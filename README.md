@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Finanzas Socios (MVP)
 
-## Getting Started
+App financiera multiusuario para socios de negocio, con:
+- autenticación y control por organización,
+- importación de Excel consolidado y por fuente,
+- dashboard con KPIs base,
+- exportación CSV/XLSX,
+- respaldo y auditoría básica.
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router)
+- Supabase (Auth + Postgres + Storage)
+- Vercel (deploy)
+- `xlsx` para importaciones
+
+## Variables de entorno
+
+Copiar `.env.example` a `.env.local` y completar:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## Levantar local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Base de datos y RLS
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Ejecutar migración SQL:
+- `supabase/migrations/0001_init.sql`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Esto crea tablas núcleo: organizaciones, membresías, transacciones, lotes de importación, auditoría y reportes.
 
-## Learn More
+## Flujo recomendado
 
-To learn more about Next.js, take a look at the following resources:
+1. Login con magic link (`/login`)
+2. Crear organización inicial (`POST /api/setup/bootstrap`)
+3. Importar Excel consolidado (`/importar`)
+4. Validar dashboard y exportar reportes (`/reportes`)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Infra y operación
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Documentación:
+- `docs/infraestructura.md`
+- `docs/respaldo-y-operacion.md`
