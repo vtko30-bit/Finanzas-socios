@@ -294,7 +294,7 @@ export async function GET(request: Request) {
   });
 
   if (incomeErr) {
-    return NextResponse.json({ error: incomeErr.message }, { status: 500 });
+    return NextResponse.json({ error: incomeErr }, { status: 500 });
   }
 
   if (ventasPorSucursal) {
@@ -320,7 +320,7 @@ export async function GET(request: Request) {
     });
 
     if (expenseErr) {
-      return NextResponse.json({ error: expenseErr.message }, { status: 500 });
+      return NextResponse.json({ error: expenseErr }, { status: 500 });
     }
 
     const gastosByLoc = new Map<string, unknown[]>();
@@ -360,7 +360,7 @@ export async function GET(request: Request) {
   });
 
   if (expenseErr) {
-    return NextResponse.json({ error: expenseErr.message }, { status: 500 });
+    return NextResponse.json({ error: expenseErr }, { status: 500 });
   }
 
   const ventasRows = ventasRowsFromIncome((incomeData ?? []) as IncomeRow[], monthKeys);
