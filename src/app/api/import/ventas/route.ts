@@ -1,46 +1,33 @@
 import { createHash, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { parseExpensesEgresosExcel } from "@/lib/import/excel";
+import { parseConsolidatedExcel } from "@/lib/import/excel";
 import { getUserOrganization } from "@/lib/organization";
 import { logAudit } from "@/lib/audit";
-import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk, DEDUPE_HASH_IN_CHUNK } from "@/lib/array-chunk";
 
+/** Importación de Excel de ventas: las filas se cargan como ingresos (`type = income`). */
 export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
 
-    const member = await getUserOrganization(supabase, user.id);
-    if (!member) {
-      return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-    }
+  const member = await getUserOrganization(supabase, user.id);
+  if (!member) {
+    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
+  }
 
-    let formData: FormData;
-    try {
-      formData = await request.formData();
-    } catch {
-      return NextResponse.json(
-        {
-          error:
-            "No se pudo leer el archivo enviado. Reintenta con un .xlsx/.xls válido y más liviano.",
-        },
-        { status: 400 },
-      );
-    }
-    const file = formData.get("file");
-    if (!(file instanceof Blob)) {
-      return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
-    }
+  const formData = await request.formData();
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
+  }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const fileName = file instanceof File ? file.name : "import.xlsx";
   const fileHash = createHash("sha256").update(buffer).digest("hex");
 
   const { data: previousBatch, error: previousBatchError } = await supabase
@@ -48,24 +35,21 @@ export async function POST(request: Request) {
     .select("id, created_at")
     .eq("organization_id", member.organization_id)
     .eq("status", "imported")
-    .eq("summary_json->>importKind", "excel_egresos")
+    .eq("summary_json->>importKind", "excel_ventas")
     .eq("summary_json->>fileHash", fileHash)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (previousBatchError) {
-    return NextResponse.json(
-      { error: supabaseErrorMessage(previousBatchError) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: previousBatchError.message }, { status: 500 });
   }
 
   if (previousBatch) {
     return NextResponse.json(
       {
         error:
-          "Este archivo de gastos/egresos ya fue importado. Si hiciste cambios, exporta un nuevo archivo antes de subirlo.",
+          "Este archivo de ventas ya fue importado. Si actualizaste datos, guarda un nuevo archivo o cambia el contenido antes de subirlo.",
         duplicateFile: true,
         previousBatchId: previousBatch.id,
       },
@@ -73,40 +57,31 @@ export async function POST(request: Request) {
     );
   }
 
-    let parsed: ReturnType<typeof parseExpensesEgresosExcel>;
-    try {
-      parsed = parseExpensesEgresosExcel(buffer);
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: `No se pudo procesar el Excel de egresos: ${
-            error instanceof Error ? error.message : "error desconocido"
-          }`,
-        },
-        { status: 400 },
-      );
-    }
-    const batchId = randomUUID();
+  const parsed = parseConsolidatedExcel(buffer, {
+    defaultMovementType: "income",
+    ventasLayout: true,
+  });
+  const batchId = randomUUID();
 
   const { error: batchError } = await supabase.from("import_batches").insert({
     id: batchId,
     organization_id: member.organization_id,
-    filename: fileName,
+    filename: file.name,
     status: "validated",
     summary_json: {
       totalRows: parsed.totalRows,
       validRows: parsed.validRows,
       invalidRows: parsed.invalidRows,
       fileHash,
-      fileName,
+      fileName: file.name,
       fileSize: file.size,
-      importKind: "excel_egresos",
+      importKind: "excel_ventas",
     },
     created_by: user.id,
   });
 
   if (batchError) {
-    return NextResponse.json({ error: supabaseErrorMessage(batchError) }, { status: 500 });
+    return NextResponse.json({ error: batchError.message }, { status: 500 });
   }
 
   if (parsed.valid.length) {
@@ -123,7 +98,7 @@ export async function POST(request: Request) {
     for (const rowsChunk of chunk(rowsToInsert, 500)) {
       const { error: rowsError } = await supabase.from("import_rows").insert(rowsChunk);
       if (rowsError) {
-        return NextResponse.json({ error: supabaseErrorMessage(rowsError) }, { status: 500 });
+        return NextResponse.json({ error: rowsError.message }, { status: 500 });
       }
     }
   }
@@ -138,7 +113,7 @@ export async function POST(request: Request) {
         .eq("organization_id", member.organization_id)
         .in("dedupe_hash", hashChunk);
       if (chunkError) {
-        return NextResponse.json({ error: supabaseErrorMessage(chunkError) }, { status: 500 });
+        return NextResponse.json({ error: chunkError.message }, { status: 500 });
       }
       if (chunkData?.length) {
         existingHashes = existingHashes.concat(chunkData);
@@ -168,37 +143,21 @@ export async function POST(request: Request) {
       description: m.description,
       counterparty: m.counterparty,
       payment_method: m.payment_method,
-      source_id: m.source_id ?? "",
       external_ref: m.external_ref,
       origen_cuenta: m.account_name ?? "",
       concepto: m.category_name ?? "",
-      source: "excel_egresos",
+      source: "excel_ventas",
       import_batch_id: batchId,
       dedupe_hash: m.dedupe_hash,
       created_by: user.id,
     }));
     for (const txChunk of chunk(tx, 500)) {
-      let { error: upsertError } = await supabase.from("transactions").upsert(txChunk, {
+      const { error: upsertError } = await supabase.from("transactions").upsert(txChunk, {
         onConflict: "organization_id,dedupe_hash",
         ignoreDuplicates: true,
       });
-      const msg = upsertError?.message ?? "";
-      if (
-        upsertError &&
-        msg.includes("source_id") &&
-        (msg.includes("does not exist") || msg.includes("schema cache"))
-      ) {
-        const withoutSourceId = txChunk.map(
-          ({ source_id: _s, ...rest }) => rest,
-        );
-        const retry = await supabase.from("transactions").upsert(withoutSourceId, {
-          onConflict: "organization_id,dedupe_hash",
-          ignoreDuplicates: true,
-        });
-        upsertError = retry.error;
-      }
       if (upsertError) {
-        return NextResponse.json({ error: supabaseErrorMessage(upsertError) }, { status: 500 });
+        return NextResponse.json({ error: upsertError.message }, { status: 500 });
       }
     }
   }
@@ -211,7 +170,7 @@ export async function POST(request: Request) {
   await logAudit(supabase, {
     organization_id: member.organization_id,
     actor_user_id: user.id,
-    action: "import_egresos",
+    action: "import_ventas",
     entity_type: "import_batch",
     entity_id: batchId,
     changes_json: {
@@ -222,20 +181,13 @@ export async function POST(request: Request) {
     },
   });
 
-    return NextResponse.json({
-      batchId,
-      ...parsed,
-      inserted: uniqueToInsert.length,
-      duplicates: parsed.validRows - uniqueToInsert.length,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: `Error inesperado importando gastos/egresos: ${
-          error instanceof Error ? error.message : "desconocido"
-        }`,
-      },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json({
+    batchId,
+    totalRows: parsed.totalRows,
+    validRows: parsed.validRows,
+    invalidRows: parsed.invalidRows,
+    invalidSample: parsed.invalidSample,
+    inserted: uniqueToInsert.length,
+    duplicates: parsed.validRows - uniqueToInsert.length,
+  });
 }

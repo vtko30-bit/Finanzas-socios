@@ -2,7 +2,7 @@
 
 App financiera multiusuario para socios de negocio, con:
 - autenticación y control por organización,
-- importación de Excel consolidado y por fuente,
+- importación de Excel (gastos hoja Egresos, otros ingresos hoja Ingresos, ventas),
 - dashboard con KPIs base,
 - exportación CSV/XLSX,
 - respaldo y auditoría básica.

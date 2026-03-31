@@ -21,7 +21,16 @@ export default function Home() {
 
       <DashboardOverview />
 
-      <section className="grid gap-4 sm:grid-cols-2">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Link
+          className="rounded-xl border border-slate-700 bg-slate-900 p-5 hover:border-sky-500"
+          href="/analisis"
+        >
+          <h2 className="font-semibold">Análisis y gráficos</h2>
+          <p className="mt-2 text-sm text-slate-300">
+            Evolución mensual y comparación año contra año (ingresos y gastos).
+          </p>
+        </Link>
         <Link
           className="rounded-xl border border-slate-700 bg-slate-900 p-5 hover:border-sky-500"
           href="/importar"
