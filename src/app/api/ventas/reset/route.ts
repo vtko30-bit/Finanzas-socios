@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { logAudit } from "@/lib/audit";
-import { chunk, UUID_IN_CHUNK } from "@/lib/array-chunk";
+
+const UUID_IN_CHUNK = 300;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
 
 /**
  * Elimina todos los movimientos de ingreso de la organización y los lotes de importación
