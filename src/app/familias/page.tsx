@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type FamilyRow = {
@@ -75,6 +74,10 @@ export default function FamiliasPage() {
   const [nombreFamiliaEdit, setNombreFamiliaEdit] = useState("");
   const [expandedFamilyIds, setExpandedFamilyIds] = useState<Set<string>>(new Set());
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  /** Clave de concepto → familia objetivo (null = quitar del catálogo). Solo diferencias respecto al servidor hasta Guardar. */
+  const [pendingFamilyByConcept, setPendingFamilyByConcept] = useState<
+    Record<string, string | null>
+  >({});
 
   const [modalEdit, setModalEdit] = useState<ModalEdit | null>(null);
   const [modalNuevaFamilia, setModalNuevaFamilia] = useState(false);
@@ -113,7 +116,7 @@ export default function FamiliasPage() {
   };
 
   const contarEnFamilia = (familyId: string) =>
-    conceptos.filter((c) => c.family_id === familyId).length;
+    conceptos.filter((c) => getTargetFamilyId(c) === familyId).length;
 
   const confirmarNuevaFamilia = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,72 +173,132 @@ export default function FamiliasPage() {
 
   const conceptoRowKey = (c: ConceptoInv) => (c.id ? c.id : `planilla:${c.label}`);
 
-  /** Solo sin familia o ya en esta familia; los asignados a otra no se listan aquí. */
-  const conceptosParaFamilia = (familyId: string) =>
-    conceptos.filter((c) => !c.family_id || c.family_id === familyId);
+  /** Familia efectiva (servidor + cambios pendientes). */
+  const getTargetFamilyId = (c: ConceptoInv): string | null => {
+    const k = conceptoRowKey(c);
+    if (Object.prototype.hasOwnProperty.call(pendingFamilyByConcept, k)) {
+      return pendingFamilyByConcept[k];
+    }
+    return c.family_id;
+  };
 
-  const onCheckboxConcepto = async (
+  /**
+   * Categorías visibles bajo una familia: destino pendiente coincide, o sin asignar (planilla / pendiente de quitar).
+   */
+  const conceptosParaFamilia = (familyId: string) =>
+    conceptos.filter((c) => {
+      const target = getTargetFamilyId(c);
+      if (target === null) return true;
+      return target === familyId;
+    });
+
+  const actualizarPendienteCheckbox = (
     c: ConceptoInv,
     familyId: string,
     marcar: boolean,
   ) => {
-    const key = `${conceptoRowKey(c)}:${familyId}:${marcar}`;
-    setBusyKey(key);
-    try {
+    const k = conceptoRowKey(c);
+    setPendingFamilyByConcept((p) => {
+      const prevT = Object.prototype.hasOwnProperty.call(p, k) ? p[k] : c.family_id;
+      let nextTarget: string | null;
       if (marcar) {
-        if (!c.id) {
-          const res = await fetch("/api/conceptos-catalogo", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              family_id: familyId,
-              label: c.label,
-              vincular_gastos_sin_catalogo: true,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            mostrar(data.error || "No se pudo asignar");
-            return;
-          }
-          const n = data.gastos_vinculados ?? 0;
-          mostrar(
-            n > 0
-              ? `Asignado a la familia. ${n} gasto(s) enlazado(s) al catálogo.`
-              : "Categoría agregada al catálogo y a la familia.",
-          );
-        } else if (c.family_id !== familyId) {
-          const res = await fetch(`/api/conceptos-catalogo/${c.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ family_id: familyId }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            mostrar(data.error || "No se pudo mover de familia");
-            return;
-          }
-          mostrar("Categoría asignada a esta familia");
-        }
+        nextTarget = familyId;
       } else {
-        if (c.id && c.family_id === familyId) {
-          if (
-            !window.confirm(
-              "¿Quitar esta categoría del catálogo? Los gastos enlazados quedarán solo con texto (sin catálogo).",
-            )
-          ) {
-            return;
-          }
+        if (prevT !== familyId) return p;
+        nextTarget = null;
+      }
+      const server = c.family_id;
+      const next = { ...p };
+      if (nextTarget === server) {
+        delete next[k];
+      } else {
+        next[k] = nextTarget;
+      }
+      return next;
+    });
+  };
+
+  const guardarPendientes = async () => {
+    const entries = Object.entries(pendingFamilyByConcept);
+    if (entries.length === 0) return;
+
+    setBusyKey("__batch__");
+    try {
+      const toDelete: ConceptoInv[] = [];
+      const toCreate: { c: ConceptoInv; familyId: string }[] = [];
+      const toPatch: { c: ConceptoInv; familyId: string }[] = [];
+
+      for (const [k, target] of entries) {
+        const c = conceptos.find((x) => conceptoRowKey(x) === k);
+        if (!c) continue;
+        const server = c.family_id;
+        if (target === server) continue;
+        if (target === null) {
+          if (c.id && server) toDelete.push(c);
+        } else if (!c.id) {
+          toCreate.push({ c, familyId: target });
+        } else if (c.family_id !== target) {
+          toPatch.push({ c, familyId: target });
+        }
+      }
+
+      if (toDelete.length > 0) {
+        if (
+          !window.confirm(
+            `¿Quitar ${toDelete.length} categoría(s) del catálogo? Los gastos enlazados quedarán solo con texto (sin catálogo).`,
+          )
+        ) {
+          return;
+        }
+        for (const c of toDelete) {
           const res = await fetch(`/api/conceptos-catalogo/${c.id}`, {
             method: "DELETE",
           });
           const data = await res.json();
           if (!res.ok) {
-            mostrar(data.error || "No se pudo quitar");
+            mostrar(data.error || "No se pudo quitar una categoría");
             return;
           }
-          mostrar("Categoría quitada del catálogo");
         }
+      }
+
+      let creadosVinc = 0;
+      for (const { c, familyId } of toCreate) {
+        const res = await fetch("/api/conceptos-catalogo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            family_id: familyId,
+            label: c.label,
+            vincular_gastos_sin_catalogo: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          mostrar(data.error || "No se pudo crear en el catálogo");
+          return;
+        }
+        creadosVinc += Number(data.gastos_vinculados ?? 0);
+      }
+
+      for (const { c, familyId } of toPatch) {
+        const res = await fetch(`/api/conceptos-catalogo/${c.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ family_id: familyId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          mostrar(data.error || "No se pudo mover de familia");
+          return;
+        }
+      }
+
+      setPendingFamilyByConcept({});
+      if (creadosVinc > 0) {
+        mostrar(`Cambios guardados. ${creadosVinc} gasto(s) enlazado(s) al catálogo.`);
+      } else {
+        mostrar("Cambios guardados");
       }
       cargar();
     } finally {
@@ -265,6 +328,7 @@ export default function FamiliasPage() {
         return;
       }
       setModalEdit(null);
+      setPendingFamilyByConcept({});
       mostrar("Categoría actualizada");
       cargar();
       return;
@@ -289,6 +353,7 @@ export default function FamiliasPage() {
       return;
     }
     setModalEdit(null);
+    setPendingFamilyByConcept({});
     mostrar(`Renombrado en ${data.actualizados ?? 0} gasto(s)`);
     cargar();
   };
@@ -323,13 +388,6 @@ export default function FamiliasPage() {
 
       <div>
         <h1 className="text-xl font-semibold text-slate-100">Familias</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Agrupa categorías del catálogo. El listado completo de categorías está en{" "}
-          <Link href="/categorias" className="text-sky-400 underline hover:text-sky-300">
-            Categorías
-          </Link>
-          .
-        </p>
       </div>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
@@ -346,6 +404,34 @@ export default function FamiliasPage() {
             Agregar familia
           </button>
         </div>
+        {Object.keys(pendingFamilyByConcept).length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-950/25 px-3 py-2.5 text-sm">
+            <p className="text-amber-100/95">
+              Tienes{" "}
+              <strong>{Object.keys(pendingFamilyByConcept).length}</strong> cambio(s) de
+              categoría sin guardar. Marca o desmarca varias familias y pulsa Guardar para
+              aplicarlos.
+            </p>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-600 px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-50"
+                disabled={busyKey === "__batch__"}
+                onClick={() => setPendingFamilyByConcept({})}
+              >
+                Descartar
+              </button>
+              <button
+                type="button"
+                className="rounded border border-sky-600 bg-sky-600/25 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600/35 disabled:opacity-50"
+                disabled={busyKey === "__batch__"}
+                onClick={() => void guardarPendientes()}
+              >
+                {busyKey === "__batch__" ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {status ? (
           <p className="mt-4 text-sm text-slate-400">{status}</p>
         ) : (
@@ -443,8 +529,8 @@ export default function FamiliasPage() {
                         ) : (
                           conceptosParaFamilia(fam.id).map((c) => {
                             const rowKey = conceptoRowKey(c);
-                            const checked = c.family_id === fam.id;
-                            const boxBusy = busyKey?.startsWith(`${rowKey}:`) ?? false;
+                            const checked = getTargetFamilyId(c) === fam.id;
+                            const batchBusy = busyKey === "__batch__";
                             return (
                               <li
                                 key={`${fam.id}-${rowKey}`}
@@ -455,9 +541,13 @@ export default function FamiliasPage() {
                                     type="checkbox"
                                     className="h-4 w-4 shrink-0 rounded border-slate-600"
                                     checked={checked}
-                                    disabled={boxBusy}
+                                    disabled={batchBusy}
                                     onChange={(e) => {
-                                      void onCheckboxConcepto(c, fam.id, e.target.checked);
+                                      actualizarPendienteCheckbox(
+                                        c,
+                                        fam.id,
+                                        e.target.checked,
+                                      );
                                     }}
                                   />
                                   <span className="min-w-0 truncate text-sm text-slate-200">
@@ -479,12 +569,13 @@ export default function FamiliasPage() {
                                   >
                                     <IconPencil />
                                   </button>
-                                  {c.id && c.family_id === fam.id ? (
+                                  {c.id && getTargetFamilyId(c) === fam.id ? (
                                     <button
                                       type="button"
                                       className="px-1.5 text-xs text-rose-400/90 hover:underline"
+                                      disabled={batchBusy}
                                       onClick={() =>
-                                        void onCheckboxConcepto(c, fam.id, false)
+                                        actualizarPendienteCheckbox(c, fam.id, false)
                                       }
                                     >
                                       Quitar

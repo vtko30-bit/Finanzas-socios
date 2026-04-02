@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Finanzas Socios",
+  title: "Finanzas Rg",
   description: "Control financiero multiusuario en la nube",
 };
 

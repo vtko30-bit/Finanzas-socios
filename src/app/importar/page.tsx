@@ -322,12 +322,11 @@ export default function ImportarPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <h1 className="text-xl font-semibold">Importar gastos y egresos</h1>
-        <p className="mt-2 text-sm text-slate-300">
-          Este flujo importa solo <strong className="text-slate-200">egresos</strong> (gastos)
-          desde planillas con hojas <strong className="text-slate-200">Ingresos</strong> y{" "}
-          <strong className="text-slate-200">Egresos</strong>, tomando únicamente la hoja{" "}
-          <strong className="text-slate-200">Egresos</strong>.
+        <h1 className="text-xl font-semibold">Importar Excel de ventas</h1>
+        <p className="mt-2 text-xs text-amber-200/90">
+          Si este archivo corresponde a egresos, impórtalo en{" "}
+          <strong className="text-slate-200">Importar gastos y egresos</strong> (sección siguiente),
+          no aquí.
         </p>
         {!ready ? (
           <p className="mt-3 text-xs text-slate-400">Verificando sesión...</p>
@@ -337,6 +336,26 @@ export default function ImportarPage() {
             Debes iniciar sesión para importar. Usa el botón Reingresar en la cabecera.
           </p>
         ) : null}
+        <form onSubmit={submitVentas} className="mt-5 flex flex-col gap-3">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => setFileVentas(e.target.files?.[0] ?? null)}
+            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
+            required
+            disabled={!authenticated || loadingVentas}
+          />
+          <button
+            disabled={!authenticated || !fileVentas || loadingVentas}
+            className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
+          >
+            {loadingVentas ? "Procesando..." : "Importar ventas (ingresos)"}
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <h2 className="text-lg font-semibold">Importar gastos y egresos</h2>
         <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
           <input
             type="file"
@@ -356,17 +375,7 @@ export default function ImportarPage() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <h2 className="text-lg font-semibold">Importar otros ingresos (hoja Ingresos)</h2>
-        <p className="mt-2 text-sm text-slate-300">
-          Para archivos con hojas <strong className="text-slate-200">Ingresos</strong> y{" "}
-          <strong className="text-slate-200">Egresos</strong> (mismo formato que el banco), este
-          flujo importa solo la hoja <strong className="text-slate-200">Ingresos</strong>, usando el
-          monto de <strong className="text-slate-200">Depósitos / Abonos</strong> como ingreso.
-        </p>
-        <p className="mt-2 text-xs text-slate-500">
-          Los egresos de ese mismo archivo debes cargarlos arriba con{" "}
-          <strong className="text-slate-300">Importar gastos y egresos</strong> (hoja Egresos).
-        </p>
+        <h2 className="text-lg font-semibold">Importar otros ingresos</h2>
         <form onSubmit={submitOtrosIngresos} className="mt-5 flex flex-col gap-3">
           <input
             type="file"
@@ -381,45 +390,6 @@ export default function ImportarPage() {
             className="rounded-md bg-violet-600 px-4 py-2 font-medium text-white disabled:opacity-60"
           >
             {loadingOtrosIngresos ? "Procesando..." : "Importar otros ingresos"}
-          </button>
-        </form>
-      </section>
-
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <h2 className="text-lg font-semibold">Importar Excel de ventas</h2>
-        <p className="mt-2 text-sm text-slate-300">
-          Usa este formulario para archivos de <strong className="text-slate-200">ventas</strong>{" "}
-          (ingresos). Puedes subir <strong className="text-slate-200">detalle</strong> con{" "}
-          <strong className="text-slate-200">Id</strong>,{" "}
-          <strong className="text-slate-200">Sucursal</strong>,{" "}
-          <strong className="text-slate-200">Fecha</strong>,{" "}
-          <strong className="text-slate-200">Medio de Pago</strong> y{" "}
-          <strong className="text-slate-200">Total</strong>, o un{" "}
-          <strong className="text-slate-200">resumen diario</strong> (totales por día y medio de pago)
-          con al menos <strong className="text-slate-200">Fecha</strong>,{" "}
-          <strong className="text-slate-200">Total</strong> y{" "}
-          <strong className="text-slate-200">Medio de Pago</strong>;{" "}
-          <strong className="text-slate-200">Sucursal</strong> es opcional. La vista Ventas muestra
-          las columnas disponibles.
-        </p>
-        <p className="mt-2 text-xs text-amber-200/90">
-          Si este archivo corresponde a egresos, súbelo arriba en{" "}
-          <strong className="text-slate-200">Importar gastos y egresos</strong>, no aquí.
-        </p>
-        <form onSubmit={submitVentas} className="mt-5 flex flex-col gap-3">
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(e) => setFileVentas(e.target.files?.[0] ?? null)}
-            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
-            required
-            disabled={!authenticated || loadingVentas}
-          />
-          <button
-            disabled={!authenticated || !fileVentas || loadingVentas}
-            className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
-          >
-            {loadingVentas ? "Procesando..." : "Importar ventas (ingresos)"}
           </button>
         </form>
       </section>

@@ -54,6 +54,9 @@ export default function ImportacionesPage() {
   const [data, setData] = useState<HistorialResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** Solo owner + creador de la organización (mismo criterio que borrados masivos). */
+  const [canDeleteImportBatch, setCanDeleteImportBatch] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     if (!authenticated) return;
@@ -79,6 +82,57 @@ export default function ImportacionesPage() {
   useEffect(() => {
     if (ready && authenticated) void load();
   }, [ready, authenticated, load]);
+
+  useEffect(() => {
+    if (!ready || !authenticated) {
+      setCanDeleteImportBatch(null);
+      return;
+    }
+    fetch("/api/session-status")
+      .then((r) => r.json())
+      .then(
+        (j: {
+          level?: string;
+          role?: string;
+          isOrgCreator?: boolean;
+        }) => {
+          setCanDeleteImportBatch(
+            j.level === "green" && j.role === "owner" && j.isOrgCreator === true,
+          );
+        },
+      )
+      .catch(() => setCanDeleteImportBatch(false));
+  }, [ready, authenticated]);
+
+  const eliminarLote = async (row: HistorialItem) => {
+    const income = row.transactionIncome;
+    const expense = row.transactionExpense;
+    const ok = window.confirm(
+      `¿Eliminar el lote «${row.filename}»?\n\n` +
+        `Se borrarán de la base de datos los movimientos de esta importación ` +
+        `(${income.toLocaleString("es-CL")} ingresos, ${expense.toLocaleString("es-CL")} egresos) ` +
+        `y el registro del archivo. Esta acción no se puede deshacer.`,
+    );
+    if (!ok) return;
+
+    setDeletingId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/import/batches/${encodeURIComponent(row.id)}`, {
+        method: "DELETE",
+      });
+      const json = (await res.json()) as { error?: string; deletedTransactions?: number };
+      if (!res.ok) {
+        setError(json.error ?? "No se pudo eliminar el lote");
+        return;
+      }
+      await load();
+    } catch {
+      setError("Error de red al eliminar el lote");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (!ready) {
     return (
@@ -107,9 +161,7 @@ export default function ImportacionesPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Importaciones</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-400">
-            Registro de archivos Excel importados (ventas, otros ingresos desde hoja Ingresos, gastos
-            desde Egresos) y cantidad de movimientos en la base de datos por archivo. Solo referencia;
-            no modifica datos.
+            Registro de Archivos Importados
           </p>
         </div>
         <button
@@ -177,12 +229,13 @@ export default function ImportacionesPage() {
                   <th className="px-4 py-3 font-medium text-slate-300 text-right">Ingresos en BD</th>
                   <th className="px-4 py-3 font-medium text-slate-300 text-right">Egresos en BD</th>
                   <th className="px-4 py-3 font-medium text-slate-300">Estado</th>
+                  <th className="px-4 py-3 font-medium text-slate-300 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {data.items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                       No hay importaciones de Excel registradas aún.{" "}
                       <Link href="/importar" className="text-sky-400 underline">
                         Ir a importar
@@ -222,6 +275,27 @@ export default function ImportacionesPage() {
                         {row.transactionExpense.toLocaleString("es-CL")}
                       </td>
                       <td className="px-4 py-3 text-slate-400">{labelEstado(row.status)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {canDeleteImportBatch ? (
+                          <button
+                            type="button"
+                            disabled={deletingId === row.id}
+                            className="rounded border border-rose-800/80 bg-rose-950/40 px-2.5 py-1 text-xs font-medium text-rose-100 hover:bg-rose-950/70 disabled:opacity-50"
+                            onClick={() => void eliminarLote(row)}
+                          >
+                            {deletingId === row.id ? "Eliminando…" : "Eliminar lote"}
+                          </button>
+                        ) : canDeleteImportBatch === false ? (
+                          <span
+                            className="text-xs text-slate-500"
+                            title="Solo el usuario creador (owner) puede eliminar lotes."
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-600">…</span>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}

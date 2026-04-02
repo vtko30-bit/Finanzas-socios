@@ -7,7 +7,7 @@ export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-10">
       <header className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <h1 className="text-2xl font-semibold">Finanzas Socios</h1>
+        <h1 className="text-2xl font-semibold">Finanzas Rg</h1>
         <p className="mt-2 text-sm text-slate-300">
           Plataforma multiusuario para ingresos, gastos, importación Excel y reportes.
         </p>

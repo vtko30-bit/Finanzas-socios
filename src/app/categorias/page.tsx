@@ -213,13 +213,6 @@ export default function CategoriasPage() {
 
       <div>
         <h1 className="text-xl font-semibold text-slate-100">Categorías</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Catálogo de conceptos (planilla y creados aquí). Las{" "}
-          <Link href="/familias" className="text-sky-400 underline hover:text-sky-300">
-            familias
-          </Link>{" "}
-          se definen en su propia vista.
-        </p>
       </div>
 
       <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">

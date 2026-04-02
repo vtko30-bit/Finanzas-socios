@@ -27,21 +27,38 @@ const formatClp = (n: number) =>
 export function DashboardOverview() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/dashboard")
       .then(async (res) => {
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Error");
+        if (!res.ok) {
+          const err = new Error(json.error || "Error") as Error & {
+            status?: number;
+          };
+          err.status = res.status;
+          throw err;
+        }
         setData(json);
       })
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error & { status?: number }) => {
+        setError(e.message);
+        setErrorStatus(e.status ?? null);
+      });
   }, []);
 
   if (error) {
+    const hint =
+      errorStatus === 401
+        ? "Inicia sesión para continuar."
+        : errorStatus === 403
+          ? "Crea la organización inicial (botón en la barra o /importar)."
+          : null;
     return (
       <p className="rounded-xl border border-amber-500/40 bg-amber-900/20 p-4 text-sm">
-        {error}. Inicia sesión y crea la organización inicial.
+        {error}
+        {hint ? ` ${hint}` : ""}
       </p>
     );
   }

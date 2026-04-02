@@ -9,6 +9,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+const GASTOS_ROW_GRID =
+  "grid w-full min-w-[1042px] grid-cols-[minmax(0,6rem)_minmax(0,0.3fr)_minmax(0,0.85fr)_minmax(0,130px)_minmax(0,200px)_minmax(0,0.6fr)_minmax(0,5rem)] items-start gap-0";
+
+const GASTOS_POR_PAGINA = 40;
+
 type CatalogConcept = { id: string; label: string };
 type CatalogFamily = {
   id: string;
@@ -419,8 +424,12 @@ export default function GastosPage() {
   const [status, setStatus] = useState("Cargando detalle de gastos...");
   const [toast, setToast] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [saveInProgress, setSaveInProgress] = useState(false);
+  const [selectedGastoIds, setSelectedGastoIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [editModal, setEditModal] = useState<{
-    gastoId: string;
+    gastoIds: string[];
     categoria: string;
     familia: string;
   } | null>(null);
@@ -439,6 +448,7 @@ export default function GastosPage() {
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [paginaGastos, setPaginaGastos] = useState(1);
   const [mounted, setMounted] = useState(false);
 
   const mostrarAviso = useCallback((mensaje: string) => {
@@ -487,9 +497,9 @@ export default function GastosPage() {
 
   /** Catálogo fresco al abrir el modal (solo al cambiar el gasto, no al editar el select). */
   useEffect(() => {
-    if (!editModal?.gastoId) return;
+    if (!editModal?.gastoIds?.length) return;
     cargarCatalogo();
-  }, [editModal?.gastoId, cargarCatalogo]);
+  }, [editModal?.gastoIds, cargarCatalogo]);
 
   useEffect(() => {
     if (!detailRow) return;
@@ -573,6 +583,37 @@ export default function GastosPage() {
     [filasFiltradas, sortKey, sortDir],
   );
 
+  const totalPaginasGastos = useMemo(() => {
+    if (displayRows.length === 0) return 0;
+    return Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
+  }, [displayRows.length]);
+
+  const filasPaginaGastos = useMemo(() => {
+    const start = (paginaGastos - 1) * GASTOS_POR_PAGINA;
+    return displayRows.slice(start, start + GASTOS_POR_PAGINA);
+  }, [displayRows, paginaGastos]);
+
+  useEffect(() => {
+    setPaginaGastos(1);
+  }, [
+    modoFecha,
+    dia,
+    mes,
+    anio,
+    rangoDesde,
+    rangoHasta,
+    filtroNombreDestino,
+    filtroFamilia,
+    filtroOrigen,
+    filtroCategoria,
+  ]);
+
+  useEffect(() => {
+    if (displayRows.length === 0) return;
+    const max = Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
+    setPaginaGastos((p) => Math.min(Math.max(1, p), max));
+  }, [displayRows.length]);
+
   const toggleSort = (key: SortKey) => {
     setSortKey((prev) => {
       if (prev === key) {
@@ -595,24 +636,41 @@ export default function GastosPage() {
     setFiltroFamilia("");
     setFiltroOrigen("");
     setFiltroCategoria("");
+    setSelectedGastoIds(new Set());
   };
 
-  const guardarConceptoLibre = async (id: string, concepto: string) => {
-    setSavingId(id);
+  const guardarConceptoLibre = async (ids: string[], concepto: string) => {
+    if (!ids.length) return true;
+    const single = ids.length === 1;
+    if (single) setSavingId(ids[0]);
+    else setSaveInProgress(true);
     try {
-      const res = await fetch(`/api/gastos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ concept_id: null, concepto }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        mostrarAviso(data.error || "No se pudo guardar");
-        return false;
+      let lastData: {
+        concepto?: string;
+        concept_id?: string | null;
+      } | null = null;
+      for (const id of ids) {
+        const res = await fetch(`/api/gastos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ concept_id: null, concepto }),
+        });
+        const data = (await res.json()) as {
+          concepto?: string;
+          concept_id?: string | null;
+          error?: string;
+        };
+        if (!res.ok) {
+          mostrarAviso(data.error || "No se pudo guardar");
+          return false;
+        }
+        lastData = data;
       }
+      if (!lastData) return false;
+      const data = lastData;
       setRows((prev) =>
         prev.map((r) => {
-          if (r.id !== id) return r;
+          if (!ids.includes(r.id)) return r;
           const fam =
             familiaParaConcepto(data.concept_id ?? null, catalogo) ?? r.familia;
           return {
@@ -630,25 +688,42 @@ export default function GastosPage() {
       return false;
     } finally {
       setSavingId(null);
+      setSaveInProgress(false);
     }
   };
 
-  const guardarConceptoCatalogo = async (id: string, conceptId: string) => {
-    setSavingId(id);
+  const guardarConceptoCatalogo = async (ids: string[], conceptId: string) => {
+    if (!ids.length) return true;
+    const single = ids.length === 1;
+    if (single) setSavingId(ids[0]);
+    else setSaveInProgress(true);
     try {
-      const res = await fetch(`/api/gastos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ concept_id: conceptId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        mostrarAviso(data.error || "No se pudo guardar");
-        return false;
+      let lastData: {
+        concepto?: string;
+        concept_id?: string | null;
+      } | null = null;
+      for (const id of ids) {
+        const res = await fetch(`/api/gastos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ concept_id: conceptId }),
+        });
+        const data = (await res.json()) as {
+          concepto?: string;
+          concept_id?: string | null;
+          error?: string;
+        };
+        if (!res.ok) {
+          mostrarAviso(data.error || "No se pudo guardar");
+          return false;
+        }
+        lastData = data;
       }
+      if (!lastData) return false;
+      const data = lastData;
       setRows((prev) =>
         prev.map((r) => {
-          if (r.id !== id) return r;
+          if (!ids.includes(r.id)) return r;
           const fam =
             familiaParaConcepto(data.concept_id ?? null, catalogo) ?? r.familia;
           return {
@@ -666,6 +741,7 @@ export default function GastosPage() {
       return false;
     } finally {
       setSavingId(null);
+      setSaveInProgress(false);
     }
   };
 
@@ -732,16 +808,22 @@ export default function GastosPage() {
       }
       await cargarCatalogo();
       const ok = await guardarConceptoCatalogo(
-        editModal.gastoId,
+        editModal.gastoIds,
         existingConcept.id,
       );
-      if (ok) setEditModal(null);
+      if (ok) {
+        setEditModal(null);
+        setSelectedGastoIds(new Set());
+      }
       return;
     }
 
     if (!famTrim) {
-      const ok = await guardarConceptoLibre(editModal.gastoId, catTrim);
-      if (ok) setEditModal(null);
+      const ok = await guardarConceptoLibre(editModal.gastoIds, catTrim);
+      if (ok) {
+        setEditModal(null);
+        setSelectedGastoIds(new Set());
+      }
       return;
     }
 
@@ -780,8 +862,11 @@ export default function GastosPage() {
     }
     const newConceptId = dataCreate.concept.id as string;
     await cargarCatalogo();
-    const ok = await guardarConceptoCatalogo(editModal.gastoId, newConceptId);
-    if (ok) setEditModal(null);
+    const ok = await guardarConceptoCatalogo(editModal.gastoIds, newConceptId);
+    if (ok) {
+      setEditModal(null);
+      setSelectedGastoIds(new Set());
+    }
   };
 
   useEffect(() => {
@@ -827,6 +912,47 @@ export default function GastosPage() {
 
   const thBtn =
     "inline-flex w-full items-center gap-1 text-left font-medium hover:text-sky-300";
+
+  const headerNombreCbRef = useRef<HTMLInputElement>(null);
+  const todosNombreSeleccionados =
+    displayRows.length > 0 &&
+    displayRows.every((r) => selectedGastoIds.has(r.id));
+  const algunoNombreSeleccionado = displayRows.some((r) =>
+    selectedGastoIds.has(r.id),
+  );
+  useEffect(() => {
+    const el = headerNombreCbRef.current;
+    if (!el) return;
+    el.indeterminate =
+      algunoNombreSeleccionado && !todosNombreSeleccionados;
+  }, [algunoNombreSeleccionado, todosNombreSeleccionados, displayRows.length]);
+
+  const toggleSeleccionGasto = (id: string) => {
+    setSelectedGastoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const abrirEdicionCategoriaSeleccion = useCallback(() => {
+    if (selectedGastoIds.size === 0) return;
+    const ordenados = rows.filter((r) => selectedGastoIds.has(r.id));
+    if (ordenados.length === 0) return;
+    const first = ordenados[0];
+    setEditModal({
+      gastoIds: ordenados.map((r) => r.id),
+      categoria: categoriaDisplayLabel(first, catalogo),
+      familia: (first.familia ?? "").trim(),
+    });
+  }, [rows, selectedGastoIds, catalogo]);
+
+  const filaEnGuardado = (rowId: string) =>
+    (saveInProgress && editModal?.gastoIds.includes(rowId)) ||
+    savingId === rowId;
+
+  const uiBloqueadoGuardado = saveInProgress || savingId !== null;
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-6 py-10">
@@ -911,8 +1037,8 @@ export default function GastosPage() {
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[140px] sm:flex-[1_1_45%] lg:min-w-[120px] lg:flex-[1_1_22%]">
-              Nombre destino (contiene)
+            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+              Nombre
               <input
                 type="text"
                 className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
@@ -921,7 +1047,7 @@ export default function GastosPage() {
                 onChange={(e) => setFiltroNombreDestino(e.target.value)}
               />
             </label>
-            <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[140px] sm:flex-[1_1_45%] lg:min-w-[120px] lg:flex-[1_1_22%]">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Familia
               <select
                 className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
@@ -937,7 +1063,7 @@ export default function GastosPage() {
                 ))}
               </select>
             </label>
-            <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[140px] sm:flex-[1_1_45%] lg:min-w-[120px] lg:flex-[1_1_22%]">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Categoría
               <select
                 className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
@@ -955,8 +1081,8 @@ export default function GastosPage() {
                 ))}
               </select>
             </label>
-            <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[140px] sm:flex-[1_1_45%] lg:min-w-[120px] lg:flex-[1_1_22%]">
-              Origen (contiene)
+            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+              Origen
               <input
                 type="text"
                 className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
@@ -967,17 +1093,39 @@ export default function GastosPage() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-600 px-3 py-1 text-sm hover:border-slate-500"
+                onClick={limpiarFiltros}
+              >
+                Limpiar filtros
+              </button>
+              <span className="text-xs text-slate-500">
+                Mostrando {displayRows.length} de {rows.length} gastos
+              </span>
+            </div>
             <button
               type="button"
-              className="rounded border border-slate-600 px-3 py-1 text-sm hover:border-slate-500"
-              onClick={limpiarFiltros}
+              className="shrink-0 rounded border border-sky-600 bg-sky-600/20 px-3 py-1 text-sm font-medium text-sky-100 hover:bg-sky-600/30 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={
+                selectedGastoIds.size === 0 || uiBloqueadoGuardado
+              }
+              title={
+                selectedGastoIds.size === 0
+                  ? "Marca gastos en Nombre destino"
+                  : "Editar categoría de todos los gastos marcados (incluye los que no ves con el filtro actual)"
+              }
+              onClick={() => abrirEdicionCategoriaSeleccion()}
             >
-              Limpiar filtros
+              Editar categoría
+              {selectedGastoIds.size > 0 ? (
+                <span className="ml-1 text-xs opacity-90">
+                  ({selectedGastoIds.size})
+                </span>
+              ) : null}
             </button>
-            <span className="text-xs text-slate-500">
-              Mostrando {displayRows.length} de {rows.length} gastos
-            </span>
           </div>
         </div>
       </section>
@@ -1008,155 +1156,235 @@ export default function GastosPage() {
         </p>
       ) : null}
 
-      <section className="overflow-auto rounded-xl border border-slate-800 bg-slate-900">
-        <table className="w-full min-w-[960px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-slate-950 text-left">
-              <th className="px-2 py-2">
-                <button
-                  type="button"
-                  className={thBtn}
-                  onClick={() => toggleSort("fecha")}
-                  aria-sort={
-                    sortKey === "fecha"
-                      ? sortDir === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                >
-                  Fecha
-                  <SortIcon active={sortKey === "fecha"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2">
-                <button type="button" className={thBtn} onClick={() => toggleSort("origen")}>
-                  Origen
-                  <SortIcon active={sortKey === "origen"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2">
-                <button
-                  type="button"
-                  className={thBtn}
-                  onClick={() => toggleSort("nombreDestino")}
-                >
-                  Nombre Destino
-                  <SortIcon active={sortKey === "nombreDestino"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2 w-[120px]">
-                <button type="button" className={thBtn} onClick={() => toggleSort("familia")}>
-                  Familia
-                  <SortIcon active={sortKey === "familia"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2 min-w-[220px]">
-                <button type="button" className={thBtn} onClick={() => toggleSort("concepto")}>
-                  Categoría
-                  <SortIcon active={sortKey === "concepto"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2">
-                <button
-                  type="button"
-                  className={thBtn}
-                  onClick={() => toggleSort("descripcion")}
-                >
-                  Descripción
-                  <SortIcon active={sortKey === "descripcion"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2 text-right">
-                <button
-                  type="button"
-                  className={`${thBtn} justify-end`}
-                  onClick={() => toggleSort("monto")}
-                >
-                  Monto
-                  <SortIcon active={sortKey === "monto"} dir={sortDir} />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayRows.map((row) => {
-              const texto =
-                (row.concepto || "").trim() ||
-                (row.concept_id
-                  ? etiquetaCatalogoParaId(row.concept_id, catalogo) ?? ""
-                  : "");
-              return (
-                <tr
-                  key={row.id}
-                  role="button"
-                  tabIndex={0}
-                  className={`cursor-pointer border-t border-slate-800 transition-colors hover:bg-slate-800/40 ${
-                    row.necesitaConcepto ? "bg-amber-950/20" : ""
-                  }`}
-                  onClick={() => setDetailRow(row)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setDetailRow(row);
-                    }
-                  }}
-                >
-                  <td className="px-3 py-2 whitespace-nowrap">{row.fecha}</td>
-                  <td className="px-3 py-2">{row.origen}</td>
-                  <td className="px-3 py-2">{row.nombreDestino}</td>
-                  <td className="px-3 py-2 text-slate-300">{row.familia ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex min-w-[140px] items-center justify-between gap-2">
-                      <span
-                        className={`min-w-0 flex-1 truncate ${
-                          row.necesitaConcepto ? "text-amber-200" : "text-slate-100"
-                        }`}
-                        title={texto || "Sin categoría"}
-                      >
-                        {texto || "—"}
-                      </span>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400 disabled:opacity-40"
-                        title="Editar categoría"
-                        aria-label="Editar categoría"
-                        disabled={savingId === row.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDetailRow(null);
-                          setEditModal({
-                            gastoId: row.id,
-                            categoria: categoriaDisplayLabel(row, catalogo),
-                            familia: (row.familia ?? "").trim(),
-                          });
-                        }}
-                      >
-                        <IconPencil />
-                      </button>
+      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+        <div
+          className={`${GASTOS_ROW_GRID} border-b border-slate-800 bg-slate-950 px-2 py-2 text-left text-sm`}
+        >
+          <div className="px-1">
+            <button
+              type="button"
+              className={thBtn}
+              onClick={() => toggleSort("fecha")}
+              aria-sort={
+                sortKey === "fecha"
+                  ? sortDir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+            >
+              Fecha
+              <SortIcon active={sortKey === "fecha"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button type="button" className={thBtn} onClick={() => toggleSort("origen")}>
+              Origen
+              <SortIcon active={sortKey === "origen"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="flex min-w-0 items-start gap-2 px-1">
+            <input
+              ref={headerNombreCbRef}
+              type="checkbox"
+              className="mt-1 h-3.5 w-3.5 shrink-0 rounded border-slate-600"
+              checked={todosNombreSeleccionados}
+              disabled={displayRows.length === 0 || uiBloqueadoGuardado}
+              title="Seleccionar todos los gastos visibles"
+              aria-label="Seleccionar todos en Nombre destino"
+              onChange={() => {
+                if (todosNombreSeleccionados) {
+                  setSelectedGastoIds((prev) => {
+                    const next = new Set(prev);
+                    displayRows.forEach((r) => next.delete(r.id));
+                    return next;
+                  });
+                } else {
+                  setSelectedGastoIds((prev) => {
+                    const next = new Set(prev);
+                    displayRows.forEach((r) => next.add(r.id));
+                    return next;
+                  });
+                }
+              }}
+            />
+            <button
+              type="button"
+              className={thBtn}
+              onClick={() => toggleSort("nombreDestino")}
+            >
+              Nombre Destino
+              <SortIcon active={sortKey === "nombreDestino"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button type="button" className={thBtn} onClick={() => toggleSort("familia")}>
+              Familia
+              <SortIcon active={sortKey === "familia"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button type="button" className={thBtn} onClick={() => toggleSort("concepto")}>
+              Categoría
+              <SortIcon active={sortKey === "concepto"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button
+              type="button"
+              className={thBtn}
+              onClick={() => toggleSort("descripcion")}
+            >
+              Descripción
+              <SortIcon active={sortKey === "descripcion"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1 text-right">
+            <button
+              type="button"
+              className={`${thBtn} justify-end`}
+              onClick={() => toggleSort("monto")}
+            >
+              Monto
+              <SortIcon active={sortKey === "monto"} dir={sortDir} />
+            </button>
+          </div>
+        </div>
+        <div
+          className="max-h-[min(70vh,720px)] overflow-auto"
+          role="grid"
+          aria-rowcount={displayRows.length}
+        >
+          {!displayRows.length && !status ? (
+            <p className="px-3 py-6 text-center text-sm text-slate-400">
+              {rows.length === 0
+                ? "Sin gastos disponibles."
+                : "Ningún gasto coincide con los filtros."}
+            </p>
+          ) : (
+            <div className="w-full">
+              {filasPaginaGastos.map((row) => {
+                const texto =
+                  (row.concepto || "").trim() ||
+                  (row.concept_id
+                    ? etiquetaCatalogoParaId(row.concept_id, catalogo) ?? ""
+                    : "");
+                return (
+                  <div
+                    key={row.id}
+                    role="button"
+                    tabIndex={0}
+                    className={`${GASTOS_ROW_GRID} cursor-pointer border-t border-slate-800 px-3 py-2 text-sm transition-colors hover:bg-slate-800/40 ${
+                      row.necesitaConcepto ? "bg-amber-950/20" : ""
+                    }`}
+                    onClick={() => setDetailRow(row)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDetailRow(row);
+                      }
+                    }}
+                  >
+                    <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
+                    <div className="min-w-0 truncate" title={row.origen}>
+                      {row.origen}
                     </div>
-                    {savingId === row.id ? (
-                      <span className="mt-1 block text-xs text-slate-500">Guardando…</span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2 max-w-[220px] truncate" title={row.descripcion}>
-                    {row.descripcion}
-                  </td>
-                  <td className="px-3 py-2 text-right">{formatClp(row.monto)}</td>
-                </tr>
-              );
-            })}
-            {!displayRows.length && !status ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
-                  {rows.length === 0
-                    ? "Sin gastos disponibles."
-                    : "Ningún gasto coincide con los filtros."}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 shrink-0 rounded border-slate-600"
+                        checked={selectedGastoIds.has(row.id)}
+                        disabled={uiBloqueadoGuardado}
+                        title="Seleccionar para editar categoría"
+                        aria-label={`Seleccionar gasto ${row.nombreDestino || row.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleSeleccionGasto(row.id)}
+                      />
+                      <span className="min-w-0 flex-1 truncate" title={row.nombreDestino}>
+                        {row.nombreDestino}
+                      </span>
+                    </div>
+                    <div className="min-w-0 text-slate-300">{row.familia ?? "—"}</div>
+                    <div className="min-w-0">
+                      <div className="flex min-w-[140px] items-center justify-between gap-2">
+                        <span
+                          className={`min-w-0 flex-1 truncate ${
+                            row.necesitaConcepto ? "text-amber-200" : "text-slate-100"
+                          }`}
+                          title={texto || "Sin categoría"}
+                        >
+                          {texto || "—"}
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400 disabled:opacity-40"
+                          title="Editar categoría"
+                          aria-label="Editar categoría"
+                          disabled={uiBloqueadoGuardado}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailRow(null);
+                            setEditModal({
+                              gastoIds: [row.id],
+                              categoria: categoriaDisplayLabel(row, catalogo),
+                              familia: (row.familia ?? "").trim(),
+                            });
+                          }}
+                        >
+                          <IconPencil />
+                        </button>
+                      </div>
+                      {filaEnGuardado(row.id) ? (
+                        <span className="mt-1 block text-xs text-slate-500">Guardando…</span>
+                      ) : null}
+                    </div>
+                    <div
+                      className="min-w-0 max-w-[220px] truncate"
+                      title={row.descripcion}
+                    >
+                      {row.descripcion}
+                    </div>
+                    <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {displayRows.length > 0 && totalPaginasGastos > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-400">
+            <span className="text-xs">
+              Filas {(paginaGastos - 1) * GASTOS_POR_PAGINA + 1}–
+              {Math.min(paginaGastos * GASTOS_POR_PAGINA, displayRows.length)} de{" "}
+              {displayRows.length}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={paginaGastos <= 1}
+                onClick={() => setPaginaGastos((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-slate-500">
+                Página {paginaGastos} de {totalPaginasGastos}
+              </span>
+              <button
+                type="button"
+                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={paginaGastos >= totalPaginasGastos}
+                onClick={() =>
+                  setPaginaGastos((p) =>
+                    Math.min(totalPaginasGastos, p + 1),
+                  )
+                }
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {detailRow ? (
@@ -1247,7 +1475,7 @@ export default function GastosPage() {
                 className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-sky-100 hover:bg-sky-600/30"
                 onClick={() => {
                   setEditModal({
-                    gastoId: detailRow.id,
+                    gastoIds: [detailRow.id],
                     categoria: categoriaDisplayLabel(detailRow, catalogo),
                     familia: (detailRow.familia ?? "").trim(),
                   });
@@ -1280,13 +1508,10 @@ export default function GastosPage() {
                   id="gasto-categoria-modal-titulo"
                   className="text-lg font-semibold text-slate-100"
                 >
-                  Editar categoría del gasto
+                  {editModal.gastoIds.length > 1
+                    ? `Editar categoría (${editModal.gastoIds.length} gastos)`
+                    : "Editar categoría del gasto"}
                 </h3>
-                <p className="mt-2 text-xs text-slate-500">
-                  Al enfocar cada campo se abre la lista para elegir; también
-                  puedes escribir. Categoría nueva requiere familia para el
-                  catálogo; sin familia solo se guarda el texto del gasto.
-                </p>
                 <div className="mt-4">
                   <ComboboxLista
                     id="gasto-edit-categoria"
@@ -1294,7 +1519,7 @@ export default function GastosPage() {
                     value={editModal.categoria}
                     options={opcionesCategorias}
                     placeholder="Ej: Alimentación"
-                    disabled={savingId === editModal.gastoId}
+                    disabled={uiBloqueadoGuardado}
                     onValueChange={(v) => {
                       setEditModal((m) => {
                         if (!m) return m;
@@ -1321,7 +1546,7 @@ export default function GastosPage() {
                     value={editModal.familia}
                     options={opcionesFamilias}
                     placeholder="Ej: Operación"
-                    disabled={savingId === editModal.gastoId}
+                    disabled={uiBloqueadoGuardado}
                     onValueChange={(v) =>
                       setEditModal((m) => (m ? { ...m, familia: v } : m))
                     }
@@ -1331,7 +1556,7 @@ export default function GastosPage() {
                   <button
                     type="button"
                     className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
-                    disabled={savingId === editModal.gastoId}
+                    disabled={uiBloqueadoGuardado}
                     onClick={() => setEditModal(null)}
                   >
                     Cancelar
@@ -1339,10 +1564,10 @@ export default function GastosPage() {
                   <button
                     type="button"
                     className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-white hover:bg-sky-600/30 disabled:opacity-50"
-                    disabled={savingId === editModal.gastoId}
+                    disabled={uiBloqueadoGuardado}
                     onClick={() => void aplicarEdicionConceptoModal()}
                   >
-                    {savingId === editModal.gastoId ? "Guardando…" : "Guardar"}
+                    {uiBloqueadoGuardado ? "Guardando…" : "Guardar"}
                   </button>
                 </div>
               </div>

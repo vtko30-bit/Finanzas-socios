@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+const VENTAS_ROW_GRID =
+  "grid w-full min-w-[720px] grid-cols-[minmax(0,7rem)_minmax(0,1fr)_minmax(0,5.5rem)_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-0";
+
+const VENTAS_POR_PAGINA = 40;
+
 /** Columnas de detalle: Id, Sucursal, Fecha, Medio de pago, Total */
 type VentaRow = {
   id: string;
@@ -79,23 +84,15 @@ function filtrarVentas(
     anio: string;
     rangoDesde: string;
     rangoHasta: string;
-    idOMedio: string;
+    formaPago: string;
     sucursal: string;
   },
 ): VentaRow[] {
   let out = rows;
 
-  const q = opts.idOMedio.trim().toLowerCase();
-  if (q) {
-    out = out.filter((r) => {
-      const idv = (r.idVenta || "").toLowerCase();
-      const ref = (r.externalRef || "").toLowerCase();
-      const mp = (r.medioPago || "").toLowerCase();
-      const uuid = (r.id || "").toLowerCase();
-      return (
-        idv.includes(q) || ref.includes(q) || mp.includes(q) || uuid.includes(q)
-      );
-    });
+  const fp = opts.formaPago.trim().toLowerCase();
+  if (fp) {
+    out = out.filter((r) => (r.medioPago || "").toLowerCase().includes(fp));
   }
 
   const su = opts.sucursal.trim().toLowerCase();
@@ -171,11 +168,12 @@ export default function VentasPage() {
   const [anio, setAnio] = useState("");
   const [rangoDesde, setRangoDesde] = useState("");
   const [rangoHasta, setRangoHasta] = useState("");
-  const [filtroIdOMedio, setFiltroIdOMedio] = useState("");
+  const [filtroFormaPago, setFiltroFormaPago] = useState("");
   const [filtroSucursal, setFiltroSucursal] = useState("");
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [paginaVentas, setPaginaVentas] = useState(1);
 
   const cargar = useCallback(() => {
     setStatus("Cargando...");
@@ -217,7 +215,7 @@ export default function VentasPage() {
         anio,
         rangoDesde,
         rangoHasta,
-        idOMedio: filtroIdOMedio,
+        formaPago: filtroFormaPago,
         sucursal: filtroSucursal,
       }),
     [
@@ -228,7 +226,7 @@ export default function VentasPage() {
       anio,
       rangoDesde,
       rangoHasta,
-      filtroIdOMedio,
+      filtroFormaPago,
       filtroSucursal,
     ],
   );
@@ -237,6 +235,35 @@ export default function VentasPage() {
     () => sortRows(filasFiltradas, sortKey, sortDir),
     [filasFiltradas, sortKey, sortDir],
   );
+
+  const totalPaginasVentas = useMemo(() => {
+    if (displayRows.length === 0) return 0;
+    return Math.ceil(displayRows.length / VENTAS_POR_PAGINA);
+  }, [displayRows.length]);
+
+  const filasPaginaVentas = useMemo(() => {
+    const start = (paginaVentas - 1) * VENTAS_POR_PAGINA;
+    return displayRows.slice(start, start + VENTAS_POR_PAGINA);
+  }, [displayRows, paginaVentas]);
+
+  useEffect(() => {
+    setPaginaVentas(1);
+  }, [
+    modoFecha,
+    dia,
+    mes,
+    anio,
+    rangoDesde,
+    rangoHasta,
+    filtroFormaPago,
+    filtroSucursal,
+  ]);
+
+  useEffect(() => {
+    if (displayRows.length === 0) return;
+    const max = Math.ceil(displayRows.length / VENTAS_POR_PAGINA);
+    setPaginaVentas((p) => Math.min(Math.max(1, p), max));
+  }, [displayRows.length]);
 
   const toggleSort = (key: SortKey) => {
     setSortKey((prev) => {
@@ -256,7 +283,7 @@ export default function VentasPage() {
     setAnio("");
     setRangoDesde("");
     setRangoHasta("");
-    setFiltroIdOMedio("");
+    setFiltroFormaPago("");
     setFiltroSucursal("");
   };
 
@@ -345,22 +372,22 @@ export default function VentasPage() {
             ) : null}
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-xs text-slate-400">
-              Id corto, ref. original o medio (contiene)
+          <div className="grid w-full max-w-full grid-cols-1 gap-2 sm:max-w-[50%] sm:grid-cols-2">
+            <label className="flex min-w-0 flex-col gap-1 text-xs text-slate-400">
+              Forma de pago
               <input
                 type="text"
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
-                placeholder="Ej: AB45231, folio largo, efectivo…"
-                value={filtroIdOMedio}
-                onChange={(e) => setFiltroIdOMedio(e.target.value)}
+                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                placeholder="Ej: Efectivo, Débito, transferencia…"
+                value={filtroFormaPago}
+                onChange={(e) => setFiltroFormaPago(e.target.value)}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-400">
-              Sucursal (contiene)
+            <label className="flex min-w-0 flex-col gap-1 text-xs text-slate-400">
+              Sucursal
               <input
                 type="text"
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
                 placeholder="Ej: nombre de sucursal…"
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
@@ -389,98 +416,141 @@ export default function VentasPage() {
         </p>
       ) : null}
 
-      <section className="overflow-auto rounded-xl border border-slate-800 bg-slate-900">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-slate-950 text-left">
-              <th className="px-2 py-2">
-                <button
-                  type="button"
-                  className={thBtn}
-                  onClick={() => toggleSort("idVenta")}
-                  aria-sort={
-                    sortKey === "idVenta"
-                      ? sortDir === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                >
-                  Id
-                  <SortIcon active={sortKey === "idVenta"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2">
-                <button type="button" className={thBtn} onClick={() => toggleSort("sucursal")}>
-                  Sucursal
-                  <SortIcon active={sortKey === "sucursal"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2">
-                <button
-                  type="button"
-                  className={thBtn}
-                  onClick={() => toggleSort("fecha")}
-                  aria-sort={
-                    sortKey === "fecha"
-                      ? sortDir === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                >
-                  Fecha
-                  <SortIcon active={sortKey === "fecha"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2">
-                <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
-                  Medio de pago
-                  <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
-                </button>
-              </th>
-              <th className="px-2 py-2 text-right">
-                <button
-                  type="button"
-                  className={`${thBtn} justify-end`}
-                  onClick={() => toggleSort("monto")}
-                >
-                  Total
-                  <SortIcon active={sortKey === "monto"} dir={sortDir} />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayRows.map((row) => (
-              <tr key={row.id} className="border-t border-slate-800">
-                <td
-                  className="px-3 py-2 font-mono text-xs"
-                  title={
-                    row.externalRef
-                      ? `${row.idVenta} · Ref. importación: ${row.externalRef}`
-                      : row.idVenta
-                  }
-                >
-                  {row.idVenta || "—"}
-                </td>
-                <td className="px-3 py-2">{row.sucursal || "—"}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{row.fecha}</td>
-                <td className="px-3 py-2">{row.medioPago || "—"}</td>
-                <td className="px-3 py-2 text-right">{formatClp(row.monto)}</td>
-              </tr>
-            ))}
-            {!displayRows.length && !status ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
-                  {rows.length === 0
-                    ? "Sin ingresos cargados. Importa un Excel de ventas desde Importar (no uses el formulario «consolidado», que guarda gastos)."
-                    : "Ninguna venta coincide con los filtros."}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+        <div
+          className={`${VENTAS_ROW_GRID} border-b border-slate-800 bg-slate-950 px-2 py-2 text-left text-sm`}
+        >
+          <div className="px-1">
+            <button
+              type="button"
+              className={thBtn}
+              onClick={() => toggleSort("idVenta")}
+              aria-sort={
+                sortKey === "idVenta"
+                  ? sortDir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+            >
+              Id
+              <SortIcon active={sortKey === "idVenta"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button type="button" className={thBtn} onClick={() => toggleSort("sucursal")}>
+              Sucursal
+              <SortIcon active={sortKey === "sucursal"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button
+              type="button"
+              className={thBtn}
+              onClick={() => toggleSort("fecha")}
+              aria-sort={
+                sortKey === "fecha"
+                  ? sortDir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+            >
+              Fecha
+              <SortIcon active={sortKey === "fecha"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1">
+            <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
+              Medio de pago
+              <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
+            </button>
+          </div>
+          <div className="px-1 text-right">
+            <button
+              type="button"
+              className={`${thBtn} justify-end`}
+              onClick={() => toggleSort("monto")}
+            >
+              Total
+              <SortIcon active={sortKey === "monto"} dir={sortDir} />
+            </button>
+          </div>
+        </div>
+        <div
+          className="max-h-[min(70vh,720px)] overflow-auto"
+          role="grid"
+          aria-rowcount={displayRows.length}
+        >
+          {!displayRows.length && !status ? (
+            <p className="px-3 py-6 text-center text-sm text-slate-400">
+              {rows.length === 0
+                ? "Sin ingresos cargados. Importa un Excel de ventas desde Importar (no uses el formulario «consolidado», que guarda gastos)."
+                : "Ninguna venta coincide con los filtros."}
+            </p>
+          ) : (
+            <div className="w-full">
+              {filasPaginaVentas.map((row) => {
+                return (
+                  <div
+                    key={row.id}
+                    role="row"
+                    className={`${VENTAS_ROW_GRID} border-t border-slate-800 px-3 py-2 text-sm`}
+                  >
+                    <div
+                      className="min-w-0 font-mono text-xs"
+                      title={
+                        row.externalRef
+                          ? `${row.idVenta} · Ref. importación: ${row.externalRef}`
+                          : row.idVenta
+                      }
+                    >
+                      {row.idVenta || "—"}
+                    </div>
+                    <div className="min-w-0">{row.sucursal || "—"}</div>
+                    <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
+                    <div className="min-w-0">{row.medioPago || "—"}</div>
+                    <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {displayRows.length > 0 && totalPaginasVentas > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-400">
+            <span className="text-xs">
+              Filas {(paginaVentas - 1) * VENTAS_POR_PAGINA + 1}–
+              {Math.min(paginaVentas * VENTAS_POR_PAGINA, displayRows.length)} de{" "}
+              {displayRows.length}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={paginaVentas <= 1}
+                onClick={() => setPaginaVentas((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-slate-500">
+                Página {paginaVentas} de {totalPaginasVentas}
+              </span>
+              <button
+                type="button"
+                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={paginaVentas >= totalPaginasVentas}
+                onClick={() =>
+                  setPaginaVentas((p) =>
+                    Math.min(totalPaginasVentas, p + 1),
+                  )
+                }
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

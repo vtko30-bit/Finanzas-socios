@@ -23,9 +23,18 @@ export async function GET() {
     });
   }
 
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("created_by")
+    .eq("id", member.organization_id)
+    .maybeSingle();
+
+  const isOrgCreator = org?.created_by === user.id;
+
   return NextResponse.json({
     level: "green",
     message: "Autenticado y con organización activa.",
     role: member.role,
+    isOrgCreator,
   });
 }
