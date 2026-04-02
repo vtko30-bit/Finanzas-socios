@@ -127,7 +127,7 @@ export function AnalisisCharts() {
 
   if (error) {
     return (
-      <p className="rounded-md border border-amber-500/40 bg-amber-900/20 p-4 text-sm text-amber-100">
+      <p className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
         {error}
       </p>
     );
@@ -135,7 +135,7 @@ export function AnalisisCharts() {
 
   if (!monthly.length) {
     return (
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-slate-600">
         No hay transacciones para graficar. Importa un Excel desde Importar.
       </p>
     );
@@ -145,7 +145,7 @@ export function AnalisisCharts() {
     <div className="flex flex-col gap-10">
       <section>
         <h2 className="text-lg font-semibold">Evolución mensual</h2>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm text-slate-600">
           Ingresos, gastos y resultado neto por mes.
         </p>
         <div className="mt-4 h-[320px] w-full min-w-0">
@@ -182,14 +182,14 @@ export function AnalisisCharts() {
       {years.length >= 1 && (
         <section>
           <h2 className="text-lg font-semibold">Comparación año contra año (por mes)</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-slate-600">
             Elige dos años y compara ingresos y gastos mes a mes.
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
-            <label className="text-sm text-slate-300">
+            <label className="text-sm text-slate-700">
               Año A
               <select
-                className="ml-2 rounded-md border border-slate-600 bg-slate-950 px-2 py-1"
+                className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1"
                 value={yearA}
                 onChange={(e) => setYearA(e.target.value)}
               >
@@ -200,10 +200,10 @@ export function AnalisisCharts() {
                 ))}
               </select>
             </label>
-            <label className="text-sm text-slate-300">
+            <label className="text-sm text-slate-700">
               Año B
               <select
-                className="ml-2 rounded-md border border-slate-600 bg-slate-950 px-2 py-1"
+                className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1"
                 value={yearB}
                 onChange={(e) => setYearB(e.target.value)}
               >

@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 
 const GASTOS_ROW_GRID =
   "grid w-full min-w-[1042px] grid-cols-[minmax(0,6rem)_minmax(0,0.3fr)_minmax(0,0.85fr)_minmax(0,130px)_minmax(0,200px)_minmax(0,0.6fr)_minmax(0,5rem)] items-start gap-0";
@@ -173,7 +174,7 @@ function ComboboxLista({
 
   return (
     <div ref={rootRef} className="relative">
-      <label className="block text-xs font-medium text-slate-300" htmlFor={id}>
+      <label className="block text-xs font-medium text-slate-700" htmlFor={id}>
         {label}
       </label>
       <input
@@ -187,7 +188,7 @@ function ComboboxLista({
         disabled={disabled}
         placeholder={placeholder}
         title="Escribe o elige de la lista al enfocar"
-        className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-500"
         value={value}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
@@ -202,7 +203,7 @@ function ComboboxLista({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-[300] mt-1 max-h-52 w-full overflow-auto rounded-md border border-slate-600 bg-slate-950 py-1 shadow-xl"
+          className="absolute z-[300] mt-1 max-h-52 w-full overflow-auto rounded-md border border-slate-300 bg-white py-1 shadow-xl"
         >
           {filtradas.length === 0 ? (
             <li className="px-3 py-2 text-xs text-slate-500">Sin coincidencias</li>
@@ -212,7 +213,7 @@ function ComboboxLista({
                 <button
                   type="button"
                   role="option"
-                  className="w-full px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-800 focus:bg-slate-800 focus:outline-none"
+                  className="w-full px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-200 focus:bg-slate-200 focus:outline-none"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     onValueChange(opt);
@@ -391,16 +392,16 @@ function filtrarGastos(
 function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
   return (
     <span
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-slate-400"
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-white"
       aria-hidden
     >
       {active ? (
         dir === "asc" ? (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-sky-400">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[1.125rem] w-[1.125rem] text-white">
             <path d="M7 14l5-5 5 5H7z" />
           </svg>
         ) : (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-sky-400">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[1.125rem] w-[1.125rem] text-white">
             <path d="M7 10l5 5 5-5H7z" />
           </svg>
         )
@@ -408,7 +409,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
         <svg
           viewBox="0 0 24 24"
           fill="currentColor"
-          className="h-3.5 w-3.5 opacity-40"
+          className="h-[1.125rem] w-[1.125rem] text-white opacity-50"
         >
           <path d="M7 10l5 5 5-5H7z" opacity="0.5" />
           <path d="M7 14l5-5 5 5H7z" opacity="0.5" />
@@ -419,6 +420,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
 }
 
 export default function GastosPage() {
+  const { canWrite, loading: capsLoading } = useOrgCapabilities();
   const [rows, setRows] = useState<GastoRow[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogFamily[]>([]);
   const [status, setStatus] = useState("Cargando detalle de gastos...");
@@ -911,7 +913,7 @@ export default function GastosPage() {
   }, [catalogo, rows]);
 
   const thBtn =
-    "inline-flex w-full items-center gap-1 text-left font-medium hover:text-sky-300";
+    "inline-flex w-full items-center gap-1 border-0 bg-transparent px-0.5 py-0.5 text-left font-medium text-white shadow-none outline-none hover:bg-white/15 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-0";
 
   const headerNombreCbRef = useRef<HTMLInputElement>(null);
   const todosNombreSeleccionados =
@@ -952,20 +954,28 @@ export default function GastosPage() {
     (saveInProgress && editModal?.gastoIds.includes(rowId)) ||
     savingId === rowId;
 
-  const uiBloqueadoGuardado = saveInProgress || savingId !== null;
+  const uiBloqueadoGuardado =
+    saveInProgress || savingId !== null || (!capsLoading && !canWrite);
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
       <h1 className="text-xl font-semibold">Detalle de gastos</h1>
+      {!capsLoading && !canWrite ? (
+        <p className="text-sm text-slate-500">
+          Solo lectura: solo el administrador (owner) puede editar categorías o importar datos.
+        </p>
+      ) : null}
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-        <h2 className="mb-2 text-xs font-medium text-slate-200">Filtros</h2>
-        <div className="flex flex-col gap-3">
+      <section
+        aria-label="Filtros"
+        className="rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-3 py-2 text-white shadow-sm [&_label]:!text-white"
+      >
+        <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex min-w-[140px] flex-col gap-1 text-xs text-slate-400">
+            <label className="flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600">
               Fecha
               <select
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                 value={modoFecha}
                 onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
               >
@@ -977,36 +987,36 @@ export default function GastosPage() {
               </select>
             </label>
             {modoFecha === "dia" ? (
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
+              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                 Día
                 <input
                   type="date"
-                  className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "mes" ? (
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
+              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                 Mes
                 <input
                   type="month"
-                  className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "anio" ? (
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
+              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                 Año
                 <input
                   type="number"
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
@@ -1014,20 +1024,20 @@ export default function GastosPage() {
             ) : null}
             {modoFecha === "rango" ? (
               <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1 text-xs text-slate-400">
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Desde
                   <input
                     type="date"
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-xs text-slate-400">
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Hasta
                   <input
                     type="date"
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
@@ -1037,20 +1047,20 @@ export default function GastosPage() {
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Nombre
               <input
                 type="text"
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                 placeholder="Buscar…"
                 value={filtroNombreDestino}
                 onChange={(e) => setFiltroNombreDestino(e.target.value)}
               />
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Familia
               <select
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                 value={filtroFamilia}
                 onChange={(e) => setFiltroFamilia(e.target.value)}
               >
@@ -1063,10 +1073,10 @@ export default function GastosPage() {
                 ))}
               </select>
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Categoría
               <select
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
@@ -1081,11 +1091,11 @@ export default function GastosPage() {
                 ))}
               </select>
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-1 text-xs text-slate-400 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Origen
               <input
                 type="text"
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                 placeholder="Ej: Banco, Mercado Pago…"
                 value={filtroOrigen}
                 onChange={(e) => setFiltroOrigen(e.target.value)}
@@ -1097,18 +1107,18 @@ export default function GastosPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-3 py-1 text-sm hover:border-slate-500"
+                className="rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white"
                 onClick={limpiarFiltros}
               >
                 Limpiar filtros
               </button>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-white">
                 Mostrando {displayRows.length} de {rows.length} gastos
               </span>
             </div>
             <button
               type="button"
-              className="shrink-0 rounded border border-sky-600 bg-sky-600/20 px-3 py-1 text-sm font-medium text-sky-100 hover:bg-sky-600/30 disabled:cursor-not-allowed disabled:opacity-40"
+              className="shrink-0 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
               disabled={
                 selectedGastoIds.size === 0 || uiBloqueadoGuardado
               }
@@ -1133,7 +1143,7 @@ export default function GastosPage() {
       {pendientes > 0 && !status ? (
         <div
           role="status"
-          className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+          className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
         >
           <strong>Aviso:</strong> hay {pendientes}{" "}
           {pendientes === 1 ? "gasto sin categoría" : "gastos sin categoría"} definido en la vista
@@ -1144,21 +1154,21 @@ export default function GastosPage() {
       {toast ? (
         <div
           role="alert"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-500/50 bg-slate-900 px-4 py-3 text-sm text-white shadow-lg"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
         >
           {toast}
         </div>
       ) : null}
 
       {status ? (
-        <p className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+        <p className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           {status}
         </p>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
         <div
-          className={`${GASTOS_ROW_GRID} border-b border-slate-800 bg-slate-950 px-2 py-2 text-left text-sm`}
+          className={`${GASTOS_ROW_GRID} border-b border-[#3a9fe0] bg-[#5AC4FF] px-2 py-2 text-left text-sm text-white`}
         >
           <div className="px-1">
             <button
@@ -1187,7 +1197,7 @@ export default function GastosPage() {
             <input
               ref={headerNombreCbRef}
               type="checkbox"
-              className="mt-1 h-3.5 w-3.5 shrink-0 rounded border-slate-600"
+              className="mt-1 h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
               checked={todosNombreSeleccionados}
               disabled={displayRows.length === 0 || uiBloqueadoGuardado}
               title="Seleccionar todos los gastos visibles"
@@ -1256,7 +1266,7 @@ export default function GastosPage() {
           aria-rowcount={displayRows.length}
         >
           {!displayRows.length && !status ? (
-            <p className="px-3 py-6 text-center text-sm text-slate-400">
+            <p className="px-3 py-6 text-center text-sm text-slate-600">
               {rows.length === 0
                 ? "Sin gastos disponibles."
                 : "Ningún gasto coincide con los filtros."}
@@ -1274,8 +1284,8 @@ export default function GastosPage() {
                     key={row.id}
                     role="button"
                     tabIndex={0}
-                    className={`${GASTOS_ROW_GRID} cursor-pointer border-t border-slate-800 px-3 py-2 text-sm transition-colors hover:bg-slate-800/40 ${
-                      row.necesitaConcepto ? "bg-amber-950/20" : ""
+                    className={`${GASTOS_ROW_GRID} cursor-pointer border-t border-slate-200 px-3 py-2 text-sm transition-colors hover:bg-slate-200/80 ${
+                      row.necesitaConcepto ? "bg-amber-50" : ""
                     }`}
                     onClick={() => setDetailRow(row)}
                     onKeyDown={(e) => {
@@ -1292,7 +1302,7 @@ export default function GastosPage() {
                     <div className="flex min-w-0 items-center gap-2">
                       <input
                         type="checkbox"
-                        className="h-3.5 w-3.5 shrink-0 rounded border-slate-600"
+                        className="h-3.5 w-3.5 shrink-0 rounded border-slate-300"
                         checked={selectedGastoIds.has(row.id)}
                         disabled={uiBloqueadoGuardado}
                         title="Seleccionar para editar categoría"
@@ -1304,12 +1314,12 @@ export default function GastosPage() {
                         {row.nombreDestino}
                       </span>
                     </div>
-                    <div className="min-w-0 text-slate-300">{row.familia ?? "—"}</div>
+                    <div className="min-w-0 text-slate-700">{row.familia ?? "—"}</div>
                     <div className="min-w-0">
                       <div className="flex min-w-[140px] items-center justify-between gap-2">
                         <span
                           className={`min-w-0 flex-1 truncate ${
-                            row.necesitaConcepto ? "text-amber-200" : "text-slate-100"
+                            row.necesitaConcepto ? "text-amber-800" : "text-slate-900"
                           }`}
                           title={texto || "Sin categoría"}
                         >
@@ -1317,7 +1327,7 @@ export default function GastosPage() {
                         </span>
                         <button
                           type="button"
-                          className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400 disabled:opacity-40"
+                          className="shrink-0 rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
                           title="Editar categoría"
                           aria-label="Editar categoría"
                           disabled={uiBloqueadoGuardado}
@@ -1352,7 +1362,7 @@ export default function GastosPage() {
           )}
         </div>
         {displayRows.length > 0 && totalPaginasGastos > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <span className="text-xs">
               Filas {(paginaGastos - 1) * GASTOS_POR_PAGINA + 1}–
               {Math.min(paginaGastos * GASTOS_POR_PAGINA, displayRows.length)} de{" "}
@@ -1361,7 +1371,7 @@ export default function GastosPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-slate-300 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={paginaGastos <= 1}
                 onClick={() => setPaginaGastos((p) => Math.max(1, p - 1))}
               >
@@ -1372,7 +1382,7 @@ export default function GastosPage() {
               </span>
               <button
                 type="button"
-                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-slate-300 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={paginaGastos >= totalPaginasGastos}
                 onClick={() =>
                   setPaginaGastos((p) =>
@@ -1397,51 +1407,51 @@ export default function GastosPage() {
             if (e.target === e.currentTarget) setDetailRow(null);
           }}
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl">
             <h3
               id="gasto-detalle-titulo"
-              className="text-lg font-semibold text-slate-100"
+              className="text-lg font-semibold text-slate-900"
             >
               Detalle del movimiento
             </h3>
-            <dl className="mt-4 space-y-0 divide-y divide-slate-800">
+            <dl className="mt-4 space-y-0 divide-y divide-slate-200">
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Fecha</dt>
-                <dd className="font-medium text-slate-100">{detailRow.fecha}</dd>
+                <dd className="font-medium text-slate-900">{detailRow.fecha}</dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">ID</dt>
-                <dd className="break-all font-mono text-xs text-slate-300">
+                <dd className="break-all font-mono text-xs text-slate-700">
                   {detailRow.id}
                 </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Id Origen</dt>
-                <dd className="font-mono text-xs text-slate-200">
+                <dd className="font-mono text-xs text-slate-800">
                   {(detailRow.idOrigen || "").trim() ? detailRow.idOrigen : "—"}
                 </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">N° Operación</dt>
-                <dd className="font-mono text-xs text-slate-200">
+                <dd className="font-mono text-xs text-slate-800">
                   {(detailRow.nroOperacion || "").trim() ? detailRow.nroOperacion : "—"}
                 </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Origen</dt>
-                <dd className="text-slate-100">{detailRow.origen || "—"}</dd>
+                <dd className="text-slate-900">{detailRow.origen || "—"}</dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Nombre destino</dt>
-                <dd className="text-slate-100">{detailRow.nombreDestino || "—"}</dd>
+                <dd className="text-slate-900">{detailRow.nombreDestino || "—"}</dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Familia</dt>
-                <dd className="text-slate-100">{detailRow.familia ?? "—"}</dd>
+                <dd className="text-slate-900">{detailRow.familia ?? "—"}</dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Categoría</dt>
-                <dd className="text-slate-100">
+                <dd className="text-slate-900">
                   {(detailRow.concepto || "").trim() ||
                     (detailRow.concept_id
                       ? etiquetaCatalogoParaId(detailRow.concept_id, catalogo) ?? ""
@@ -1451,13 +1461,13 @@ export default function GastosPage() {
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Descripción</dt>
-                <dd className="whitespace-pre-wrap break-words text-slate-100">
+                <dd className="whitespace-pre-wrap break-words text-slate-900">
                   {detailRow.descripcion || "—"}
                 </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">Monto</dt>
-                <dd className="text-right font-medium text-slate-100">
+                <dd className="text-right font-medium text-slate-900">
                   {formatClp(detailRow.monto)}
                 </dd>
               </div>
@@ -1465,14 +1475,14 @@ export default function GastosPage() {
             <div className="mt-6 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+                className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
                 onClick={() => setDetailRow(null)}
               >
                 Cerrar
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-sky-100 hover:bg-sky-600/30"
+                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm text-sky-800 hover:bg-sky-100"
                 onClick={() => {
                   setEditModal({
                     gastoIds: [detailRow.id],
@@ -1501,12 +1511,12 @@ export default function GastosPage() {
               }}
             >
               <div
-                className="pointer-events-auto w-full max-w-md overflow-visible rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl"
+                className="pointer-events-auto w-full max-w-md overflow-visible rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3
                   id="gasto-categoria-modal-titulo"
-                  className="text-lg font-semibold text-slate-100"
+                  className="text-lg font-semibold text-slate-900"
                 >
                   {editModal.gastoIds.length > 1
                     ? `Editar categoría (${editModal.gastoIds.length} gastos)`
@@ -1555,7 +1565,7 @@ export default function GastosPage() {
                 <div className="mt-6 flex justify-end gap-2">
                   <button
                     type="button"
-                    className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+                    className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
                     disabled={uiBloqueadoGuardado}
                     onClick={() => setEditModal(null)}
                   >
@@ -1563,7 +1573,7 @@ export default function GastosPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-white hover:bg-sky-600/30 disabled:opacity-50"
+                    className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
                     disabled={uiBloqueadoGuardado}
                     onClick={() => void aplicarEdicionConceptoModal()}
                   >

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 
 type FamilyRow = {
   id: string;
@@ -53,6 +54,7 @@ function IconPencil({ className }: { className?: string }) {
 }
 
 export default function CategoriasPage() {
+  const { canWrite } = useOrgCapabilities();
   const [families, setFamilies] = useState<FamilyRow[]>([]);
   const [conceptos, setConceptos] = useState<ConceptoInv[]>([]);
   const [status, setStatus] = useState("Cargando…");
@@ -205,36 +207,36 @@ export default function CategoriasPage() {
       {toast ? (
         <div
           role="alert"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-500/50 bg-slate-900 px-4 py-3 text-sm text-white shadow-lg"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
         >
           {toast}
         </div>
       ) : null}
 
       <div>
-        <h1 className="text-xl font-semibold text-slate-100">Categorías</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Categorías</h1>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-100">Listado</h2>
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#3a9fe0] bg-[#5AC4FF] px-6 py-4">
+          <h2 className="text-lg font-semibold text-white drop-shadow-sm">Listado</h2>
           <button
             type="button"
-            disabled={!families.length}
-            className="shrink-0 rounded-md border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600/30 disabled:opacity-40"
+            disabled={!families.length || !canWrite}
+            className="shrink-0 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
             onClick={abrirNuevoConcepto}
           >
             Nueva categoría
           </button>
         </div>
-        <div className="border-t border-slate-800 px-6 py-4">
+        <div className="border-t border-slate-200 px-6 py-4">
           {status ? (
-            <p className="text-sm text-slate-400">{status}</p>
+            <p className="text-sm text-slate-600">{status}</p>
           ) : !conceptos.length ? (
             <p className="py-4 text-sm text-slate-500">
               No hay categorías aún. Importa gastos o crea una categoría nueva (necesitas al menos
               una familia en{" "}
-              <Link href="/familias" className="text-sky-400 underline hover:text-sky-300">
+              <Link href="/familias" className="text-sky-400 underline hover:text-sky-700">
                 Familias
               </Link>
               ).
@@ -246,24 +248,25 @@ export default function CategoriasPage() {
                 return (
                   <li
                     key={conceptoRowKey(c)}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-transparent px-2 py-2 hover:border-slate-800 hover:bg-slate-950/60"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-transparent px-2 py-2 hover:border-slate-200 hover:bg-white/60"
                   >
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                      <span className="min-w-0 font-medium text-slate-200">{c.label}</span>
+                      <span className="min-w-0 font-medium text-slate-800">{c.label}</span>
                       <span className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-slate-500">
                         {c.solo_planilla ? (
                           <span className="uppercase tracking-wide text-amber-500/90">
                             planilla
                           </span>
                         ) : null}
-                        <span className="text-slate-400">
+                        <span className="text-slate-600">
                           {famNombre ? `Familia: ${famNombre}` : "Sin familia"}
                         </span>
                       </span>
                     </div>
                     <button
                       type="button"
-                      className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400"
+                      disabled={!canWrite}
+                      className="shrink-0 rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
                       title="Editar categoría"
                       aria-label="Editar categoría"
                       onClick={() => abrirEditarCategoria(c)}
@@ -288,15 +291,15 @@ export default function CategoriasPage() {
             if (e.target === e.currentTarget) setModalNuevo(null);
           }}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
-            <h3 id="modal-nuevo-titulo" className="text-lg font-semibold text-slate-100">
+          <div className="w-full max-w-md rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl">
+            <h3 id="modal-nuevo-titulo" className="text-lg font-semibold text-slate-900">
               Nueva categoría
             </h3>
-            <label className="mt-4 block text-xs text-slate-400">
+            <label className="mt-4 block text-xs text-slate-600">
               Nombre
               <input
                 type="text"
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                 placeholder="Ej: Honorarios contador"
                 value={modalNuevo.nombre}
                 onChange={(e) =>
@@ -305,10 +308,10 @@ export default function CategoriasPage() {
                 autoFocus
               />
             </label>
-            <label className="mt-3 block text-xs text-slate-400">
+            <label className="mt-3 block text-xs text-slate-600">
               Familia
               <select
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                 value={modalNuevo.familyId}
                 onChange={(e) =>
                   setModalNuevo((m) => (m ? { ...m, familyId: e.target.value } : m))
@@ -324,14 +327,14 @@ export default function CategoriasPage() {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+                className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
                 onClick={() => setModalNuevo(null)}
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-white hover:bg-sky-600/30"
+                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
                 onClick={() => void guardarNuevoConcepto()}
               >
                 Crear
@@ -351,8 +354,8 @@ export default function CategoriasPage() {
             if (e.target === e.currentTarget) setModalEdit(null);
           }}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
-            <h3 id="modal-edit-titulo" className="text-lg font-semibold text-slate-100">
+          <div className="w-full max-w-md rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl">
+            <h3 id="modal-edit-titulo" className="text-lg font-semibold text-slate-900">
               {modalEdit.kind === "planilla"
                 ? "Editar categoría (planilla)"
                 : "Editar categoría"}
@@ -362,11 +365,11 @@ export default function CategoriasPage() {
                 ? "Se actualizará el texto en todos los gastos importados que tengan esta categoría y aún no estén en el catálogo."
                 : "Cambios en el catálogo; los gastos enlazados se actualizan según corresponda."}
             </p>
-            <label className="mt-4 block text-xs text-slate-400">
+            <label className="mt-4 block text-xs text-slate-600">
               Nombre
               <input
                 type="text"
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                 value={modalEdit.label}
                 onChange={(e) =>
                   setModalEdit((m) => {
@@ -378,10 +381,10 @@ export default function CategoriasPage() {
               />
             </label>
             {modalEdit.kind === "catalogo" ? (
-              <label className="mt-3 block text-xs text-slate-400">
+              <label className="mt-3 block text-xs text-slate-600">
                 Familia
                 <select
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                   value={modalEdit.familyId}
                   onChange={(e) =>
                     setModalEdit((m) =>
@@ -402,14 +405,14 @@ export default function CategoriasPage() {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+                className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
                 onClick={() => setModalEdit(null)}
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-white hover:bg-sky-600/30"
+                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
                 onClick={() => void guardarModalEdit()}
               >
                 Guardar

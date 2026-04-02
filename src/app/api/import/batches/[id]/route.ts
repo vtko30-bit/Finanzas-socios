@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 import { logAudit } from "@/lib/audit";
 
 const EXCEL_KINDS = new Set([
@@ -31,32 +32,10 @@ export async function DELETE(
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
-  if (member.role !== "owner") {
-    return NextResponse.json(
-      { error: "Solo el owner puede eliminar lotes de importación." },
-      { status: 403 },
-    );
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
 
-  const orgId = member.organization_id;
-
-  const { data: org, error: orgErr } = await supabase
-    .from("organizations")
-    .select("created_by")
-    .eq("id", orgId)
-    .maybeSingle();
-  if (orgErr) {
-    return NextResponse.json({ error: orgErr.message }, { status: 500 });
-  }
-  if (!org || org.created_by !== user.id) {
-    return NextResponse.json(
-      { error: "Solo el usuario creador de la organización puede eliminar lotes de importación." },
-      { status: 403 },
-    );
-  }
+  const orgId = member!.organization_id;
 
   const { data: batch, error: batchErr } = await supabase
     .from("import_batches")

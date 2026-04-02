@@ -30,11 +30,11 @@ export function SetupBootstrapButton() {
         type="button"
         onClick={onClick}
         disabled={loading}
-        className="rounded-md border border-slate-600 px-3 py-2 text-sm hover:border-sky-500 disabled:opacity-60"
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:border-sky-500 disabled:opacity-60"
       >
         {loading ? "Creando organización..." : "Crear organización inicial"}
       </button>
-      {message ? <p className="text-xs text-slate-300">{message}</p> : null}
+      {message ? <p className="text-xs text-slate-700">{message}</p> : null}
     </div>
   );
 }

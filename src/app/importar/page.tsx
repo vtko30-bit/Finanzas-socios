@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useState } from "react";
+import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
 
 type ImportResult = {
@@ -14,6 +15,7 @@ type ImportResult = {
 
 export default function ImportarPage() {
   const { ready, authenticated } = useAuthState();
+  const { canWrite, loading: capsLoading } = useOrgCapabilities();
   const [file, setFile] = useState<File | null>(null);
   const [fileVentas, setFileVentas] = useState<File | null>(null);
   const [status, setStatus] = useState("");
@@ -319,20 +321,39 @@ export default function ImportarPage() {
   const borradoBusy =
     loadingBackup || loadingResetVentas || loadingResetTodo;
 
+  if (authenticated && capsLoading) {
+    return (
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+        <p className="text-sm text-slate-600">Verificando permisos…</p>
+      </main>
+    );
+  }
+
+  if (authenticated && !canWrite) {
+    return (
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+        <p className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          Tu cuenta tiene acceso de solo lectura. Solo el administrador de la organización (rol owner)
+          puede importar archivos o usar las herramientas de borrado.
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
         <h1 className="text-xl font-semibold">Importar Excel de ventas</h1>
-        <p className="mt-2 text-xs text-amber-200/90">
+        <p className="mt-2 text-xs text-amber-800">
           Si este archivo corresponde a egresos, impórtalo en{" "}
-          <strong className="text-slate-200">Importar gastos y egresos</strong> (sección siguiente),
+          <strong className="text-slate-800">Importar gastos y egresos</strong> (sección siguiente),
           no aquí.
         </p>
         {!ready ? (
-          <p className="mt-3 text-xs text-slate-400">Verificando sesión...</p>
+          <p className="mt-3 text-xs text-slate-600">Verificando sesión...</p>
         ) : null}
         {ready && !authenticated ? (
-          <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
             Debes iniciar sesión para importar. Usa el botón Reingresar en la cabecera.
           </p>
         ) : null}
@@ -341,7 +362,7 @@ export default function ImportarPage() {
             type="file"
             accept=".xlsx,.xls"
             onChange={(e) => setFileVentas(e.target.files?.[0] ?? null)}
-            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
+            className="rounded-md border border-slate-300 bg-white px-3 py-2"
             required
             disabled={!authenticated || loadingVentas}
           />
@@ -354,14 +375,14 @@ export default function ImportarPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
         <h2 className="text-lg font-semibold">Importar gastos y egresos</h2>
         <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
           <input
             type="file"
             accept=".xlsx,.xls"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
+            className="rounded-md border border-slate-300 bg-white px-3 py-2"
             required
             disabled={!authenticated || loadingConsolidado}
           />
@@ -374,14 +395,14 @@ export default function ImportarPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
         <h2 className="text-lg font-semibold">Importar otros ingresos</h2>
         <form onSubmit={submitOtrosIngresos} className="mt-5 flex flex-col gap-3">
           <input
             type="file"
             accept=".xlsx,.xls"
             onChange={(e) => setFileOtrosIngresos(e.target.files?.[0] ?? null)}
-            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
+            className="rounded-md border border-slate-300 bg-white px-3 py-2"
             required
             disabled={!authenticated || loadingOtrosIngresos}
           />
@@ -395,26 +416,26 @@ export default function ImportarPage() {
       </section>
 
       {status ? (
-        <p className="rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-300">
+        <p className="rounded-xl border border-slate-200 bg-slate-50/95 px-4 py-3 text-sm text-slate-700">
           {status}
         </p>
       ) : null}
 
-      <section className="rounded-xl border border-rose-900/50 bg-slate-900 p-6">
-        <h2 className="font-semibold text-rose-100">Borrar datos de prueba</h2>
-        <p className="mt-2 text-sm text-slate-400">
-          <strong className="text-slate-200">Solo ingresos:</strong> borra{" "}
-          <strong className="text-slate-200">todos</strong> los movimientos de ingreso (incluye ventas y otros
+      <section className="rounded-xl border border-rose-900/50 bg-slate-50 p-6">
+        <h2 className="font-semibold text-rose-900">Borrar datos de prueba</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          <strong className="text-slate-800">Solo ingresos:</strong> borra{" "}
+          <strong className="text-slate-800">todos</strong> los movimientos de ingreso (incluye ventas y otros
           ingresos importados) y los lotes de importación de ventas; no borra egresos.{" "}
-          <strong className="text-slate-200">Todo:</strong> elimina gastos e ingresos y todos los lotes
-          importados. Antes de cada borrado se descarga un <strong className="text-slate-200">JSON de respaldo</strong>{" "}
+          <strong className="text-slate-800">Todo:</strong> elimina gastos e ingresos y todos los lotes
+          importados. Antes de cada borrado se descarga un <strong className="text-slate-800">JSON de respaldo</strong>{" "}
           y hace falta confirmar en dos pasos.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
             disabled={!authenticated || borradoBusy}
-            className="rounded-md border border-amber-700/80 bg-amber-950/30 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+            className="rounded-md border border-amber-400 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
             onClick={() => void borrarTodosLosIngresosVentas()}
           >
             {loadingResetVentas
@@ -426,7 +447,7 @@ export default function ImportarPage() {
           <button
             type="button"
             disabled={!authenticated || borradoBusy}
-            className="rounded-md border border-rose-700/80 bg-rose-950/40 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-950/60 disabled:opacity-50"
+            className="rounded-md border border-rose-400 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-800 hover:bg-rose-100 disabled:opacity-50"
             onClick={() => void borrarTodoMovimientos()}
           >
             {loadingResetTodo
@@ -439,9 +460,9 @@ export default function ImportarPage() {
       </section>
 
       {result ? (
-        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
           <h2 className="font-semibold">Resultado del lote</h2>
-          <ul className="mt-3 space-y-1 text-sm text-slate-300">
+          <ul className="mt-3 space-y-1 text-sm text-slate-700">
             <li>Filas totales: {result.totalRows}</li>
             <li>Filas válidas: {result.validRows}</li>
             <li>Filas inválidas: {result.invalidRows}</li>
@@ -450,7 +471,7 @@ export default function ImportarPage() {
           </ul>
           {result.invalidRows > 0 && result.invalidSample?.length ? (
             <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-              <p className="text-xs font-medium text-amber-100">
+              <p className="text-xs font-medium text-amber-900">
                 Ejemplos de filas rechazadas (primeras {result.invalidSample.length}):
               </p>
               <ul className="mt-2 max-h-48 list-inside list-disc space-y-1 overflow-y-auto text-xs text-amber-50/95">

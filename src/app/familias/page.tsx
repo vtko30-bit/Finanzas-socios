@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 
 type FamilyRow = {
   id: string;
@@ -52,7 +53,7 @@ function IconPencil({ className }: { className?: string }) {
 function IconChevron({ open }: { open: boolean }) {
   return (
     <svg
-      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+      className={`h-4 w-4 shrink-0 text-slate-600 transition-transform ${open ? "rotate-180" : ""}`}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -65,6 +66,7 @@ function IconChevron({ open }: { open: boolean }) {
 }
 
 export default function FamiliasPage() {
+  const { canWrite } = useOrgCapabilities();
   const [families, setFamilies] = useState<FamilyRow[]>([]);
   const [conceptos, setConceptos] = useState<ConceptoInv[]>([]);
   const [status, setStatus] = useState("Cargando…");
@@ -380,22 +382,23 @@ export default function FamiliasPage() {
       {toast ? (
         <div
           role="alert"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-500/50 bg-slate-900 px-4 py-3 text-sm text-white shadow-lg"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
         >
           {toast}
         </div>
       ) : null}
 
       <div>
-        <h1 className="text-xl font-semibold text-slate-100">Familias</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Familias</h1>
       </div>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-100">Listado</h2>
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#3a9fe0] bg-[#5AC4FF] px-6 py-4">
+          <h2 className="text-lg font-semibold text-white drop-shadow-sm">Listado</h2>
           <button
             type="button"
-            className="shrink-0 rounded-md border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600/30"
+            disabled={!canWrite}
+            className="shrink-0 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
             onClick={() => {
               setNuevaFamilia("");
               setModalNuevaFamilia(true);
@@ -404,9 +407,10 @@ export default function FamiliasPage() {
             Agregar familia
           </button>
         </div>
+        <div className="border-t border-slate-200 px-6 py-4 space-y-4">
         {Object.keys(pendingFamilyByConcept).length > 0 ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-950/25 px-3 py-2.5 text-sm">
-            <p className="text-amber-100/95">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-50/90 px-3 py-2.5 text-sm">
+            <p className="text-amber-900">
               Tienes{" "}
               <strong>{Object.keys(pendingFamilyByConcept).length}</strong> cambio(s) de
               categoría sin guardar. Marca o desmarca varias familias y pulsa Guardar para
@@ -415,16 +419,16 @@ export default function FamiliasPage() {
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-50"
-                disabled={busyKey === "__batch__"}
+                className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-200 disabled:opacity-50"
+                disabled={busyKey === "__batch__" || !canWrite}
                 onClick={() => setPendingFamilyByConcept({})}
               >
                 Descartar
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-600/25 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600/35 disabled:opacity-50"
-                disabled={busyKey === "__batch__"}
+                className="rounded border border-sky-600 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                disabled={busyKey === "__batch__" || !canWrite}
                 onClick={() => void guardarPendientes()}
               >
                 {busyKey === "__batch__" ? "Guardando…" : "Guardar"}
@@ -433,16 +437,16 @@ export default function FamiliasPage() {
           </div>
         ) : null}
         {status ? (
-          <p className="mt-4 text-sm text-slate-400">{status}</p>
+          <p className="text-sm text-slate-600">{status}</p>
         ) : (
-          <ul className="mt-4 flex flex-col gap-2">
+          <ul className="flex flex-col gap-2">
             {families.map((fam) => {
               const open = expandedFamilyIds.has(fam.id);
               const count = contarEnFamilia(fam.id);
               return (
                 <li
                   key={fam.id}
-                  className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950/50"
+                  className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100/90"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                     <button
@@ -453,10 +457,10 @@ export default function FamiliasPage() {
                     >
                       <IconChevron open={open} />
                       {editandoFamilia === fam.id ? (
-                        <span className="text-sm text-slate-400">(editando nombre…)</span>
+                        <span className="text-sm text-slate-600">(editando nombre…)</span>
                       ) : (
                         <>
-                          <span className="font-medium text-slate-100">{fam.name}</span>
+                          <span className="font-medium text-slate-900">{fam.name}</span>
                           <span className="text-xs text-slate-500">
                             {count} categoría(s) aquí
                           </span>
@@ -467,7 +471,7 @@ export default function FamiliasPage() {
                       {editandoFamilia === fam.id ? (
                         <>
                           <input
-                            className="w-40 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                            className="w-40 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
                             value={nombreFamiliaEdit}
                             onChange={(e) => setNombreFamiliaEdit(e.target.value)}
                             onKeyDown={(e) => {
@@ -495,7 +499,8 @@ export default function FamiliasPage() {
                         <>
                           <button
                             type="button"
-                            className="text-xs text-slate-400 hover:text-sky-400"
+                            disabled={!canWrite}
+                            className="text-xs text-slate-600 hover:text-sky-400 disabled:opacity-40"
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditandoFamilia(fam.id);
@@ -506,7 +511,8 @@ export default function FamiliasPage() {
                           </button>
                           <button
                             type="button"
-                            className="text-xs text-rose-400/90 hover:underline"
+                            disabled={!canWrite}
+                            className="text-xs text-rose-400/90 hover:underline disabled:opacity-40"
                             onClick={(e) => {
                               e.stopPropagation();
                               void eliminarFamilia(fam.id);
@@ -519,7 +525,7 @@ export default function FamiliasPage() {
                     </div>
                   </div>
                   {open ? (
-                    <div className="border-t border-slate-800 px-3 py-2">
+                    <div className="border-t border-slate-200 px-3 py-2">
                       <ul className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto pr-1">
                         {conceptosParaFamilia(fam.id).length === 0 ? (
                           <li className="px-2 py-3 text-sm text-slate-500">
@@ -534,14 +540,14 @@ export default function FamiliasPage() {
                             return (
                               <li
                                 key={`${fam.id}-${rowKey}`}
-                                className="flex flex-wrap items-center gap-2 rounded px-2 py-1.5 hover:bg-slate-900/80"
+                                className="flex flex-wrap items-center gap-2 rounded px-2 py-1.5 hover:bg-slate-100"
                               >
                                 <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                                   <input
                                     type="checkbox"
-                                    className="h-4 w-4 shrink-0 rounded border-slate-600"
+                                    className="h-4 w-4 shrink-0 rounded border-slate-300"
                                     checked={checked}
-                                    disabled={batchBusy}
+                                    disabled={batchBusy || !canWrite}
                                     onChange={(e) => {
                                       actualizarPendienteCheckbox(
                                         c,
@@ -550,7 +556,7 @@ export default function FamiliasPage() {
                                       );
                                     }}
                                   />
-                                  <span className="min-w-0 truncate text-sm text-slate-200">
+                                  <span className="min-w-0 truncate text-sm text-slate-800">
                                     {c.label}
                                   </span>
                                   {c.solo_planilla ? (
@@ -562,7 +568,8 @@ export default function FamiliasPage() {
                                 <div className="flex shrink-0 items-center gap-1">
                                   <button
                                     type="button"
-                                    className="rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400"
+                                    disabled={!canWrite}
+                                    className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
                                     title="Editar nombre"
                                     aria-label="Editar nombre"
                                     onClick={() => abrirEditarCategoria(c, fam.id)}
@@ -573,7 +580,7 @@ export default function FamiliasPage() {
                                     <button
                                       type="button"
                                       className="px-1.5 text-xs text-rose-400/90 hover:underline"
-                                      disabled={batchBusy}
+                                      disabled={batchBusy || !canWrite}
                                       onClick={() =>
                                         actualizarPendienteCheckbox(c, fam.id, false)
                                       }
@@ -597,6 +604,7 @@ export default function FamiliasPage() {
             ) : null}
           </ul>
         )}
+        </div>
       </section>
 
       {modalNuevaFamilia ? (
@@ -612,19 +620,19 @@ export default function FamiliasPage() {
             }
           }}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl">
             <h3
               id="modal-nueva-familia-titulo"
-              className="text-lg font-semibold text-slate-100"
+              className="text-lg font-semibold text-slate-900"
             >
               Nueva familia
             </h3>
             <form onSubmit={(e) => void confirmarNuevaFamilia(e)} className="mt-4">
-              <label className="block text-xs text-slate-400">
+              <label className="block text-xs text-slate-600">
                 Nombre
                 <input
                   type="text"
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
                   placeholder="Ej: Remuneración, Operación, Impuestos…"
                   value={nuevaFamilia}
                   onChange={(e) => setNuevaFamilia(e.target.value)}
@@ -635,7 +643,7 @@ export default function FamiliasPage() {
               <div className="mt-6 flex justify-end gap-2">
                 <button
                   type="button"
-                  className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+                  className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
                   onClick={() => {
                     setNuevaFamilia("");
                     setModalNuevaFamilia(false);
@@ -645,7 +653,7 @@ export default function FamiliasPage() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-white hover:bg-sky-600/30"
+                  className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
                 >
                   Crear familia
                 </button>
@@ -665,8 +673,8 @@ export default function FamiliasPage() {
             if (e.target === e.currentTarget) setModalEdit(null);
           }}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
-            <h3 id="modal-edit-titulo" className="text-lg font-semibold text-slate-100">
+          <div className="w-full max-w-md rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl">
+            <h3 id="modal-edit-titulo" className="text-lg font-semibold text-slate-900">
               {modalEdit.kind === "planilla"
                 ? "Editar categoría (planilla)"
                 : "Editar categoría"}
@@ -676,11 +684,11 @@ export default function FamiliasPage() {
                 ? "Se actualizará el texto en todos los gastos importados que tengan esta categoría y aún no estén en el catálogo."
                 : "Cambios en el catálogo; los gastos enlazados se actualizan según corresponda."}
             </p>
-            <label className="mt-4 block text-xs text-slate-400">
+            <label className="mt-4 block text-xs text-slate-600">
               Nombre
               <input
                 type="text"
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
                 value={modalEdit.label}
                 onChange={(e) =>
                   setModalEdit((m) => {
@@ -692,10 +700,10 @@ export default function FamiliasPage() {
               />
             </label>
             {modalEdit.kind === "catalogo" ? (
-              <label className="mt-3 block text-xs text-slate-400">
+              <label className="mt-3 block text-xs text-slate-600">
                 Familia
                 <select
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
                   value={modalEdit.familyId}
                   onChange={(e) =>
                     setModalEdit((m) =>
@@ -716,14 +724,14 @@ export default function FamiliasPage() {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800"
+                className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
                 onClick={() => setModalEdit(null)}
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-600/20 px-4 py-2 text-sm text-white hover:bg-sky-600/30"
+                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
                 onClick={() => void guardarModalEdit()}
               >
                 Guardar

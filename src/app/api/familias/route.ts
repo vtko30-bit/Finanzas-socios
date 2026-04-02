@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 
 export async function GET() {
   const supabase = await createClient();
@@ -66,9 +67,9 @@ export async function POST(request: Request) {
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   let body: { name?: unknown; sort_order?: unknown };
   try {
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
   const { data: row, error } = await supabase
     .from("concept_families")
     .insert({
-      organization_id: member.organization_id,
+      organization_id: orgId,
       name,
       sort_order,
     })

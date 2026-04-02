@@ -44,16 +44,18 @@ export default function LoginPage() {
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-10">
       <form
         onSubmit={onSubmit}
-        className="rounded-xl border border-slate-800 bg-slate-900 p-6"
+        className="rounded-xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/30 to-indigo-50/20 p-6 shadow-md shadow-sky-100/40"
       >
-        <h1 className="text-xl font-semibold">Ingresar</h1>
-        <p className="mt-2 text-sm text-slate-300">
+        <h1 className="bg-gradient-to-r from-sky-800 to-indigo-800 bg-clip-text text-xl font-semibold text-transparent">
+          Ingresar
+        </h1>
+        <p className="mt-2 text-sm text-slate-700">
           Accede con enlace mágico para ti y tus socios.
         </p>
         <label className="mt-5 block text-sm">
           Correo
           <input
-            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
+            className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
             type="email"
             required
             value={email}
@@ -66,7 +68,7 @@ export default function LoginPage() {
         >
           {loading ? "Enviando..." : "Enviar enlace"}
         </button>
-        {status ? <p className="mt-3 text-sm text-slate-300">{status}</p> : null}
+        {status ? <p className="mt-3 text-sm text-slate-700">{status}</p> : null}
       </form>
     </main>
   );

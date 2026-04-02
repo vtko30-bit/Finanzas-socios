@@ -31,10 +31,13 @@ export async function GET() {
 
   const isOrgCreator = org?.created_by === user.id;
 
+  const canWrite = member.role === "owner";
+
   return NextResponse.json({
     level: "green",
     message: "Autenticado y con organización activa.",
     role: member.role,
     isOrgCreator,
+    canWrite,
   });
 }

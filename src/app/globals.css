@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617;
-  --foreground: #e2e8f0;
+  /* Blanco mezclado con #5AC4FF al 40% (equivalente a ese azul al 40% sobre blanco). */
+  --background: color-mix(in srgb, #5ac4ff 40%, #ffffff);
+  --foreground: #0f172a;
+  --accent-sky: #0284c7;
+  --accent-indigo: #4f46e5;
 }
 
 @theme inline {
@@ -12,21 +15,25 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --foreground: #e2e8f0;
-  }
-}
-
 body {
-  background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background);
 }
 
-a {
-  color: inherit;
+/* En @layer base para no pisar utilidades Tailwind (p. ej. enlaces del menú). */
+@layer base {
+  a {
+    color: inherit;
+  }
+
+  /* Sombra gris clara por defecto; shadow-* en clases la sustituye si hace falta. */
+  button,
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"] {
+    box-shadow: 0 1px 2px rgb(148 163 184 / 0.4), 0 1px 3px rgb(203 213 225 / 0.45);
+  }
 }
 
 input,

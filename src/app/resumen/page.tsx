@@ -258,86 +258,90 @@ export default function ResumenPage() {
     [data],
   );
 
-  const thCls = "px-2 py-2 text-left text-xs font-medium text-slate-300";
+  const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
-  const tdCls = "border-t border-slate-800 px-2 py-2 text-slate-200";
+  const tdCls = "border-t border-slate-200 px-2 py-2 text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 pb-10 pt-4">
       <header>
         <h1 className="text-xl font-semibold">Resumen mensual</h1>
       </header>
 
       {!ready ? (
-        <p className="text-sm text-slate-400">Verificando sesión…</p>
+        <p className="text-sm text-slate-600">Verificando sesión…</p>
       ) : !authenticated ? (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           Inicia sesión para ver el resumen.
         </p>
       ) : (
         <>
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <h2 className="text-sm font-medium text-slate-200">Filtros</h2>
-            <div className="mt-3 flex flex-col gap-4">
-              <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-                <label className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
-                  <span className="shrink-0 text-slate-400">Período:</span>
-                  <select
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
-                    value={modo}
-                    onChange={(e) => setModo(e.target.value as FiltroModo)}
-                  >
-                    <option value="anio">Por año</option>
-                    <option value="mes">Por mes</option>
-                    <option value="rango">Rango de fechas</option>
-                  </select>
-                  {modo === "anio" ? (
-                    <input
-                      type="number"
-                      min={1990}
-                      max={2100}
-                      className="w-28 rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
-                      value={anio}
-                      onChange={(e) => setAnio(e.target.value)}
-                    />
-                  ) : null}
-                  {modo === "mes" ? (
-                    <input
-                      type="month"
-                      className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
-                      value={mes}
-                      onChange={(e) => setMes(e.target.value)}
-                    />
-                  ) : null}
-                  {modo === "rango" ? (
-                    <span className="flex flex-wrap items-center gap-2">
+          <section
+            aria-label="Filtros"
+            className="-mt-2 rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-3 py-2 text-white shadow-sm"
+          >
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                <div className="relative min-w-[200px] max-w-xs flex-1">
+                  <span className="mb-0.5 block text-xs text-white">Período</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      className="box-border h-9 min-w-[9rem] flex-1 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500 sm:max-w-[11rem] sm:flex-none"
+                      value={modo}
+                      onChange={(e) => setModo(e.target.value as FiltroModo)}
+                    >
+                      <option value="anio">Por año</option>
+                      <option value="mes">Por mes</option>
+                      <option value="rango">Rango de fechas</option>
+                    </select>
+                    {modo === "anio" ? (
                       <input
-                        type="date"
-                        className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
-                        value={rangoDesde}
-                        onChange={(e) => setRangoDesde(e.target.value)}
+                        type="number"
+                        min={1990}
+                        max={2100}
+                        className="box-border h-9 w-28 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        value={anio}
+                        onChange={(e) => setAnio(e.target.value)}
                       />
-                      <span className="text-slate-500">a</span>
+                    ) : null}
+                    {modo === "mes" ? (
                       <input
-                        type="date"
-                        className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
-                        value={rangoHasta}
-                        onChange={(e) => setRangoHasta(e.target.value)}
+                        type="month"
+                        className="box-border h-9 min-w-[9rem] rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        value={mes}
+                        onChange={(e) => setMes(e.target.value)}
                       />
-                    </span>
-                  ) : null}
-                </label>
+                    ) : null}
+                    {modo === "rango" ? (
+                      <>
+                        <input
+                          type="date"
+                          className="box-border h-9 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
+                          value={rangoDesde}
+                          onChange={(e) => setRangoDesde(e.target.value)}
+                        />
+                        <span className="shrink-0 text-sm text-white/90">a</span>
+                        <input
+                          type="date"
+                          className="box-border h-9 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
+                          value={rangoHasta}
+                          onChange={(e) => setRangoHasta(e.target.value)}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                </div>
 
                 <div className="relative min-w-[200px] max-w-xs flex-1">
-                  <span className="mb-1 block text-xs text-slate-400">Sucursal / origen</span>
+                  <span className="mb-0.5 block text-xs text-white">Sucursal / origen</span>
                   <input
                     type="text"
                     autoComplete="off"
                     role="combobox"
                     aria-expanded={sucursalAbierta}
                     aria-controls="resumen-sucursal-lista"
-                    className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500"
+                    className="box-border h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500"
                     placeholder="Todas — escribe o elige"
                     value={textoSucursalCampo}
                     onChange={(e) => {
@@ -353,11 +357,11 @@ export default function ResumenPage() {
                     <ul
                       id="resumen-sucursal-lista"
                       role="listbox"
-                      className="absolute left-0 right-0 z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-600 bg-slate-950 py-1 text-sm shadow-lg"
+                      className="absolute left-0 right-0 z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
                     >
                       <li
                         role="option"
-                        className="cursor-pointer px-3 py-2 text-slate-400 hover:bg-slate-800"
+                        className="cursor-pointer px-3 py-2 text-slate-600 hover:bg-slate-200"
                         onMouseDown={(e) => {
                           e.preventDefault();
                           elegirSucursalLista({ k: "todas" });
@@ -367,7 +371,7 @@ export default function ResumenPage() {
                       </li>
                       <li
                         role="option"
-                        className="cursor-pointer px-3 py-2 text-slate-300 hover:bg-slate-800"
+                        className="cursor-pointer px-3 py-2 text-slate-700 hover:bg-slate-200"
                         onMouseDown={(e) => {
                           e.preventDefault();
                           elegirSucursalLista({ k: "por_sucursal" });
@@ -386,7 +390,7 @@ export default function ResumenPage() {
                           <li
                             key={s}
                             role="option"
-                            className="cursor-pointer px-3 py-2 text-slate-200 hover:bg-slate-800"
+                            className="cursor-pointer px-3 py-2 text-slate-800 hover:bg-slate-200"
                             onMouseDown={(e) => {
                               e.preventDefault();
                               elegirSucursalLista({ k: "una", v: s });
@@ -405,12 +409,12 @@ export default function ResumenPage() {
                 <button
                   type="button"
                   disabled={loading}
-                  className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                   onClick={() => void cargar()}
                 >
                   {loading ? "Cargando…" : "Actualizar"}
                 </button>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-white/95">
                   Rango activo: {rangoEfectivo.desde} → {rangoEfectivo.hasta}
                 </span>
               </div>
@@ -418,7 +422,7 @@ export default function ResumenPage() {
           </section>
 
           {status ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
               {status}
             </p>
           ) : null}
@@ -427,11 +431,11 @@ export default function ResumenPage() {
             <>
               {data.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
-                  <h2 className="text-lg font-semibold text-slate-100">
+                  <h2 className="text-lg font-semibold text-slate-900">
                     Resumen de ventas por sucursal
                   </h2>
                   {(data.ventasPorSucursalLista ?? []).length === 0 ? (
-                    <p className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-6 text-center text-sm text-slate-500">
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
                       Sin ventas en este período.
                     </p>
                   ) : (
@@ -441,14 +445,14 @@ export default function ResumenPage() {
                       return (
                         <section
                           key={bloque.sucursal}
-                          className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm"
+                          className="overflow-x-auto rounded-xl border border-slate-300 bg-slate-50 shadow-sm"
                         >
-                          <h3 className="border-b border-slate-800 bg-slate-950/80 px-4 py-3 text-base font-semibold text-sky-100">
+                          <h3 className="border-b border-slate-200 bg-white/80 px-4 py-3 text-base font-semibold text-sky-900">
                             {bloque.sucursal}
                           </h3>
                           <table className="w-full min-w-[640px] border-collapse text-sm">
                             <thead>
-                              <tr className="bg-slate-950">
+                              <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                                 <th className={thCls}>Forma de pago</th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
@@ -482,14 +486,14 @@ export default function ResumenPage() {
                                   </td>
                                 </tr>
                               ) : (
-                                <tr className="bg-slate-950/80">
-                                  <td className={`${tdCls} font-medium text-slate-100`}>Total</td>
+                                <tr className="bg-white/80">
+                                  <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
                                   {data.monthKeys.map((mk) => (
-                                    <td key={mk} className={`${tdNum} font-medium text-slate-100`}>
+                                    <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                                       {formatClp(tpmB[mk] ?? 0)}
                                     </td>
                                   ))}
-                                  <td className={`${tdNum} font-semibold text-sky-200`}>
+                                  <td className={`${tdNum} font-semibold text-sky-800`}>
                                     {formatClp(totB)}
                                   </td>
                                 </tr>
@@ -502,15 +506,15 @@ export default function ResumenPage() {
                   )}
                 </div>
               ) : (
-                <section className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">
-                  <h2 className="border-b border-slate-800 px-4 py-3 text-base font-semibold text-slate-100">
+                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     {sucursalSel.k === "una" && sucursalSel.v.trim()
                       ? `Resumen de ventas ${sucursalSel.v.trim()}`
                       : "Resumen de ventas"}
                   </h2>
                   <table className="w-full min-w-[640px] border-collapse text-sm">
                     <thead>
-                      <tr className="bg-slate-950">
+                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                         <th className={thCls}>Forma de pago</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
@@ -548,14 +552,14 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr className="bg-slate-950/80">
-                          <td className={`${tdCls} font-medium text-slate-100`}>Total</td>
+                        <tr className="bg-white/80">
+                          <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
-                            <td key={mk} className={`${tdNum} font-medium text-slate-100`}>
+                            <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                               {formatClp(totalesPorMesVentas[mk] ?? 0)}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-sky-200`}>
+                          <td className={`${tdNum} font-semibold text-sky-800`}>
                             {formatClp(totalVentas)}
                           </td>
                         </tr>
@@ -567,11 +571,11 @@ export default function ResumenPage() {
 
               {data.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
-                  <h2 className="text-lg font-semibold text-slate-100">
+                  <h2 className="text-lg font-semibold text-slate-900">
                     Resumen de gastos por sucursal
                   </h2>
                   {(data.gastosPorSucursalLista ?? []).length === 0 ? (
-                    <p className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-6 text-center text-sm text-slate-500">
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
                       Sin gastos en este período.
                     </p>
                   ) : (
@@ -581,14 +585,14 @@ export default function ResumenPage() {
                       return (
                         <section
                           key={`g-${bloque.sucursal}`}
-                          className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm"
+                          className="overflow-x-auto rounded-xl border border-slate-300 bg-slate-50 shadow-sm"
                         >
-                          <h3 className="border-b border-slate-800 bg-slate-950/80 px-4 py-3 text-base font-semibold text-rose-100">
+                          <h3 className="border-b border-slate-200 bg-white/80 px-4 py-3 text-base font-semibold text-rose-900">
                             {bloque.sucursal}
                           </h3>
                           <table className="w-full min-w-[640px] border-collapse text-sm">
                             <thead>
-                              <tr className="bg-slate-950">
+                              <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                                 <th className={thCls}>Familia</th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
@@ -622,14 +626,14 @@ export default function ResumenPage() {
                                   </td>
                                 </tr>
                               ) : (
-                                <tr className="bg-slate-950/80">
-                                  <td className={`${tdCls} font-medium text-slate-100`}>Total</td>
+                                <tr className="bg-white/80">
+                                  <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
                                   {data.monthKeys.map((mk) => (
-                                    <td key={mk} className={`${tdNum} font-medium text-slate-100`}>
+                                    <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                                       {formatClp(tpmG[mk] ?? 0)}
                                     </td>
                                   ))}
-                                  <td className={`${tdNum} font-semibold text-rose-200`}>
+                                  <td className={`${tdNum} font-semibold text-rose-800`}>
                                     {formatClp(totG)}
                                   </td>
                                 </tr>
@@ -642,15 +646,15 @@ export default function ResumenPage() {
                   )}
                 </div>
               ) : (
-                <section className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">
-                  <h2 className="border-b border-slate-800 px-4 py-3 text-base font-semibold text-slate-100">
+                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     {sucursalSel.k === "una" && sucursalSel.v.trim()
                       ? `Resumen de gastos ${sucursalSel.v.trim()}`
                       : "Resumen de gastos"}
                   </h2>
                   <table className="w-full min-w-[640px] border-collapse text-sm">
                     <thead>
-                      <tr className="bg-slate-950">
+                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                         <th className={thCls}>Familia</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
@@ -688,14 +692,14 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr className="bg-slate-950/80">
-                          <td className={`${tdCls} font-medium text-slate-100`}>Total</td>
+                        <tr className="bg-white/80">
+                          <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
-                            <td key={mk} className={`${tdNum} font-medium text-slate-100`}>
+                            <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                               {formatClp(totalesPorMesGastos[mk] ?? 0)}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-rose-200`}>
+                          <td className={`${tdNum} font-semibold text-rose-800`}>
                             {formatClp(totalGastos)}
                           </td>
                         </tr>

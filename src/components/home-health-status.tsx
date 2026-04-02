@@ -11,9 +11,9 @@ type StatusResponse = {
 };
 
 const levelStyles: Record<Level, string> = {
-  green: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-  yellow: "border-amber-500/40 bg-amber-500/10 text-amber-200",
-  red: "border-rose-500/40 bg-rose-500/10 text-rose-200",
+  green: "border-emerald-300 bg-emerald-50 text-emerald-950",
+  yellow: "border-amber-300 bg-amber-50 text-amber-950",
+  red: "border-rose-300 bg-rose-50 text-rose-950",
 };
 
 const labels: Record<Level, string> = {
@@ -41,7 +41,7 @@ export function HomeHealthStatus() {
 
   if (loading) {
     return (
-      <p className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+      <p className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
         Verificando estado general...
       </p>
     );

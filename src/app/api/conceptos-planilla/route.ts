@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 import { chunk, UUID_IN_CHUNK } from "@/lib/array-chunk";
 
 function conceptoEsVacioOPlaceholder(raw: string) {
@@ -22,9 +23,9 @@ export async function PATCH(request: Request) {
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   let body: { label_actual?: unknown; label_nuevo?: unknown };
   try {
@@ -48,8 +49,6 @@ export async function PATCH(request: Request) {
   if (conceptoEsVacioOPlaceholder(label_nuevo)) {
     return NextResponse.json({ error: "El nombre nuevo no es válido" }, { status: 400 });
   }
-
-  const orgId = member.organization_id;
 
   const { data: rows, error: qErr } = await supabase
     .from("transactions")

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 
 export async function PATCH(
   request: Request,
@@ -17,9 +18,9 @@ export async function PATCH(
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   let body: { name?: unknown; sort_order?: unknown };
   try {
@@ -48,7 +49,7 @@ export async function PATCH(
     .from("concept_families")
     .update(updates)
     .eq("id", id)
-    .eq("organization_id", member.organization_id)
+    .eq("organization_id", orgId)
     .select("id, name, sort_order")
     .maybeSingle();
 
@@ -77,15 +78,14 @@ export async function DELETE(
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
 
   const { error } = await supabase
     .from("concept_families")
     .delete()
     .eq("id", id)
-    .eq("organization_id", member.organization_id);
+    .eq("organization_id", member!.organization_id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

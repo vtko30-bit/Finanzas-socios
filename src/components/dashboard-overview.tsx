@@ -56,7 +56,7 @@ export function DashboardOverview() {
           ? "Crea la organización inicial (botón en la barra o /importar)."
           : null;
     return (
-      <p className="rounded-xl border border-amber-500/40 bg-amber-900/20 p-4 text-sm">
+      <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
         {error}
         {hint ? ` ${hint}` : ""}
       </p>
@@ -72,17 +72,27 @@ export function DashboardOverview() {
     ["Gastos acumulados", data ? formatClp(data.total.expense) : "..."],
     ["Resultado neto acumulado", data ? formatClp(data.total.net) : "..."],
     ["Transacciones totales", data ? String(data.total.count) : "..."],
-  ];
+  ] as const;
+
+  function metricStyle(label: string) {
+    if (label.includes("Ingresos"))
+      return "border-l-emerald-500 from-emerald-50/50 to-white text-emerald-950";
+    if (label.includes("Gastos"))
+      return "border-l-rose-500 from-rose-50/50 to-white text-rose-950";
+    if (label.includes("neto") || label.includes("Neto"))
+      return "border-l-sky-500 from-sky-50/50 to-white text-sky-950";
+    return "border-l-violet-500 from-violet-50/40 to-white text-violet-950";
+  }
 
   return (
     <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {metrics.map(([label, value]) => (
         <article
           key={label}
-          className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+          className={`rounded-xl border border-slate-200/90 border-l-4 bg-gradient-to-br p-4 shadow-sm ${metricStyle(label)}`}
         >
-          <p className="text-sm text-slate-300">{label}</p>
-          <p className="mt-2 text-2xl font-semibold">{value}</p>
+          <p className="text-sm opacity-90">{label}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900 tabular-nums">{value}</p>
         </article>
       ))}
     </section>

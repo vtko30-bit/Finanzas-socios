@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 
 export async function PATCH(
   request: Request,
@@ -17,9 +18,9 @@ export async function PATCH(
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   let body: { label?: unknown; family_id?: unknown };
   try {
@@ -41,7 +42,7 @@ export async function PATCH(
       .from("concept_families")
       .select("id")
       .eq("id", body.family_id.trim())
-      .eq("organization_id", member.organization_id)
+      .eq("organization_id", orgId)
       .maybeSingle();
     if (famErr || !fam) {
       return NextResponse.json({ error: "Familia no encontrada" }, { status: 404 });
@@ -57,7 +58,7 @@ export async function PATCH(
     .from("concept_catalog")
     .update(updates)
     .eq("id", id)
-    .eq("organization_id", member.organization_id)
+    .eq("organization_id", orgId)
     .select("id, label, family_id")
     .maybeSingle();
 
@@ -81,7 +82,7 @@ export async function PATCH(
         concepto: updates.label,
         updated_at: new Date().toISOString(),
       })
-      .eq("organization_id", member.organization_id)
+      .eq("organization_id", orgId)
       .eq("concept_id", id);
   }
 
@@ -103,15 +104,14 @@ export async function DELETE(
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
 
   const { error } = await supabase
     .from("concept_catalog")
     .delete()
     .eq("id", id)
-    .eq("organization_id", member.organization_id);
+    .eq("organization_id", member!.organization_id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

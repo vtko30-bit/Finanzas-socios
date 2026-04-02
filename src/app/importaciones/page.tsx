@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
 
 type HistorialItem = {
@@ -51,12 +52,11 @@ function labelEstado(status: string): string {
 
 export default function ImportacionesPage() {
   const { ready, authenticated } = useAuthState();
+  const { canWrite } = useOrgCapabilities();
   const [data, setData] = useState<HistorialResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  /** Solo owner + creador de la organización (mismo criterio que borrados masivos). */
-  const [canDeleteImportBatch, setCanDeleteImportBatch] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     if (!authenticated) return;
@@ -82,27 +82,6 @@ export default function ImportacionesPage() {
   useEffect(() => {
     if (ready && authenticated) void load();
   }, [ready, authenticated, load]);
-
-  useEffect(() => {
-    if (!ready || !authenticated) {
-      setCanDeleteImportBatch(null);
-      return;
-    }
-    fetch("/api/session-status")
-      .then((r) => r.json())
-      .then(
-        (j: {
-          level?: string;
-          role?: string;
-          isOrgCreator?: boolean;
-        }) => {
-          setCanDeleteImportBatch(
-            j.level === "green" && j.role === "owner" && j.isOrgCreator === true,
-          );
-        },
-      )
-      .catch(() => setCanDeleteImportBatch(false));
-  }, [ready, authenticated]);
 
   const eliminarLote = async (row: HistorialItem) => {
     const income = row.transactionIncome;
@@ -137,7 +116,7 @@ export default function ImportacionesPage() {
   if (!ready) {
     return (
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-400">Cargando…</p>
+        <p className="text-slate-600">Cargando…</p>
       </main>
     );
   }
@@ -145,7 +124,7 @@ export default function ImportacionesPage() {
   if (!authenticated) {
     return (
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-slate-300">
+        <p className="text-slate-700">
           Inicia sesión para ver el historial de importaciones.{" "}
           <Link href="/login" className="text-sky-400 underline">
             Ir a login
@@ -159,8 +138,8 @@ export default function ImportacionesPage() {
     <main className="mx-auto max-w-6xl px-6 py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Importaciones</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400">
+          <h1 className="text-2xl font-semibold text-slate-900">Importaciones</h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
             Registro de Archivos Importados
           </p>
         </div>
@@ -168,14 +147,14 @@ export default function ImportacionesPage() {
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-sky-500 hover:text-white disabled:opacity-50"
+          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:border-sky-500 hover:text-slate-900 disabled:opacity-50"
         >
           {loading ? "Actualizando…" : "Actualizar"}
         </button>
       </div>
 
       {error ? (
-        <p className="mt-6 rounded-lg border border-red-900/80 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <p className="mt-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
           {error}
         </p>
       ) : null}
@@ -183,18 +162,18 @@ export default function ImportacionesPage() {
       {data && !error ? (
         <>
           <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/95 p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Ventas (en BD)
               </p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-300 tabular-nums">
+              <p className="mt-1 text-2xl font-semibold text-emerald-700 tabular-nums">
                 {data.totals.ventasIngresos.toLocaleString("es-CL")}
               </p>
               <p className="mt-2 text-xs text-slate-500">
                 Ingresos desde importación de ventas (planilla de punto de venta).
               </p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/95 p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Otros ingresos (en BD)
               </p>
@@ -205,11 +184,11 @@ export default function ImportacionesPage() {
                 Ingresos desde hoja Ingresos (planilla banco, Depósitos / Abonos).
               </p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-5 sm:col-span-2 lg:col-span-1">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/95 p-5 sm:col-span-2 lg:col-span-1">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Gastos / egresos (en BD)
               </p>
-              <p className="mt-1 text-2xl font-semibold text-amber-200 tabular-nums">
+              <p className="mt-1 text-2xl font-semibold text-amber-800 tabular-nums">
                 {data.totals.gastosEgresos.toLocaleString("es-CL")}
               </p>
               <p className="mt-2 text-xs text-slate-500">
@@ -218,18 +197,24 @@ export default function ImportacionesPage() {
             </div>
           </section>
 
-          <div className="mt-10 overflow-x-auto rounded-xl border border-slate-800">
+          <div className="mt-10 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[720px] border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/90">
-                  <th className="px-4 py-3 font-medium text-slate-300">Fecha</th>
-                  <th className="px-4 py-3 font-medium text-slate-300">Archivo</th>
-                  <th className="px-4 py-3 font-medium text-slate-300">Tipo</th>
-                  <th className="px-4 py-3 font-medium text-slate-300 text-right">Filas válidas (Excel)</th>
-                  <th className="px-4 py-3 font-medium text-slate-300 text-right">Ingresos en BD</th>
-                  <th className="px-4 py-3 font-medium text-slate-300 text-right">Egresos en BD</th>
-                  <th className="px-4 py-3 font-medium text-slate-300">Estado</th>
-                  <th className="px-4 py-3 font-medium text-slate-300 text-right">Acción</th>
+                <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                  <th className="px-4 py-3 font-medium text-white">Fecha</th>
+                  <th className="px-4 py-3 font-medium text-white">Archivo</th>
+                  <th className="px-4 py-3 font-medium text-white">Tipo</th>
+                  <th className="px-4 py-3 text-right font-medium text-white">
+                    Filas válidas (Excel)
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-white">
+                    Ingresos en BD
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-white">
+                    Egresos en BD
+                  </th>
+                  <th className="px-4 py-3 font-medium text-white">Estado</th>
+                  <th className="px-4 py-3 text-right font-medium text-white">Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -237,7 +222,7 @@ export default function ImportacionesPage() {
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                       No hay importaciones de Excel registradas aún.{" "}
-                      <Link href="/importar" className="text-sky-400 underline">
+                      <Link href="/importar" className="text-sky-700 underline">
                         Ir a importar
                       </Link>
                     </td>
@@ -246,15 +231,15 @@ export default function ImportacionesPage() {
                   data.items.map((row) => (
                     <tr
                       key={row.id}
-                      className="border-b border-slate-800/80 hover:bg-slate-900/50"
+                      className="border-b border-slate-200/80 hover:bg-slate-50/50"
                     >
-                      <td className="px-4 py-3 text-slate-400 whitespace-nowrap">
+                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                         {new Date(row.createdAt).toLocaleString("es-CL", {
                           dateStyle: "short",
                           timeStyle: "short",
                         })}
                       </td>
-                      <td className="px-4 py-3 text-slate-200">
+                      <td className="px-4 py-3 text-slate-800">
                         <span className="break-all" title={row.filename}>
                           {row.filename}
                         </span>
@@ -264,36 +249,34 @@ export default function ImportacionesPage() {
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 text-slate-300">{labelTipo(row.importKind)}</td>
-                      <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
+                      <td className="px-4 py-3 text-slate-700">{labelTipo(row.importKind)}</td>
+                      <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
                         {row.validRows != null ? row.validRows.toLocaleString("es-CL") : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-emerald-300/90">
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">
                         {row.transactionIncome.toLocaleString("es-CL")}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-amber-200/90">
+                      <td className="px-4 py-3 text-right tabular-nums text-amber-800">
                         {row.transactionExpense.toLocaleString("es-CL")}
                       </td>
-                      <td className="px-4 py-3 text-slate-400">{labelEstado(row.status)}</td>
+                      <td className="px-4 py-3 text-slate-600">{labelEstado(row.status)}</td>
                       <td className="px-4 py-3 text-right">
-                        {canDeleteImportBatch ? (
+                        {canWrite ? (
                           <button
                             type="button"
                             disabled={deletingId === row.id}
-                            className="rounded border border-rose-800/80 bg-rose-950/40 px-2.5 py-1 text-xs font-medium text-rose-100 hover:bg-rose-950/70 disabled:opacity-50"
+                            className="rounded border border-rose-400 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100 disabled:opacity-50"
                             onClick={() => void eliminarLote(row)}
                           >
                             {deletingId === row.id ? "Eliminando…" : "Eliminar lote"}
                           </button>
-                        ) : canDeleteImportBatch === false ? (
+                        ) : (
                           <span
                             className="text-xs text-slate-500"
-                            title="Solo el usuario creador (owner) puede eliminar lotes."
+                            title="Solo el administrador (owner) puede eliminar lotes."
                           >
                             —
                           </span>
-                        ) : (
-                          <span className="text-xs text-slate-600">…</span>
                         )}
                       </td>
                     </tr>
@@ -310,7 +293,7 @@ export default function ImportacionesPage() {
           </p>
         </>
       ) : !error && loading ? (
-        <p className="mt-8 text-slate-400">Cargando historial…</p>
+        <p className="mt-8 text-slate-600">Cargando historial…</p>
       ) : null}
     </main>
   );

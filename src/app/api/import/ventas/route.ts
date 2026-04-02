@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseConsolidatedExcel } from "@/lib/import/excel";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 import { logAudit } from "@/lib/audit";
 import { chunk, DEDUPE_HASH_IN_CHUNK } from "@/lib/array-chunk";
 
@@ -17,9 +18,9 @@ export async function POST(request: Request) {
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   const formData = await request.formData();
   const file = formData.get("file");
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   const { data: previousBatch, error: previousBatchError } = await supabase
     .from("import_batches")
     .select("id, created_at")
-    .eq("organization_id", member.organization_id)
+    .eq("organization_id", orgId)
     .eq("status", "imported")
     .eq("summary_json->>importKind", "excel_ventas")
     .eq("summary_json->>fileHash", fileHash)
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
 
   const { error: batchError } = await supabase.from("import_batches").insert({
     id: batchId,
-    organization_id: member.organization_id,
+    organization_id: orgId,
     filename: file.name,
     status: "validated",
     summary_json: {
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
       const { data: chunkData, error: chunkError } = await supabase
         .from("transactions")
         .select("dedupe_hash")
-        .eq("organization_id", member.organization_id)
+        .eq("organization_id", orgId)
         .in("dedupe_hash", hashChunk);
       if (chunkError) {
         return NextResponse.json({ error: chunkError.message }, { status: 500 });
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
   if (uniqueToInsert.length) {
     const tx = uniqueToInsert.map((m) => ({
       id: randomUUID(),
-      organization_id: member.organization_id,
+      organization_id: orgId,
       account_id: null,
       category_id: null,
       date: m.date,
@@ -168,7 +169,7 @@ export async function POST(request: Request) {
     .eq("id", batchId);
 
   await logAudit(supabase, {
-    organization_id: member.organization_id,
+    organization_id: orgId,
     actor_user_id: user.id,
     action: "import_ventas",
     entity_type: "import_batch",

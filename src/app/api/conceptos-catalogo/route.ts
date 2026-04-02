@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 import { vincularGastosPlanillaAlConcepto } from "@/lib/conceptos-vincular";
 
 export async function POST(request: Request) {
@@ -14,9 +15,9 @@ export async function POST(request: Request) {
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   let body: {
     family_id?: unknown;
@@ -46,14 +47,12 @@ export async function POST(request: Request) {
     .from("concept_families")
     .select("id")
     .eq("id", family_id)
-    .eq("organization_id", member.organization_id)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   if (famErr || !fam) {
     return NextResponse.json({ error: "Familia no encontrada" }, { status: 404 });
   }
-
-  const orgId = member.organization_id;
 
   const { data: inserted, error: insErr } = await supabase
     .from("concept_catalog")

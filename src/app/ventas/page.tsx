@@ -131,16 +131,16 @@ function filtrarVentas(
 function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
   return (
     <span
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-slate-400"
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-white"
       aria-hidden
     >
       {active ? (
         dir === "asc" ? (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-sky-400">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[1.125rem] w-[1.125rem] text-white">
             <path d="M7 14l5-5 5 5H7z" />
           </svg>
         ) : (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-sky-400">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[1.125rem] w-[1.125rem] text-white">
             <path d="M7 10l5 5 5-5H7z" />
           </svg>
         )
@@ -148,7 +148,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
         <svg
           viewBox="0 0 24 24"
           fill="currentColor"
-          className="h-3.5 w-3.5 opacity-40"
+          className="h-[1.125rem] w-[1.125rem] text-white opacity-50"
         >
           <path d="M7 10l5 5 5-5H7z" opacity="0.5" />
           <path d="M7 14l5-5 5 5H7z" opacity="0.5" />
@@ -288,20 +288,22 @@ export default function VentasPage() {
   };
 
   const thBtn =
-    "inline-flex w-full items-center gap-1 text-left font-medium hover:text-sky-300";
+    "inline-flex w-full items-center gap-1 border-0 bg-transparent px-0.5 py-0.5 text-left font-medium text-white shadow-none outline-none hover:bg-white/15 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-0";
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
       <h1 className="text-xl font-semibold">Detalle de ventas</h1>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-        <h2 className="mb-2 text-xs font-medium text-slate-200">Filtros</h2>
-        <div className="flex flex-col gap-3">
+      <section
+        aria-label="Filtros"
+        className="rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-3 py-2 text-white shadow-sm [&_label]:!text-white"
+      >
+        <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex min-w-[140px] flex-col gap-1 text-xs text-slate-400">
+            <label className="flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600">
               Fecha
               <select
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                 value={modoFecha}
                 onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
               >
@@ -313,36 +315,36 @@ export default function VentasPage() {
               </select>
             </label>
             {modoFecha === "dia" ? (
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
+              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                 Día
                 <input
                   type="date"
-                  className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "mes" ? (
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
+              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                 Mes
                 <input
                   type="month"
-                  className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "anio" ? (
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
+              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                 Año
                 <input
                   type="number"
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
@@ -350,20 +352,20 @@ export default function VentasPage() {
             ) : null}
             {modoFecha === "rango" ? (
               <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1 text-xs text-slate-400">
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Desde
                   <input
                     type="date"
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-xs text-slate-400">
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Hasta
                   <input
                     type="date"
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
@@ -372,22 +374,22 @@ export default function VentasPage() {
             ) : null}
           </div>
 
-          <div className="grid w-full max-w-full grid-cols-1 gap-2 sm:max-w-[50%] sm:grid-cols-2">
-            <label className="flex min-w-0 flex-col gap-1 text-xs text-slate-400">
+          <div className="grid w-full max-w-full grid-cols-1 gap-1.5 sm:max-w-[50%] sm:grid-cols-2">
+            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600">
               Forma de pago
               <input
                 type="text"
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                 placeholder="Ej: Efectivo, Débito, transferencia…"
                 value={filtroFormaPago}
                 onChange={(e) => setFiltroFormaPago(e.target.value)}
               />
             </label>
-            <label className="flex min-w-0 flex-col gap-1 text-xs text-slate-400">
+            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600">
               Sucursal
               <input
                 type="text"
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm"
+                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
                 placeholder="Ej: nombre de sucursal…"
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
@@ -398,12 +400,12 @@ export default function VentasPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="rounded border border-slate-600 px-3 py-1 text-sm hover:border-slate-500"
+              className="rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white"
               onClick={limpiarFiltros}
             >
               Limpiar filtros
             </button>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-white">
               Mostrando {displayRows.length} de {rows.length} ventas
             </span>
           </div>
@@ -411,14 +413,14 @@ export default function VentasPage() {
       </section>
 
       {status ? (
-        <p className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+        <p className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           {status}
         </p>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
         <div
-          className={`${VENTAS_ROW_GRID} border-b border-slate-800 bg-slate-950 px-2 py-2 text-left text-sm`}
+          className={`${VENTAS_ROW_GRID} border-b border-[#3a9fe0] bg-[#5AC4FF] px-2 py-2 text-left text-sm text-white`}
         >
           <div className="px-1">
             <button
@@ -483,7 +485,7 @@ export default function VentasPage() {
           aria-rowcount={displayRows.length}
         >
           {!displayRows.length && !status ? (
-            <p className="px-3 py-6 text-center text-sm text-slate-400">
+            <p className="px-3 py-6 text-center text-sm text-slate-600">
               {rows.length === 0
                 ? "Sin ingresos cargados. Importa un Excel de ventas desde Importar (no uses el formulario «consolidado», que guarda gastos)."
                 : "Ninguna venta coincide con los filtros."}
@@ -495,7 +497,7 @@ export default function VentasPage() {
                   <div
                     key={row.id}
                     role="row"
-                    className={`${VENTAS_ROW_GRID} border-t border-slate-800 px-3 py-2 text-sm`}
+                    className={`${VENTAS_ROW_GRID} border-t border-slate-200 px-3 py-2 text-sm`}
                   >
                     <div
                       className="min-w-0 font-mono text-xs"
@@ -518,7 +520,7 @@ export default function VentasPage() {
           )}
         </div>
         {displayRows.length > 0 && totalPaginasVentas > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <span className="text-xs">
               Filas {(paginaVentas - 1) * VENTAS_POR_PAGINA + 1}–
               {Math.min(paginaVentas * VENTAS_POR_PAGINA, displayRows.length)} de{" "}
@@ -527,7 +529,7 @@ export default function VentasPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-slate-300 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={paginaVentas <= 1}
                 onClick={() => setPaginaVentas((p) => Math.max(1, p - 1))}
               >
@@ -538,7 +540,7 @@ export default function VentasPage() {
               </span>
               <button
                 type="button"
-                className="rounded border border-slate-600 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-slate-300 px-2 py-1 text-xs hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={paginaVentas >= totalPaginasVentas}
                 onClick={() =>
                   setPaginaVentas((p) =>

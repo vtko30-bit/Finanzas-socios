@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { denyIfNotOwner } from "@/lib/org-permissions";
 import { logAudit } from "@/lib/audit";
 import { patchTransactionConcepto } from "@/lib/patch-transaction-concepto";
 
@@ -24,9 +25,9 @@ export async function PATCH(
   }
 
   const member = await getUserOrganization(supabase, user.id);
-  if (!member) {
-    return NextResponse.json({ error: "Sin organización" }, { status: 403 });
-  }
+  const denied = denyIfNotOwner(member);
+  if (denied) return denied;
+  const orgId = member!.organization_id;
 
   let body: PatchBody;
   try {
@@ -37,7 +38,7 @@ export async function PATCH(
 
   const result = await patchTransactionConcepto(supabase, {
     txId: id,
-    organizationId: member.organization_id,
+    organizationId: orgId,
     body,
     allowedTypes: ["expense"],
     wrongTypeMessage: "Solo se edita la categoría en gastos",
@@ -48,7 +49,7 @@ export async function PATCH(
   }
 
   await logAudit(supabase, {
-    organization_id: member.organization_id,
+    organization_id: orgId,
     actor_user_id: user.id,
     action: "update_concepto_gasto",
     entity_type: "transaction",
