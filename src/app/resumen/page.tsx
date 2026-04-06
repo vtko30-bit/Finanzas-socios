@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthState } from "@/hooks/use-auth-state";
 
@@ -26,6 +27,7 @@ type PivotResponse = {
   monthLabels: string[];
   ventas: { rows: PivotRowVenta[] };
   gastos: { rows: PivotRowGasto[] };
+  gastosSocios?: { rows: PivotRowGasto[] };
   error?: string;
 };
 
@@ -258,10 +260,32 @@ export default function ResumenPage() {
     [data],
   );
 
+  const totalesPorMesGastosSocios = useMemo(() => {
+    if (!data?.monthKeys.length) return {};
+    const rows = data.gastosSocios?.rows ?? [];
+    const acc: Record<string, number> = {};
+    for (const mk of data.monthKeys) acc[mk] = 0;
+    for (const r of rows) {
+      for (const mk of data.monthKeys) {
+        acc[mk] += r.byMonth[mk] ?? 0;
+      }
+    }
+    return acc;
+  }, [data]);
+
+  const totalGastosSocios = useMemo(() => {
+    const rows = data?.gastosSocios?.rows ?? [];
+    return rows.reduce((s, r) => s + r.total, 0);
+  }, [data]);
+
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
   const tdCls = "border-t border-slate-200 px-2 py-2 text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
+  /** Primera columna fija al hacer scroll horizontal en móvil (solo meses + total se desplazan). */
+  const thStickyFirst = `${thCls} max-sm:sticky max-sm:left-0 max-sm:z-20 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-[#5AC4FF] max-sm:border-r max-sm:border-sky-700/30 max-sm:shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
+  const tdStickyFirst = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-slate-50 max-sm:border-r max-sm:border-slate-200 max-sm:shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
+  const tdStickyFirstTotal = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-white/80 max-sm:border-r max-sm:border-slate-200`;
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 pb-10 pt-4">
@@ -453,7 +477,7 @@ export default function ResumenPage() {
                           <table className="w-full min-w-[640px] border-collapse text-sm">
                             <thead>
                               <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
-                                <th className={thCls}>Forma de pago</th>
+                                <th className={thStickyFirst}>Forma de pago</th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
                                     {label}
@@ -465,7 +489,7 @@ export default function ResumenPage() {
                             <tbody>
                               {bloque.rows.map((r) => (
                                 <tr key={r.formaPago}>
-                                  <td className={tdCls}>{r.formaPago}</td>
+                                  <td className={tdStickyFirst}>{r.formaPago}</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={tdNum}>
                                       {formatClp(r.byMonth[mk] ?? 0)}
@@ -487,7 +511,7 @@ export default function ResumenPage() {
                                 </tr>
                               ) : (
                                 <tr className="bg-white/80">
-                                  <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
+                                  <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                                       {formatClp(tpmB[mk] ?? 0)}
@@ -515,7 +539,7 @@ export default function ResumenPage() {
                   <table className="w-full min-w-[640px] border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
-                        <th className={thCls}>Forma de pago</th>
+                        <th className={thStickyFirst}>Forma de pago</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
                             {label}
@@ -527,7 +551,7 @@ export default function ResumenPage() {
                     <tbody>
                       {data.ventas.rows.map((r) => (
                         <tr key={r.formaPago}>
-                          <td className={tdCls}>{r.formaPago}</td>
+                          <td className={tdStickyFirst}>{r.formaPago}</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
                               {formatClp(r.byMonth[mk] ?? 0)}
@@ -553,7 +577,7 @@ export default function ResumenPage() {
                         </tr>
                       ) : (
                         <tr className="bg-white/80">
-                          <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
+                          <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                               {formatClp(totalesPorMesVentas[mk] ?? 0)}
@@ -593,7 +617,7 @@ export default function ResumenPage() {
                           <table className="w-full min-w-[640px] border-collapse text-sm">
                             <thead>
                               <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
-                                <th className={thCls}>Familia</th>
+                                <th className={thStickyFirst}>Familia</th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
                                     {label}
@@ -605,7 +629,7 @@ export default function ResumenPage() {
                             <tbody>
                               {bloque.rows.map((r) => (
                                 <tr key={r.familia}>
-                                  <td className={tdCls}>{r.familia}</td>
+                                  <td className={tdStickyFirst}>{r.familia}</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={tdNum}>
                                       {formatClp(r.byMonth[mk] ?? 0)}
@@ -627,7 +651,7 @@ export default function ResumenPage() {
                                 </tr>
                               ) : (
                                 <tr className="bg-white/80">
-                                  <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
+                                  <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                                       {formatClp(tpmG[mk] ?? 0)}
@@ -655,7 +679,7 @@ export default function ResumenPage() {
                   <table className="w-full min-w-[640px] border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
-                        <th className={thCls}>Familia</th>
+                        <th className={thStickyFirst}>Familia</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
                             {label}
@@ -667,7 +691,7 @@ export default function ResumenPage() {
                     <tbody>
                       {data.gastos.rows.map((r) => (
                         <tr key={r.familia}>
-                          <td className={tdCls}>{r.familia}</td>
+                          <td className={tdStickyFirst}>{r.familia}</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
                               {formatClp(r.byMonth[mk] ?? 0)}
@@ -693,7 +717,7 @@ export default function ResumenPage() {
                         </tr>
                       ) : (
                         <tr className="bg-white/80">
-                          <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
+                          <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                               {formatClp(totalesPorMesGastos[mk] ?? 0)}
@@ -708,6 +732,72 @@ export default function ResumenPage() {
                   </table>
                 </section>
               )}
+
+              {data.gastosSocios ? (
+                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
+                    Resumen de gastos socios (Mario, Mena, Victor)
+                  </h2>
+                  <p className="border-b border-slate-100 bg-white/70 px-4 py-2 text-xs text-slate-600">
+                    Estos gastos no se incluyen en el resumen general de gastos del negocio. Detalle
+                    por categoría y mes en{" "}
+                    <Link href="/socios" className="text-sky-700 underline hover:text-sky-900">
+                      Socios
+                    </Link>
+                    .
+                  </p>
+                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                        <th className={thStickyFirst}>Familia</th>
+                        {data.monthLabels.map((label, i) => (
+                          <th key={data.monthKeys[i]} className={thNum}>
+                            {label}
+                          </th>
+                        ))}
+                        <th className={thNum}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.gastosSocios.rows ?? []).map((r) => (
+                        <tr key={r.familia}>
+                          <td className={tdStickyFirst}>{r.familia}</td>
+                          {data.monthKeys.map((mk) => (
+                            <td key={mk} className={tdNum}>
+                              {formatClp(r.byMonth[mk] ?? 0)}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-medium text-slate-50`}>
+                            {formatClp(r.total)}
+                          </td>
+                        </tr>
+                      ))}
+                      {(data.gastosSocios.rows ?? []).length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={data.monthKeys.length + 2}
+                            className="px-4 py-6 text-center text-slate-500"
+                          >
+                            Sin gastos de socios en este período.
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr className="bg-white/80">
+                          <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
+                          {data.monthKeys.map((mk) => (
+                            <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
+                              {formatClp(totalesPorMesGastosSocios[mk] ?? 0)}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-semibold text-violet-800`}>
+                            {formatClp(totalGastosSocios)}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </section>
+              ) : null}
             </>
           ) : data && data.monthKeys.length === 0 ? (
             <p className="text-sm text-slate-500">No hay meses en el rango seleccionado.</p>

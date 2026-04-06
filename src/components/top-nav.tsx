@@ -4,12 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { SessionStatus } from "@/components/session-status";
+import { useAuthState } from "@/hooks/use-auth-state";
+import { createClient } from "@/lib/supabase/browser";
 
 const NAV_BASE: { href: string; label: string }[] = [
   { href: "/gastos", label: "Gastos" },
   { href: "/ventas", label: "Ventas" },
   { href: "/familias", label: "Familias" },
   { href: "/categorias", label: "Categorías" },
+  { href: "/socios", label: "Socios" },
   { href: "/resumen", label: "Resumen" },
   { href: "/analisis", label: "Análisis" },
   { href: "/reportes", label: "Reportes" },
@@ -27,8 +30,15 @@ const NAV_LOGIN: { href: string; label: string }[] = [
 
 export function TopNav() {
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
+  const { ready: authReady, authenticated } = useAuthState();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const signOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }, []);
 
   const navItems = [
     ...NAV_BASE,
@@ -57,7 +67,7 @@ export function TopNav() {
 
   return (
     <header className="border-b border-[#3a9fe0] bg-[#5AC4FF] shadow-sm">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-3">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-3">
         <div
           ref={rootRef}
           className="relative flex min-w-0 flex-1 items-center gap-3 text-white"
@@ -103,6 +113,24 @@ export function TopNav() {
                       </Link>
                     </li>
                   ))}
+                  {authReady && authenticated ? (
+                    <li
+                      role="none"
+                      className="mt-1 border-t border-slate-200 pt-1 sm:hidden"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-4 py-2.5 text-left text-sm text-slate-900 hover:bg-sky-100 hover:text-slate-950"
+                        onClick={() => {
+                          close();
+                          void signOut();
+                        }}
+                      >
+                        Cerrar sesión
+                      </button>
+                    </li>
+                  ) : null}
                 </ul>
               </div>
             ) : null}
@@ -110,13 +138,13 @@ export function TopNav() {
 
           <Link
             href="/"
-            className="min-w-0 truncate text-lg font-semibold text-white drop-shadow-sm hover:text-white"
+            className="min-w-0 truncate text-lg font-semibold text-sky-950 hover:text-sky-900"
           >
             Finanzas Rg
           </Link>
         </div>
 
-        <div className="min-w-0 shrink">
+        <div className="min-w-0 w-full border-t border-sky-800/15 pt-2 sm:w-auto sm:shrink-0 sm:border-t-0 sm:pt-0">
           <SessionStatus variant="on-brand" />
         </div>
       </div>

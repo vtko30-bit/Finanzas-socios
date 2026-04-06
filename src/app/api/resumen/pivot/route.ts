@@ -203,6 +203,13 @@ function familiaFromExpenseRow(raw: unknown): string {
   return String(name ?? "").trim() || "Sin familia";
 }
 
+/** Familias de socios (gastos personales): no entran en el resumen general de gastos. */
+const FAMILIAS_SOCIOS = new Set(["mario", "mena", "victor"]);
+
+function esFamiliaSocio(familia: string): boolean {
+  return FAMILIAS_SOCIOS.has(familia.trim().toLowerCase());
+}
+
 function gastosRowsFromExpenseRows(
   rows: unknown[],
   monthKeys: string[],
@@ -230,6 +237,19 @@ function gastosRowsFromExpenseRows(
       return { familia, byMonth, total };
     })
     .sort((a, b) => a.familia.localeCompare(b.familia, "es"));
+}
+
+function partitionExpenseRowsSocios(rows: unknown[]): {
+  negocio: unknown[];
+  socios: unknown[];
+} {
+  const negocio: unknown[] = [];
+  const socios: unknown[] = [];
+  for (const raw of rows) {
+    if (esFamiliaSocio(familiaFromExpenseRow(raw))) socios.push(raw);
+    else negocio.push(raw);
+  }
+  return { negocio, socios };
 }
 
 export async function GET(request: Request) {
@@ -282,6 +302,7 @@ export async function GET(request: Request) {
       ventasPorSucursalLista: [],
       gastosPorSucursalLista: [],
       gastos: { rows: [] },
+      gastosSocios: { rows: [] },
     });
   }
 
@@ -323,8 +344,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: expenseErr }, { status: 500 });
     }
 
+    const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+      expenseData ?? [],
+    );
+
     const gastosByLoc = new Map<string, unknown[]>();
-    for (const raw of expenseData ?? []) {
+    for (const raw of expenseNegocio) {
       const row = raw as { origen_cuenta?: string | null };
       const loc = String(row.origen_cuenta ?? "").trim() || "Sin sucursal";
       if (!gastosByLoc.has(loc)) gastosByLoc.set(loc, []);
@@ -337,6 +362,8 @@ export async function GET(request: Request) {
       }))
       .sort((a, b) => a.sucursal.localeCompare(b.sucursal, "es"));
 
+    const gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
+
     return NextResponse.json({
       desde,
       hasta,
@@ -348,6 +375,7 @@ export async function GET(request: Request) {
       ventasPorSucursalLista: ventasPorSucursalRows,
       gastos: { rows: [] },
       gastosPorSucursalLista: gastosPorSucursalRows,
+      gastosSocios: { rows: gastosSociosRows },
     });
   }
 
@@ -364,7 +392,11 @@ export async function GET(request: Request) {
   }
 
   const ventasRows = ventasRowsFromIncome((incomeData ?? []) as IncomeRow[], monthKeys);
-  const gastosRows = gastosRowsFromExpenseRows(expenseData ?? [], monthKeys);
+  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+    expenseData ?? [],
+  );
+  const gastosRows = gastosRowsFromExpenseRows(expenseNegocio, monthKeys);
+  const gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
 
   return NextResponse.json({
     desde,
@@ -377,5 +409,6 @@ export async function GET(request: Request) {
     monthLabels,
     ventas: { rows: ventasRows },
     gastos: { rows: gastosRows },
+    gastosSocios: { rows: gastosSociosRows },
   });
 }

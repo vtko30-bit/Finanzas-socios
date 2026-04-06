@@ -393,8 +393,7 @@ export default function FamiliasPage() {
       </div>
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#3a9fe0] bg-[#5AC4FF] px-6 py-4">
-          <h2 className="text-lg font-semibold text-white drop-shadow-sm">Listado</h2>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-[#3a9fe0] bg-[#5AC4FF] px-6 py-2">
           <button
             type="button"
             disabled={!canWrite}
