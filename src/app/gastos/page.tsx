@@ -13,6 +13,10 @@ import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 const GASTOS_ROW_GRID =
   "grid w-full min-w-[1042px] grid-cols-[minmax(0,6rem)_minmax(0,0.3fr)_minmax(0,0.85fr)_minmax(0,130px)_minmax(0,200px)_minmax(0,0.6fr)_minmax(0,5rem)] items-start gap-0";
 
+/** Solo móvil: Fecha, Nombre destino, Descripción, Monto (el resto en el modal al tocar). */
+const GASTOS_ROW_GRID_MOVIL =
+  "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,4.75rem)] items-center gap-1";
+
 const GASTOS_POR_PAGINA = 40;
 
 type CatalogConcept = { id: string; label: string };
@@ -234,9 +238,7 @@ function ComboboxLista({
 function IconPencil({ className }: { className?: string }) {
   return (
     <svg
-      className={className}
-      width="16"
-      height="16"
+      className={className ?? "h-3.5 w-3.5 shrink-0"}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -916,6 +918,7 @@ export default function GastosPage() {
     "inline-flex w-full items-center gap-1 border-0 bg-transparent px-0.5 py-0.5 text-left font-medium text-white shadow-none outline-none hover:bg-white/15 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-0";
 
   const headerNombreCbRef = useRef<HTMLInputElement>(null);
+  const headerNombreCbRefMovil = useRef<HTMLInputElement>(null);
   const todosNombreSeleccionados =
     displayRows.length > 0 &&
     displayRows.every((r) => selectedGastoIds.has(r.id));
@@ -923,10 +926,10 @@ export default function GastosPage() {
     selectedGastoIds.has(r.id),
   );
   useEffect(() => {
-    const el = headerNombreCbRef.current;
-    if (!el) return;
-    el.indeterminate =
-      algunoNombreSeleccionado && !todosNombreSeleccionados;
+    const indet = algunoNombreSeleccionado && !todosNombreSeleccionados;
+    for (const el of [headerNombreCbRef.current, headerNombreCbRefMovil.current]) {
+      if (el) el.indeterminate = indet;
+    }
   }, [algunoNombreSeleccionado, todosNombreSeleccionados, displayRows.length]);
 
   const toggleSeleccionGasto = (id: string) => {
@@ -1167,97 +1170,174 @@ export default function GastosPage() {
       ) : null}
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-        <div
-          className={`${GASTOS_ROW_GRID} border-b border-[#3a9fe0] bg-[#5AC4FF] px-2 py-2 text-left text-sm text-white`}
-        >
-          <div className="px-1">
-            <button
-              type="button"
-              className={thBtn}
-              onClick={() => toggleSort("fecha")}
-              aria-sort={
-                sortKey === "fecha"
-                  ? sortDir === "asc"
-                    ? "ascending"
-                    : "descending"
-                  : "none"
-              }
-            >
-              Fecha
-              <SortIcon active={sortKey === "fecha"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1">
-            <button type="button" className={thBtn} onClick={() => toggleSort("origen")}>
-              Origen
-              <SortIcon active={sortKey === "origen"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="flex min-w-0 items-start gap-2 px-1">
-            <input
-              ref={headerNombreCbRef}
-              type="checkbox"
-              className="mt-1 h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
-              checked={todosNombreSeleccionados}
-              disabled={displayRows.length === 0 || uiBloqueadoGuardado}
-              title="Seleccionar todos los gastos visibles"
-              aria-label="Seleccionar todos en Nombre destino"
-              onChange={() => {
-                if (todosNombreSeleccionados) {
-                  setSelectedGastoIds((prev) => {
-                    const next = new Set(prev);
-                    displayRows.forEach((r) => next.delete(r.id));
-                    return next;
-                  });
-                } else {
-                  setSelectedGastoIds((prev) => {
-                    const next = new Set(prev);
-                    displayRows.forEach((r) => next.add(r.id));
-                    return next;
-                  });
+        <div className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+          <div
+            className={`hidden sm:grid ${GASTOS_ROW_GRID} px-2 py-1.5 text-left text-sm text-white`}
+          >
+            <div className="px-1">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("fecha")}
+                aria-sort={
+                  sortKey === "fecha"
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
                 }
-              }}
-            />
-            <button
-              type="button"
-              className={thBtn}
-              onClick={() => toggleSort("nombreDestino")}
-            >
-              Nombre Destino
-              <SortIcon active={sortKey === "nombreDestino"} dir={sortDir} />
-            </button>
+              >
+                Fecha
+                <SortIcon active={sortKey === "fecha"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button type="button" className={thBtn} onClick={() => toggleSort("origen")}>
+                Origen
+                <SortIcon active={sortKey === "origen"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="flex min-w-0 items-start gap-2 px-1">
+              <input
+                ref={headerNombreCbRef}
+                type="checkbox"
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
+                checked={todosNombreSeleccionados}
+                disabled={displayRows.length === 0 || uiBloqueadoGuardado}
+                title="Seleccionar todos los gastos visibles"
+                aria-label="Seleccionar todos en Nombre destino"
+                onChange={() => {
+                  if (todosNombreSeleccionados) {
+                    setSelectedGastoIds((prev) => {
+                      const next = new Set(prev);
+                      displayRows.forEach((r) => next.delete(r.id));
+                      return next;
+                    });
+                  } else {
+                    setSelectedGastoIds((prev) => {
+                      const next = new Set(prev);
+                      displayRows.forEach((r) => next.add(r.id));
+                      return next;
+                    });
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("nombreDestino")}
+              >
+                Nombre Destino
+                <SortIcon active={sortKey === "nombreDestino"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button type="button" className={thBtn} onClick={() => toggleSort("familia")}>
+                Familia
+                <SortIcon active={sortKey === "familia"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button type="button" className={thBtn} onClick={() => toggleSort("concepto")}>
+                Categoría
+                <SortIcon active={sortKey === "concepto"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("descripcion")}
+              >
+                Descripción
+                <SortIcon active={sortKey === "descripcion"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1 text-right">
+              <button
+                type="button"
+                className={`${thBtn} justify-end`}
+                onClick={() => toggleSort("monto")}
+              >
+                Monto
+                <SortIcon active={sortKey === "monto"} dir={sortDir} />
+              </button>
+            </div>
           </div>
-          <div className="px-1">
-            <button type="button" className={thBtn} onClick={() => toggleSort("familia")}>
-              Familia
-              <SortIcon active={sortKey === "familia"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1">
-            <button type="button" className={thBtn} onClick={() => toggleSort("concepto")}>
-              Categoría
-              <SortIcon active={sortKey === "concepto"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1">
-            <button
-              type="button"
-              className={thBtn}
-              onClick={() => toggleSort("descripcion")}
-            >
-              Descripción
-              <SortIcon active={sortKey === "descripcion"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1 text-right">
-            <button
-              type="button"
-              className={`${thBtn} justify-end`}
-              onClick={() => toggleSort("monto")}
-            >
-              Monto
-              <SortIcon active={sortKey === "monto"} dir={sortDir} />
-            </button>
+          <div
+            className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-2 py-1.5 text-left text-xs font-medium text-white`}
+          >
+            <div className="min-w-0 px-0.5">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("fecha")}
+                aria-sort={
+                  sortKey === "fecha"
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                Fecha
+                <SortIcon active={sortKey === "fecha"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="flex min-w-0 items-center gap-1">
+              <input
+                ref={headerNombreCbRefMovil}
+                type="checkbox"
+                className="h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
+                checked={todosNombreSeleccionados}
+                disabled={displayRows.length === 0 || uiBloqueadoGuardado}
+                title="Seleccionar todos"
+                aria-label="Seleccionar todos en Nombre destino"
+                onChange={() => {
+                  if (todosNombreSeleccionados) {
+                    setSelectedGastoIds((prev) => {
+                      const next = new Set(prev);
+                      displayRows.forEach((r) => next.delete(r.id));
+                      return next;
+                    });
+                  } else {
+                    setSelectedGastoIds((prev) => {
+                      const next = new Set(prev);
+                      displayRows.forEach((r) => next.add(r.id));
+                      return next;
+                    });
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className={`${thBtn} min-w-0 flex-1`}
+                onClick={() => toggleSort("nombreDestino")}
+              >
+                Nombre
+                <SortIcon active={sortKey === "nombreDestino"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="min-w-0 px-0.5">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("descripcion")}
+              >
+                Descripción
+                <SortIcon active={sortKey === "descripcion"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="min-w-0 text-right">
+              <button
+                type="button"
+                className={`${thBtn} justify-end`}
+                onClick={() => toggleSort("monto")}
+              >
+                Monto
+                <SortIcon active={sortKey === "monto"} dir={sortDir} />
+              </button>
+            </div>
           </div>
         </div>
         <div
@@ -1284,7 +1364,7 @@ export default function GastosPage() {
                     key={row.id}
                     role="button"
                     tabIndex={0}
-                    className={`${GASTOS_ROW_GRID} cursor-pointer border-t border-slate-200 px-3 py-2 text-sm transition-colors hover:bg-slate-200/80 ${
+                    className={`cursor-pointer border-t border-slate-200 transition-colors hover:bg-slate-200/80 ${
                       row.necesitaConcepto ? "bg-amber-50" : ""
                     }`}
                     onClick={() => setDetailRow(row)}
@@ -1295,66 +1375,109 @@ export default function GastosPage() {
                       }
                     }}
                   >
-                    <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
-                    <div className="min-w-0 truncate" title={row.origen}>
-                      {row.origen}
-                    </div>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 shrink-0 rounded border-slate-300"
-                        checked={selectedGastoIds.has(row.id)}
-                        disabled={uiBloqueadoGuardado}
-                        title="Seleccionar para editar categoría"
-                        aria-label={`Seleccionar gasto ${row.nombreDestino || row.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={() => toggleSeleccionGasto(row.id)}
-                      />
-                      <span className="min-w-0 flex-1 truncate" title={row.nombreDestino}>
-                        {row.nombreDestino}
-                      </span>
-                    </div>
-                    <div className="min-w-0 text-slate-700">{row.familia ?? "—"}</div>
-                    <div className="min-w-0">
-                      <div className="flex min-w-[140px] items-center justify-between gap-2">
-                        <span
-                          className={`min-w-0 flex-1 truncate ${
-                            row.necesitaConcepto ? "text-amber-800" : "text-slate-900"
-                          }`}
-                          title={texto || "Sin categoría"}
-                        >
-                          {texto || "—"}
-                        </span>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
-                          title="Editar categoría"
-                          aria-label="Editar categoría"
-                          disabled={uiBloqueadoGuardado}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDetailRow(null);
-                            setEditModal({
-                              gastoIds: [row.id],
-                              categoria: categoriaDisplayLabel(row, catalogo),
-                              familia: (row.familia ?? "").trim(),
-                            });
-                          }}
-                        >
-                          <IconPencil />
-                        </button>
+                    <div
+                      className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1 text-sm leading-snug`}
+                    >
+                      <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
+                      <div className="min-w-0 truncate" title={row.origen}>
+                        {row.origen}
                       </div>
-                      {filaEnGuardado(row.id) ? (
-                        <span className="mt-1 block text-xs text-slate-500">Guardando…</span>
-                      ) : null}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 shrink-0 rounded border-slate-300"
+                          checked={selectedGastoIds.has(row.id)}
+                          disabled={uiBloqueadoGuardado}
+                          title="Seleccionar para editar categoría"
+                          aria-label={`Seleccionar gasto ${row.nombreDestino || row.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleSeleccionGasto(row.id)}
+                        />
+                        <span className="min-w-0 flex-1 truncate" title={row.nombreDestino}>
+                          {row.nombreDestino}
+                        </span>
+                      </div>
+                      <div className="min-w-0 text-slate-700">{row.familia ?? "—"}</div>
+                      <div className="min-w-0 pr-2">
+                        <div className="flex min-w-[140px] items-center justify-between gap-2">
+                          <span
+                            className={`min-w-0 flex-1 truncate ${
+                              row.necesitaConcepto ? "text-amber-800" : "text-slate-900"
+                            }`}
+                            title={texto || "Sin categoría"}
+                          >
+                            {texto || "—"}
+                          </span>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
+                            title="Editar categoría"
+                            aria-label="Editar categoría"
+                            disabled={uiBloqueadoGuardado}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailRow(null);
+                              setEditModal({
+                                gastoIds: [row.id],
+                                categoria: categoriaDisplayLabel(row, catalogo),
+                                familia: (row.familia ?? "").trim(),
+                              });
+                            }}
+                          >
+                            <IconPencil />
+                          </button>
+                        </div>
+                        {filaEnGuardado(row.id) ? (
+                          <span className="mt-0.5 block text-xs text-slate-500">Guardando…</span>
+                        ) : null}
+                      </div>
+                      <div
+                        className="min-w-0 max-w-[220px] truncate"
+                        title={row.descripcion}
+                      >
+                        {row.descripcion}
+                      </div>
+                      <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
                     </div>
                     <div
-                      className="min-w-0 max-w-[220px] truncate"
-                      title={row.descripcion}
+                      className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1 text-sm leading-snug`}
                     >
-                      {row.descripcion}
+                      <div className="min-w-0 whitespace-nowrap text-slate-900">
+                        {row.fecha}
+                      </div>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 shrink-0 rounded border-slate-300"
+                          checked={selectedGastoIds.has(row.id)}
+                          disabled={uiBloqueadoGuardado}
+                          title="Seleccionar"
+                          aria-label={`Seleccionar gasto ${row.nombreDestino || row.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleSeleccionGasto(row.id)}
+                        />
+                        <span
+                          className="min-w-0 flex-1 truncate font-medium text-slate-900"
+                          title={row.nombreDestino}
+                        >
+                          {row.nombreDestino || "—"}
+                        </span>
+                      </div>
+                      <div
+                        className="min-w-0 truncate text-slate-700"
+                        title={row.descripcion || undefined}
+                      >
+                        {row.descripcion || "—"}
+                      </div>
+                      <div className="min-w-0 text-right font-medium tabular-nums text-slate-900">
+                        {formatClp(row.monto)}
+                      </div>
+                      {filaEnGuardado(row.id) ? (
+                        <div className="col-span-4 -mt-1 text-[10px] text-slate-500">
+                          Guardando…
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
                   </div>
                 );
               })}

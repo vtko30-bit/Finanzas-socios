@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const VENTAS_ROW_GRID =
-  "grid w-full min-w-[720px] grid-cols-[minmax(0,7rem)_minmax(0,1fr)_minmax(0,5.5rem)_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-0";
+  "grid w-full min-w-[720px] grid-cols-[minmax(0,7rem)_minmax(0,5.5rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-0";
+
+/** Móvil: Fecha, Sucursal, Medio de pago, Total (sin columna Id). */
+const VENTAS_ROW_GRID_MOVIL =
+  "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,4.75rem)] items-center gap-1";
 
 const VENTAS_POR_PAGINA = 40;
 
-/** Columnas de detalle: Id, Sucursal, Fecha, Medio de pago, Total */
+/** Columnas de detalle (escritorio): Id, Fecha, Sucursal, Medio de pago, Total */
 type VentaRow = {
   id: string;
   /** Prefijo sucursal (2 letras) + número; ver API detalle. */
@@ -419,64 +423,109 @@ export default function VentasPage() {
       ) : null}
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-        <div
-          className={`${VENTAS_ROW_GRID} border-b border-[#3a9fe0] bg-[#5AC4FF] px-2 py-2 text-left text-sm text-white`}
-        >
-          <div className="px-1">
-            <button
-              type="button"
-              className={thBtn}
-              onClick={() => toggleSort("idVenta")}
-              aria-sort={
-                sortKey === "idVenta"
-                  ? sortDir === "asc"
-                    ? "ascending"
-                    : "descending"
-                  : "none"
-              }
-            >
-              Id
-              <SortIcon active={sortKey === "idVenta"} dir={sortDir} />
-            </button>
+        <div className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+          <div
+            className={`hidden sm:grid ${VENTAS_ROW_GRID} px-2 py-2 text-left text-sm text-white`}
+          >
+            <div className="px-1">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("idVenta")}
+                aria-sort={
+                  sortKey === "idVenta"
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                Id
+                <SortIcon active={sortKey === "idVenta"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("fecha")}
+                aria-sort={
+                  sortKey === "fecha"
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                Fecha
+                <SortIcon active={sortKey === "fecha"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button type="button" className={thBtn} onClick={() => toggleSort("sucursal")}>
+                Sucursal
+                <SortIcon active={sortKey === "sucursal"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1">
+              <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
+                Medio de pago
+                <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1 text-right">
+              <button
+                type="button"
+                className={`${thBtn} justify-end`}
+                onClick={() => toggleSort("monto")}
+              >
+                Total
+                <SortIcon active={sortKey === "monto"} dir={sortDir} />
+              </button>
+            </div>
           </div>
-          <div className="px-1">
-            <button type="button" className={thBtn} onClick={() => toggleSort("sucursal")}>
-              Sucursal
-              <SortIcon active={sortKey === "sucursal"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1">
-            <button
-              type="button"
-              className={thBtn}
-              onClick={() => toggleSort("fecha")}
-              aria-sort={
-                sortKey === "fecha"
-                  ? sortDir === "asc"
-                    ? "ascending"
-                    : "descending"
-                  : "none"
-              }
-            >
-              Fecha
-              <SortIcon active={sortKey === "fecha"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1">
-            <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
-              Medio de pago
-              <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
-            </button>
-          </div>
-          <div className="px-1 text-right">
-            <button
-              type="button"
-              className={`${thBtn} justify-end`}
-              onClick={() => toggleSort("monto")}
-            >
-              Total
-              <SortIcon active={sortKey === "monto"} dir={sortDir} />
-            </button>
+          <div
+            className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-2 py-2 text-left text-xs font-medium text-white`}
+          >
+            <div className="min-w-0 px-0.5">
+              <button
+                type="button"
+                className={thBtn}
+                onClick={() => toggleSort("fecha")}
+                aria-sort={
+                  sortKey === "fecha"
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                Fecha
+                <SortIcon active={sortKey === "fecha"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="min-w-0 px-0.5">
+              <button type="button" className={thBtn} onClick={() => toggleSort("sucursal")}>
+                Sucursal
+                <SortIcon active={sortKey === "sucursal"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="min-w-0 px-0.5">
+              <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
+                Medio de pago
+                <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="min-w-0 text-right">
+              <button
+                type="button"
+                className={`${thBtn} justify-end`}
+                onClick={() => toggleSort("monto")}
+              >
+                Total
+                <SortIcon active={sortKey === "monto"} dir={sortDir} />
+              </button>
+            </div>
           </div>
         </div>
         <div
@@ -497,22 +546,49 @@ export default function VentasPage() {
                   <div
                     key={row.id}
                     role="row"
-                    className={`${VENTAS_ROW_GRID} border-t border-slate-200 px-3 py-2 text-sm`}
+                    className="border-t border-slate-200"
                   >
                     <div
-                      className="min-w-0 font-mono text-xs"
+                      className={`hidden sm:grid ${VENTAS_ROW_GRID} px-3 py-2 text-sm`}
+                    >
+                      <div
+                        className="min-w-0 font-mono text-xs"
+                        title={
+                          row.externalRef
+                            ? `${row.idVenta} · Ref. importación: ${row.externalRef}`
+                            : row.idVenta
+                        }
+                      >
+                        {row.idVenta || "—"}
+                      </div>
+                      <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
+                      <div className="min-w-0">{row.sucursal || "—"}</div>
+                      <div className="min-w-0">{row.medioPago || "—"}</div>
+                      <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
+                    </div>
+                    <div
+                      className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-3 py-2 text-sm`}
                       title={
                         row.externalRef
-                          ? `${row.idVenta} · Ref. importación: ${row.externalRef}`
+                          ? `Id: ${row.idVenta} · Ref.: ${row.externalRef}`
                           : row.idVenta
+                            ? `Id: ${row.idVenta}`
+                            : undefined
                       }
                     >
-                      {row.idVenta || "—"}
+                      <div className="min-w-0 whitespace-nowrap text-slate-900">
+                        {row.fecha}
+                      </div>
+                      <div className="min-w-0 truncate font-medium text-slate-900">
+                        {row.sucursal || "—"}
+                      </div>
+                      <div className="min-w-0 truncate text-slate-800" title={row.medioPago}>
+                        {row.medioPago || "—"}
+                      </div>
+                      <div className="min-w-0 text-right font-medium tabular-nums text-slate-900">
+                        {formatClp(row.monto)}
+                      </div>
                     </div>
-                    <div className="min-w-0">{row.sucursal || "—"}</div>
-                    <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
-                    <div className="min-w-0">{row.medioPago || "—"}</div>
-                    <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
                   </div>
                 );
               })}
