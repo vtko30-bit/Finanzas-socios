@@ -385,6 +385,7 @@ export default function ResumenPage() {
                     >
                       <li
                         role="option"
+                        aria-selected={sucursalSel.k === "todas"}
                         className="cursor-pointer px-3 py-2 text-slate-600 hover:bg-slate-200"
                         onMouseDown={(e) => {
                           e.preventDefault();
@@ -395,6 +396,7 @@ export default function ResumenPage() {
                       </li>
                       <li
                         role="option"
+                        aria-selected={sucursalSel.k === "por_sucursal"}
                         className="cursor-pointer px-3 py-2 text-slate-700 hover:bg-slate-200"
                         onMouseDown={(e) => {
                           e.preventDefault();
@@ -414,6 +416,7 @@ export default function ResumenPage() {
                           <li
                             key={s}
                             role="option"
+                            aria-selected={sucursalSel.k === "una" && sucursalSel.v === s}
                             className="cursor-pointer px-3 py-2 text-slate-800 hover:bg-slate-200"
                             onMouseDown={(e) => {
                               e.preventDefault();

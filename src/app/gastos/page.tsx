@@ -217,6 +217,7 @@ function ComboboxLista({
                 <button
                   type="button"
                   role="option"
+                  aria-selected={value === opt}
                   className="w-full px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-200 focus:bg-slate-200 focus:outline-none"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
@@ -1179,13 +1180,6 @@ export default function GastosPage() {
                 type="button"
                 className={thBtn}
                 onClick={() => toggleSort("fecha")}
-                aria-sort={
-                  sortKey === "fecha"
-                    ? sortDir === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
               >
                 Fecha
                 <SortIcon active={sortKey === "fecha"} dir={sortDir} />
@@ -1272,13 +1266,6 @@ export default function GastosPage() {
                 type="button"
                 className={thBtn}
                 onClick={() => toggleSort("fecha")}
-                aria-sort={
-                  sortKey === "fecha"
-                    ? sortDir === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
               >
                 Fecha
                 <SortIcon active={sortKey === "fecha"} dir={sortDir} />

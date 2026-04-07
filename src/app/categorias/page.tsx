@@ -83,6 +83,7 @@ export default function CategoriasPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargar();
   }, [cargar]);
 
@@ -198,6 +199,7 @@ export default function CategoriasPage() {
 
   useEffect(() => {
     if (modalNuevo && families.length && !modalNuevo.familyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModalNuevo((m) => (m ? { ...m, familyId: families[0].id } : m));
     }
   }, [modalNuevo, families]);

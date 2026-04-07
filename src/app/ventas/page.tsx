@@ -46,6 +46,29 @@ function cmpStr(a: string, b: string) {
   return a.localeCompare(b, "es", { sensitivity: "base" });
 }
 
+/**
+ * Prioridad entre locales conocidos (mismo día); otros van después y se ordenan alfabéticamente.
+ * Ajusta aquí si agregas sucursales con orden fijo.
+ */
+function sucursalGrupo(s: string): number {
+  const t = (s || "").trim().toLowerCase();
+  if (t === "rg" || t.startsWith("rg ") || t.startsWith("rg-")) return 0;
+  if (t.includes("happy")) return 1;
+  return 2;
+}
+
+/** Desempate estable dentro del mismo día: local → medio de pago → id. */
+function cmpMismaFecha(x: VentaRow, y: VentaRow) {
+  const gx = sucursalGrupo(x.sucursal);
+  const gy = sucursalGrupo(y.sucursal);
+  if (gx !== gy) return gx - gy;
+  let s = cmpStr(x.sucursal || "", y.sucursal || "");
+  if (s !== 0) return s;
+  s = cmpStr(x.medioPago || "", y.medioPago || "");
+  if (s !== 0) return s;
+  return cmpStr(x.id, y.id);
+}
+
 function sortRows(
   list: VentaRow[],
   key: SortKey,
@@ -62,7 +85,8 @@ function sortRows(
         const dx = fechaIsoDia(x.fecha) ?? "";
         const dy = fechaIsoDia(y.fecha) ?? "";
         c = cmpStr(dx, dy) * mul;
-        return c || cmpStr(x.id, y.id);
+        if (c !== 0) return c;
+        return cmpMismaFecha(x, y);
       }
       case "idVenta":
         c = cmpStr(x.idVenta, y.idVenta) * mul;
@@ -207,6 +231,7 @@ export default function VentasPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargar();
   }, [cargar]);
 
@@ -240,6 +265,20 @@ export default function VentasPage() {
     [filasFiltradas, sortKey, sortDir],
   );
 
+  const hayFiltroVentas = useMemo(
+    () =>
+      modoFecha !== "todo" ||
+      filtroFormaPago.trim() !== "" ||
+      filtroSucursal.trim() !== "",
+    [modoFecha, filtroFormaPago, filtroSucursal],
+  );
+
+  /** Suma del monto de todas las filas que cumplen el filtro (todas las páginas de la tabla). */
+  const totalMontoFiltrado = useMemo(
+    () => displayRows.reduce((acc, r) => acc + (Number(r.monto) || 0), 0),
+    [displayRows],
+  );
+
   const totalPaginasVentas = useMemo(() => {
     if (displayRows.length === 0) return 0;
     return Math.ceil(displayRows.length / VENTAS_POR_PAGINA);
@@ -251,6 +290,7 @@ export default function VentasPage() {
   }, [displayRows, paginaVentas]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaginaVentas(1);
   }, [
     modoFecha,
@@ -266,6 +306,7 @@ export default function VentasPage() {
   useEffect(() => {
     if (displayRows.length === 0) return;
     const max = Math.ceil(displayRows.length / VENTAS_POR_PAGINA);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaginaVentas((p) => Math.min(Math.max(1, p), max));
   }, [displayRows.length]);
 
@@ -323,7 +364,7 @@ export default function VentasPage() {
                 Día
                 <input
                   type="date"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
@@ -334,7 +375,7 @@ export default function VentasPage() {
                 Mes
                 <input
                   type="month"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
@@ -348,7 +389,7 @@ export default function VentasPage() {
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-400"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
@@ -360,7 +401,7 @@ export default function VentasPage() {
                   Desde
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
@@ -369,7 +410,7 @@ export default function VentasPage() {
                   Hasta
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
@@ -383,7 +424,7 @@ export default function VentasPage() {
               Forma de pago
               <input
                 type="text"
-                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-400"
                 placeholder="Ej: Efectivo, Débito, transferencia…"
                 value={filtroFormaPago}
                 onChange={(e) => setFiltroFormaPago(e.target.value)}
@@ -393,7 +434,7 @@ export default function VentasPage() {
               Sucursal
               <input
                 type="text"
-                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-400"
                 placeholder="Ej: nombre de sucursal…"
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
@@ -411,6 +452,11 @@ export default function VentasPage() {
             </button>
             <span className="text-xs text-white">
               Mostrando {displayRows.length} de {rows.length} ventas
+              {hayFiltroVentas ? (
+                <span className="ml-1.5 font-semibold tabular-nums text-white">
+                  · Total filtrado: {formatClp(totalMontoFiltrado)}
+                </span>
+              ) : null}
             </span>
           </div>
         </div>
@@ -432,13 +478,6 @@ export default function VentasPage() {
                 type="button"
                 className={thBtn}
                 onClick={() => toggleSort("idVenta")}
-                aria-sort={
-                  sortKey === "idVenta"
-                    ? sortDir === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
               >
                 Id
                 <SortIcon active={sortKey === "idVenta"} dir={sortDir} />
@@ -449,13 +488,6 @@ export default function VentasPage() {
                 type="button"
                 className={thBtn}
                 onClick={() => toggleSort("fecha")}
-                aria-sort={
-                  sortKey === "fecha"
-                    ? sortDir === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
               >
                 Fecha
                 <SortIcon active={sortKey === "fecha"} dir={sortDir} />
@@ -492,13 +524,6 @@ export default function VentasPage() {
                 type="button"
                 className={thBtn}
                 onClick={() => toggleSort("fecha")}
-                aria-sort={
-                  sortKey === "fecha"
-                    ? sortDir === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
               >
                 Fecha
                 <SortIcon active={sortKey === "fecha"} dir={sortDir} />

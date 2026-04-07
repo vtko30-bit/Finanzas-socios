@@ -190,7 +190,10 @@ export async function POST(request: Request) {
           msg.includes("source_id") &&
           (msg.includes("does not exist") || msg.includes("schema cache"))
         ) {
-          const withoutSourceId = txChunk.map(({ source_id: _s, ...rest }) => rest);
+          const withoutSourceId = txChunk.map(({ source_id, ...rest }) => {
+            void source_id;
+            return rest;
+          });
           const retry = await supabase.from("transactions").upsert(withoutSourceId, {
             onConflict: "organization_id,dedupe_hash",
             ignoreDuplicates: true,
