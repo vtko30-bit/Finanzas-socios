@@ -362,6 +362,29 @@ export default function ImportarPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+      <section
+        aria-label="Ayuda sobre duplicados"
+        className="rounded-xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-slate-800"
+      >
+        <h2 className="font-semibold text-sky-950">Archivos repetidos y datos nuevos</h2>
+        <ul className="mt-2 list-inside list-disc space-y-1 text-slate-700">
+          <li>
+            La app reconoce si el Excel es <strong className="font-medium text-slate-900">idéntico</strong> al que ya
+            importaste (por el contenido del archivo, no solo por el nombre). En ese caso no se importa de nuevo.
+          </li>
+          <li>
+            Si <strong className="font-medium text-slate-900">agregaste filas o cambiaste datos</strong> y guardaste el
+            archivo, el contenido cambia: se puede importar otra vez y solo se agregan{" "}
+            <strong className="font-medium text-slate-900">movimientos nuevos</strong>; las filas que ya estaban se
+            omiten como duplicadas.
+          </li>
+          <li>
+            Puedes volver a subir un archivo con el <strong className="font-medium text-slate-900">mismo nombre</strong>{" "}
+            siempre que no sea byte por byte igual al ya importado.
+          </li>
+        </ul>
+      </section>
+
       <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
         <h1 className="text-xl font-semibold">Importar Excel de ventas</h1>
         <p className="mt-2 text-xs text-amber-800">
