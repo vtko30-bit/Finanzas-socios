@@ -28,6 +28,9 @@ export default function ImportarPage() {
   const [loadingResetVentas, setLoadingResetVentas] = useState(false);
   const [loadingBackup, setLoadingBackup] = useState(false);
   const [backupTarget, setBackupTarget] = useState<null | "ingresos" | "todo">(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [fileInputVersion, setFileInputVersion] = useState(0);
 
   const parseApiBody = (text: string): { error?: string; [k: string]: unknown } => {
     if (!text) return {};
@@ -86,6 +89,8 @@ export default function ImportarPage() {
       const importData = data as ImportResult;
       setResult(importData);
       setStatus("Importación finalizada.");
+      setSuccessMessage("La importación de gastos y egresos terminó correctamente.");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus(
         `Error inesperado al importar: ${
@@ -137,6 +142,8 @@ export default function ImportarPage() {
       } else {
         setStatus("Importación de ventas finalizada. Revisa la vista Ventas.");
       }
+      setSuccessMessage("La importación de ventas terminó correctamente.");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus(
         `Error inesperado al importar ventas: ${
@@ -190,6 +197,8 @@ export default function ImportarPage() {
       } else {
         setStatus("Importación de otros ingresos finalizada.");
       }
+      setSuccessMessage("La importación de otros ingresos terminó correctamente.");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus(
         `Error inesperado al importar otros ingresos: ${
@@ -321,6 +330,17 @@ export default function ImportarPage() {
   const borradoBusy =
     loadingBackup || loadingResetVentas || loadingResetTodo;
 
+  const aceptarImportacionExitosa = () => {
+    setShowSuccessModal(false);
+    setSuccessMessage("");
+    setFile(null);
+    setFileVentas(null);
+    setFileOtrosIngresos(null);
+    setResult(null);
+    setStatus("");
+    setFileInputVersion((v) => v + 1);
+  };
+
   if (authenticated && capsLoading) {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
@@ -359,6 +379,7 @@ export default function ImportarPage() {
         ) : null}
         <form onSubmit={submitVentas} className="mt-5 flex flex-col gap-3">
           <input
+            key={`file-ventas-${fileInputVersion}`}
             type="file"
             accept=".xlsx,.xls"
             onChange={(e) => setFileVentas(e.target.files?.[0] ?? null)}
@@ -379,6 +400,7 @@ export default function ImportarPage() {
         <h2 className="text-lg font-semibold">Importar gastos y egresos</h2>
         <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
           <input
+            key={`file-consolidado-${fileInputVersion}`}
             type="file"
             accept=".xlsx,.xls"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -399,6 +421,7 @@ export default function ImportarPage() {
         <h2 className="text-lg font-semibold">Importar otros ingresos</h2>
         <form onSubmit={submitOtrosIngresos} className="mt-5 flex flex-col gap-3">
           <input
+            key={`file-otros-${fileInputVersion}`}
             type="file"
             accept=".xlsx,.xls"
             onChange={(e) => setFileOtrosIngresos(e.target.files?.[0] ?? null)}
@@ -484,6 +507,33 @@ export default function ImportarPage() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {showSuccessModal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="import-success-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl">
+            <h3 id="import-success-title" className="text-lg font-semibold text-slate-900">
+              Importación finalizada
+            </h3>
+            <p className="mt-2 text-sm text-slate-700">
+              {successMessage || "El archivo se importó correctamente."}
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
+                onClick={aceptarImportacionExitosa}
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </main>
   );
