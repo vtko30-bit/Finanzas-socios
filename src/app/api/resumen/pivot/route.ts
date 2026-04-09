@@ -61,23 +61,6 @@ type IncomeRow = {
   origen_cuenta: string | null;
 };
 
-function cleanCuentaKey(v: string | null | undefined): string {
-  return String(v ?? "").trim();
-}
-
-function filterIncomeByExcluded(rows: IncomeRow[], excluded: Set<string>): IncomeRow[] {
-  if (excluded.size === 0) return rows;
-  return rows.filter((r) => !excluded.has(cleanCuentaKey(r.origen_cuenta)));
-}
-
-function filterExpenseByExcluded(rows: unknown[], excluded: Set<string>): unknown[] {
-  if (excluded.size === 0) return rows;
-  return rows.filter((raw) => {
-    const row = raw as { origen_cuenta?: string | null };
-    return !excluded.has(cleanCuentaKey(row.origen_cuenta));
-  });
-}
-
 async function fetchIncomeRowsPaged(args: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   organizationId: string;
@@ -288,11 +271,6 @@ export async function GET(request: Request) {
   const desde = searchParams.get("desde")?.trim() ?? "";
   const hasta = searchParams.get("hasta")?.trim() ?? "";
   const sucursal = searchParams.get("sucursal")?.trim() ?? "";
-  const excludedCuentas = searchParams
-    .getAll("excludeCuenta")
-    .map((x) => cleanCuentaKey(x))
-    .filter(Boolean);
-  const excludedSet = new Set(excludedCuentas);
   const ventasPorSucursal =
     searchParams.get("ventasPorSucursal") === "1" ||
     searchParams.get("ventasPorSucursal") === "true";
@@ -341,9 +319,8 @@ export async function GET(request: Request) {
   }
 
   if (ventasPorSucursal) {
-    const incomeRows = filterIncomeByExcluded((incomeData ?? []) as IncomeRow[], excludedSet);
     const byLoc = new Map<string, IncomeRow[]>();
-    for (const raw of incomeRows) {
+    for (const raw of incomeData ?? []) {
       const row = raw as IncomeRow;
       const loc = String(row.origen_cuenta ?? "").trim() || "Sin sucursal";
       if (!byLoc.has(loc)) byLoc.set(loc, []);
@@ -356,7 +333,7 @@ export async function GET(request: Request) {
       }))
       .sort((a, b) => a.sucursal.localeCompare(b.sucursal, "es"));
 
-    const { data: expenseDataRaw, error: expenseErr } = await fetchExpenseRowsPaged({
+    const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
       supabase,
       organizationId: member.organization_id,
       desde,
@@ -367,9 +344,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: expenseErr }, { status: 500 });
     }
 
-    const expenseData = filterExpenseByExcluded(expenseDataRaw ?? [], excludedSet);
     const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
-      expenseData,
+      expenseData ?? [],
     );
 
     const gastosByLoc = new Map<string, unknown[]>();
@@ -403,7 +379,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const { data: expenseDataRaw, error: expenseErr } = await fetchExpenseRowsPaged({
+  const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
     supabase,
     organizationId: member.organization_id,
     desde,
@@ -415,11 +391,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: expenseErr }, { status: 500 });
   }
 
-  const incomeRows = filterIncomeByExcluded((incomeData ?? []) as IncomeRow[], excludedSet);
-  const expenseData = filterExpenseByExcluded(expenseDataRaw ?? [], excludedSet);
-  const ventasRows = ventasRowsFromIncome(incomeRows, monthKeys);
+  const ventasRows = ventasRowsFromIncome((incomeData ?? []) as IncomeRow[], monthKeys);
   const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
-    expenseData,
+    expenseData ?? [],
   );
   const gastosRows = gastosRowsFromExpenseRows(expenseNegocio, monthKeys);
   const gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
