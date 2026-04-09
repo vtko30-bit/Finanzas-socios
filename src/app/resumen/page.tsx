@@ -120,6 +120,9 @@ export default function ResumenPage() {
   const sucursalSelRef = useRef<SucursalVentasSel>(sucursalSel);
   sucursalSelRef.current = sucursalSel;
   const [listaSucursales, setListaSucursales] = useState<string[]>([]);
+  const [excludedCuentas, setExcludedCuentas] = useState<string[]>([]);
+  const excludedCuentasRef = useRef<string[]>([]);
+  excludedCuentasRef.current = excludedCuentas;
   const [sucursalAbierta, setSucursalAbierta] = useState(false);
   const sucursalBlurT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [data, setData] = useState<PivotResponse | null>(null);
@@ -153,6 +156,7 @@ export default function ResumenPage() {
     async (overrideSel?: SucursalVentasSel) => {
       if (!authenticated) return;
       const sel = overrideSel ?? sucursalSelRef.current;
+      const excluded = excludedCuentasRef.current;
       const { desde, hasta } = rangoEfectivo;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) {
         setStatus("Define un rango de fechas válido.");
@@ -170,6 +174,9 @@ export default function ResumenPage() {
           q.set("ventasPorSucursal", "1");
         } else if (sel.k === "una" && sel.v.trim()) {
           q.set("sucursal", sel.v.trim());
+        }
+        for (const cuenta of excluded) {
+          q.append("excludeCuenta", cuenta);
         }
         const res = await fetch(`/api/resumen/pivot?${q}`);
         const json = (await res.json()) as PivotResponse & { error?: string };
@@ -224,6 +231,25 @@ export default function ResumenPage() {
       sucursalBlurT.current = null;
     }
     void cargar(sel);
+  };
+
+  const toggleExcluirCuenta = (cuenta: string) => {
+    setExcludedCuentas((prev) => {
+      const next = prev.includes(cuenta)
+        ? prev.filter((x) => x !== cuenta)
+        : [...prev, cuenta];
+      queueMicrotask(() => {
+        void cargar();
+      });
+      return next;
+    });
+  };
+
+  const limpiarExcluidas = () => {
+    setExcludedCuentas([]);
+    queueMicrotask(() => {
+      void cargar();
+    });
   };
 
   const totalesPorMesVentas = useMemo(() => {
@@ -430,6 +456,43 @@ export default function ResumenPage() {
                     </ul>
                   ) : null}
                 </div>
+              </div>
+
+              <div className="rounded-md border border-white/30 bg-white/10 px-2.5 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-white">Excluir cuentas del resumen</span>
+                  {excludedCuentas.length > 0 ? (
+                    <button
+                      type="button"
+                      className="rounded border border-white/40 px-2 py-0.5 text-[11px] text-white hover:bg-white/15"
+                      onClick={limpiarExcluidas}
+                    >
+                      Limpiar excluidas
+                    </button>
+                  ) : null}
+                </div>
+                {listaSucursales.length === 0 ? (
+                  <p className="mt-1 text-[11px] text-white/80">No hay cuentas disponibles.</p>
+                ) : (
+                  <div className="mt-2 flex max-h-24 flex-wrap gap-x-3 gap-y-1 overflow-auto pr-1">
+                    {listaSucursales.map((cuenta) => (
+                      <label
+                        key={`exc-${cuenta}`}
+                        className="inline-flex items-center gap-1 text-xs text-white"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 rounded border-white/70 bg-white/20"
+                          checked={excludedCuentas.includes(cuenta)}
+                          onChange={() => toggleExcluirCuenta(cuenta)}
+                        />
+                        <span className="max-w-[12rem] truncate" title={cuenta}>
+                          {cuenta}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
