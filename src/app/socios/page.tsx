@@ -91,10 +91,11 @@ export default function SociosPage() {
   const [catalogo, setCatalogo] = useState<CatalogFamily[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [anio, setAnio] = useState(() => String(new Date().getFullYear()));
+  const [mes, setMes] = useState<string>("todos");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const cargar = useCallback(async () => {
-    setStatus("Cargando�");
+    setStatus("Cargando...");
     try {
       const [resG, resF] = await Promise.all([
         fetch("/api/gastos/detalle"),
@@ -133,6 +134,17 @@ export default function SociosPage() {
     () => Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`),
     [anio],
   );
+  const visibleMonthKeys = useMemo(
+    () => (mes === "todos" ? monthKeys : [`${anio}-${mes}`]),
+    [anio, mes, monthKeys],
+  );
+  const visibleMonthLabels = useMemo(
+    () =>
+      mes === "todos"
+        ? [...MONTH_LABELS]
+        : [MONTH_LABELS[Math.max(0, Number(mes) - 1)] ?? mes],
+    [mes],
+  );
 
   const yearsDisponibles = useMemo(() => {
     const years = new Set<string>([String(new Date().getFullYear())]);
@@ -167,8 +179,9 @@ export default function SociosPage() {
       const iso = fechaIsoDia(r.fecha);
       if (!iso || !iso.startsWith(`${anio}-`)) continue;
       const mk = iso.slice(0, 7);
+      if (mes !== "todos" && mk !== `${anio}-${mes}`) continue;
 
-      const categoria = categoriaDisplayLabel(r, catalogo).trim() || "Sin categor�a";
+      const categoria = categoriaDisplayLabel(r, catalogo).trim() || "Sin categoría";
       const key = categoria.toLowerCase();
 
       const cur =
@@ -186,7 +199,7 @@ export default function SociosPage() {
     }
 
     return bySocio;
-  }, [rowsSocios, anio, catalogo, monthKeys]);
+  }, [rowsSocios, anio, mes, catalogo, monthKeys]);
 
   const bloques = useMemo(() => {
     return SOCIOS.map((socio) => {
@@ -214,25 +227,41 @@ export default function SociosPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Socios</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Gastos asignados a las familias <strong>Mario</strong>, <strong>Mena</strong> y
-            <strong> Victor</strong>, agrupados por categor�a y mes.
-          </p>
         </div>
-        <label className="text-sm text-slate-700">
-          A�o
-          <select
-            className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-            value={anio}
-            onChange={(e) => setAnio(e.target.value)}
-          >
-            {yearsDisponibles.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-end gap-3">
+          <label className="text-sm text-slate-700">
+            Año
+            <select
+              className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+              value={anio}
+              onChange={(e) => setAnio(e.target.value)}
+            >
+              {yearsDisponibles.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-slate-700">
+            Mes
+            <select
+              className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+              value={mes}
+              onChange={(e) => setMes(e.target.value)}
+            >
+              <option value="todos">Todos</option>
+              {MONTH_LABELS.map((label, i) => {
+                const value = String(i + 1).padStart(2, "0");
+                return (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+        </div>
       </div>
 
       {status ? (
@@ -253,9 +282,9 @@ export default function SociosPage() {
             <table className="w-full min-w-[980px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
-                  <th className={thCls}>Categor�a</th>
-                  {MONTH_LABELS.map((label, i) => (
-                    <th key={monthKeys[i]} className={thNum}>
+                  <th className={thCls}>Categoría</th>
+                  {visibleMonthLabels.map((label, i) => (
+                    <th key={visibleMonthKeys[i]} className={thNum}>
                       {label}
                     </th>
                   ))}
@@ -276,11 +305,10 @@ export default function SociosPage() {
                             onClick={() => toggleExpanded(rowKey)}
                             aria-expanded={open}
                           >
-                            <span>{open ? "?" : "?"}</span>
                             <span className="font-medium">{r.categoria}</span>
                           </button>
                         </td>
-                        {monthKeys.map((mk) => (
+                        {visibleMonthKeys.map((mk) => (
                           <td key={mk} className={tdNum}>
                             {formatClp(r.byMonth[mk] ?? 0)}
                           </td>
@@ -289,7 +317,7 @@ export default function SociosPage() {
                       </tr>
                       {open ? (
                         <tr key={`${rowKey}-detail`} className="bg-white/80">
-                          <td colSpan={14} className="px-4 py-3">
+                          <td colSpan={visibleMonthKeys.length + 2} className="px-4 py-3">
                             <ul className="space-y-2">
                               {r.items.map((it) => (
                                 <li
@@ -299,7 +327,7 @@ export default function SociosPage() {
                                   <div className="min-w-0 flex-1">
                                     <p className="text-xs text-slate-500">{it.fecha}</p>
                                     <p className="truncate text-sm font-medium text-slate-900">
-                                      {it.nombreDestino || "�"}
+                                      {it.nombreDestino || "—"}
                                     </p>
                                     {it.descripcion ? (
                                       <p className="truncate text-xs text-slate-600">{it.descripcion}</p>
@@ -320,14 +348,15 @@ export default function SociosPage() {
 
                 {bloque.rowsCategoria.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-4 py-6 text-center text-slate-500">
-                      Sin movimientos para {bloque.socio} en {anio}.
+                    <td colSpan={visibleMonthKeys.length + 2} className="px-4 py-6 text-center text-slate-500">
+                      Sin movimientos para {bloque.socio} en {anio}
+                      {mes === "todos" ? "" : ` (${visibleMonthLabels[0]})`}.
                     </td>
                   </tr>
                 ) : (
                   <tr className="bg-white/80">
                     <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
-                    {monthKeys.map((mk) => (
+                    {visibleMonthKeys.map((mk) => (
                       <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                         {formatClp(
                           bloque.rowsCategoria.reduce((sum, row) => sum + (row.byMonth[mk] ?? 0), 0),

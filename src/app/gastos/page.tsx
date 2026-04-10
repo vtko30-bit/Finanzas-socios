@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 
 const GASTOS_ROW_GRID =
@@ -963,7 +964,15 @@ export default function GastosPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
-      <h1 className="text-xl font-semibold">Detalle de gastos</h1>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <h1 className="text-xl font-semibold">Detalle de gastos</h1>
+        <Link
+          href="/movimientos-excluidos"
+          className="text-sm font-medium text-sky-700 underline hover:text-sky-900"
+        >
+          Movimientos excluidos del resumen
+        </Link>
+      </div>
       {!capsLoading && !canWrite ? (
         <p className="text-sm text-slate-500">
           Solo lectura: solo el administrador (owner) puede editar categorías o importar datos.

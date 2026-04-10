@@ -278,6 +278,70 @@ export default function ResumenPage() {
     return rows.reduce((s, r) => s + r.total, 0);
   }, [data]);
 
+  /** Ingresos (ventas) agregados por mes y total: sirve con vista única o desglose por sucursal. */
+  const ingresosAgregados = useMemo(() => {
+    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const keys = data.monthKeys;
+    const porMes: Record<string, number> = {};
+    for (const mk of keys) porMes[mk] = 0;
+    if (data.desgloseVentasPorSucursal) {
+      let total = 0;
+      for (const b of data.ventasPorSucursalLista ?? []) {
+        for (const r of b.rows) {
+          total += r.total;
+          for (const mk of keys) porMes[mk] += r.byMonth[mk] ?? 0;
+        }
+      }
+      return { porMes, total };
+    }
+    let total = 0;
+    for (const r of data.ventas.rows) {
+      total += r.total;
+      for (const mk of keys) porMes[mk] += r.byMonth[mk] ?? 0;
+    }
+    return { porMes, total };
+  }, [data]);
+
+  /** Egresos: gastos del negocio + gastos de socios, por mes y total. */
+  const egresosAgregados = useMemo(() => {
+    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const keys = data.monthKeys;
+    const porMes: Record<string, number> = {};
+    for (const mk of keys) porMes[mk] = 0;
+    let total = 0;
+
+    const sumRows = (rows: PivotRowGasto[]) => {
+      for (const r of rows) {
+        total += r.total;
+        for (const mk of keys) porMes[mk] += r.byMonth[mk] ?? 0;
+      }
+    };
+
+    if (data.desgloseVentasPorSucursal) {
+      for (const b of data.gastosPorSucursalLista ?? []) {
+        sumRows(b.rows);
+      }
+    } else {
+      sumRows(data.gastos.rows);
+    }
+
+    sumRows(data.gastosSocios?.rows ?? []);
+
+    return { porMes, total };
+  }, [data]);
+
+  const resultadoIngresosMenosEgresos = useMemo(() => {
+    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const porMes: Record<string, number> = {};
+    for (const mk of data.monthKeys) {
+      porMes[mk] = (ingresosAgregados.porMes[mk] ?? 0) - (egresosAgregados.porMes[mk] ?? 0);
+    }
+    return {
+      porMes,
+      total: ingresosAgregados.total - egresosAgregados.total,
+    };
+  }, [data, ingresosAgregados, egresosAgregados]);
+
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
   const tdCls = "border-t border-slate-200 px-2 py-2 text-slate-800";
@@ -801,6 +865,58 @@ export default function ResumenPage() {
                   </table>
                 </section>
               ) : null}
+
+              <section className="overflow-x-auto rounded-xl border-2 border-slate-400 bg-slate-100 shadow-sm">
+                <h2 className="border-b border-slate-300 bg-slate-200/90 px-4 py-3 text-base font-semibold text-slate-900">
+                  Total ingresos − egresos
+                </h2>
+                <p className="border-b border-slate-200 px-4 py-2 text-xs text-slate-600">
+                  Por mes y total del período: ventas menos todos los egresos (gastos del negocio más gastos
+                  de socios).
+                </p>
+                <table className="w-full min-w-[640px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                      <th className={thStickyFirst}>Concepto</th>
+                      {data.monthLabels.map((label, i) => (
+                        <th key={data.monthKeys[i]} className={thNum}>
+                          {label}
+                        </th>
+                      ))}
+                      <th className={thNum}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="bg-white">
+                      <td className={`${tdStickyFirstTotal} font-semibold text-slate-900`}>
+                        Ingresos − egresos
+                      </td>
+                      {data.monthKeys.map((mk) => {
+                        const v = resultadoIngresosMenosEgresos.porMes[mk] ?? 0;
+                        return (
+                          <td
+                            key={mk}
+                            className={`${tdNum} font-semibold ${
+                              v >= 0 ? "text-sky-900" : "text-red-800"
+                            }`}
+                          >
+                            {formatClp(v)}
+                          </td>
+                        );
+                      })}
+                      <td
+                        className={`${tdNum} font-bold ${
+                          resultadoIngresosMenosEgresos.total >= 0
+                            ? "text-sky-900"
+                            : "text-red-800"
+                        }`}
+                      >
+                        {formatClp(resultadoIngresosMenosEgresos.total)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
             </>
           ) : data && data.monthKeys.length === 0 ? (
             <p className="text-sm text-slate-500">No hay meses en el rango seleccionado.</p>

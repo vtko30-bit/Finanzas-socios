@@ -14,6 +14,7 @@ const NAV_BASE: { href: string; label: string }[] = [
   { href: "/categorias", label: "Categorías" },
   { href: "/socios", label: "Socios" },
   { href: "/resumen", label: "Resumen" },
+  { href: "/movimientos-excluidos", label: "Excluidos" },
   { href: "/analisis", label: "Análisis" },
   { href: "/reportes", label: "Reportes" },
 ];

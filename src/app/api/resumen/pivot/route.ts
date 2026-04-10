@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
+import {
+  fetchExcludedFamilyIdSet,
+  rowMatchesExcludedFamily,
+} from "@/lib/org-excluded-families-db";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
@@ -59,6 +64,12 @@ type IncomeRow = {
   amount: number | string;
   payment_method: string | null;
   origen_cuenta: string | null;
+  concepto?: string | null;
+  concept_catalog?: {
+    label?: string | null;
+    family_id?: string | null;
+    concept_families?: { id?: string | null; name?: string | null } | null;
+  } | null;
 };
 
 async function fetchIncomeRowsPaged(args: {
@@ -74,7 +85,20 @@ async function fetchIncomeRowsPaged(args: {
     const to = from + PAGE_SIZE - 1;
     let q = args.supabase
       .from("transactions")
-      .select("date, amount, payment_method, origen_cuenta")
+      .select(
+        `
+      date,
+      amount,
+      payment_method,
+      origen_cuenta,
+      concepto,
+      concept_catalog (
+        label,
+        family_id,
+        concept_families ( id, name )
+      )
+    `,
+      )
       .eq("organization_id", args.organizationId)
       .eq("type", "income")
       .gte("date", args.desde)
@@ -113,8 +137,11 @@ async function fetchExpenseRowsPaged(args: {
       date,
       amount,
       origen_cuenta,
+      concepto,
       concept_catalog (
-        concept_families ( name )
+        label,
+        family_id,
+        concept_families ( id, name )
       )
     `,
       )
@@ -210,6 +237,37 @@ function esFamiliaSocio(familia: string): boolean {
   return FAMILIAS_SOCIOS.has(familia.trim().toLowerCase());
 }
 
+function filterIncomeRowsByExcludedFamilies(
+  rows: IncomeRow[],
+  excludedFamilyIds: Set<string>,
+): IncomeRow[] {
+  if (excludedFamilyIds.size === 0) return rows;
+  return rows.filter((r) => {
+    const fid = familyIdDesdeRawTx({
+      concept_catalog: r.concept_catalog ?? null,
+    });
+    return !rowMatchesExcludedFamily(fid, excludedFamilyIds);
+  });
+}
+
+function filterExpenseRowsByExcludedFamilies(
+  rows: unknown[],
+  excludedFamilyIds: Set<string>,
+): unknown[] {
+  if (excludedFamilyIds.size === 0) return rows;
+  return rows.filter((raw) => {
+    const fid = familyIdDesdeRawTx(
+      raw as {
+        concept_catalog?: {
+          family_id?: string | null;
+          concept_families?: { id?: string | null } | null;
+        } | null;
+      },
+    );
+    return !rowMatchesExcludedFamily(fid, excludedFamilyIds);
+  });
+}
+
 function gastosRowsFromExpenseRows(
   rows: unknown[],
   monthKeys: string[],
@@ -291,6 +349,23 @@ export async function GET(request: Request) {
 
   const monthKeys = monthKeysInRange(desde, hasta);
   const monthLabels = buildMonthLabels(monthKeys);
+
+  let excludedFamilyIds: Set<string>;
+  try {
+    excludedFamilyIds = await fetchExcludedFamilyIdSet(
+      supabase,
+      member.organization_id,
+    );
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error:
+          e instanceof Error ? e.message : "Error al cargar familias excluidas",
+      },
+      { status: 500 },
+    );
+  }
+
   if (monthKeys.length === 0) {
     return NextResponse.json({
       desde,
@@ -318,9 +393,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: incomeErr }, { status: 500 });
   }
 
+  const incomeFiltrados = filterIncomeRowsByExcludedFamilies(
+    (incomeData ?? []) as IncomeRow[],
+    excludedFamilyIds,
+  );
+
   if (ventasPorSucursal) {
     const byLoc = new Map<string, IncomeRow[]>();
-    for (const raw of incomeData ?? []) {
+    for (const raw of incomeFiltrados) {
       const row = raw as IncomeRow;
       const loc = String(row.origen_cuenta ?? "").trim() || "Sin sucursal";
       if (!byLoc.has(loc)) byLoc.set(loc, []);
@@ -344,8 +424,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: expenseErr }, { status: 500 });
     }
 
-    const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+    const expenseFiltrados = filterExpenseRowsByExcludedFamilies(
       expenseData ?? [],
+      excludedFamilyIds,
+    );
+
+    const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+      expenseFiltrados,
     );
 
     const gastosByLoc = new Map<string, unknown[]>();
@@ -391,9 +476,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: expenseErr }, { status: 500 });
   }
 
-  const ventasRows = ventasRowsFromIncome((incomeData ?? []) as IncomeRow[], monthKeys);
-  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+  const expenseFiltradosMain = filterExpenseRowsByExcludedFamilies(
     expenseData ?? [],
+    excludedFamilyIds,
+  );
+
+  const ventasRows = ventasRowsFromIncome(incomeFiltrados, monthKeys);
+  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+    expenseFiltradosMain,
   );
   const gastosRows = gastosRowsFromExpenseRows(expenseNegocio, monthKeys);
   const gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const VENTAS_ROW_GRID =
@@ -337,7 +338,15 @@ export default function VentasPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
-      <h1 className="text-xl font-semibold">Detalle de ventas</h1>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <h1 className="text-xl font-semibold">Detalle de ventas</h1>
+        <Link
+          href="/movimientos-excluidos"
+          className="text-sm font-medium text-sky-700 underline hover:text-sky-900"
+        >
+          Movimientos excluidos del resumen
+        </Link>
+      </div>
 
       <section
         aria-label="Filtros"

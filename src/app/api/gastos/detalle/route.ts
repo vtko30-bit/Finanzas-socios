@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
+import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
+import {
+  fetchExcludedFamilyIdSet,
+  rowMatchesExcludedFamily,
+} from "@/lib/org-excluded-families-db";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
@@ -12,7 +18,7 @@ function necesitaConcepto(raw: string) {
   return false;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -25,6 +31,22 @@ export async function GET() {
   const member = await getUserOrganization(supabase, user.id);
   if (!member) {
     return NextResponse.json({ error: "Sin organización" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const soloExcluidos = searchParams.get("soloExcluidos") === "1";
+
+  let excludedFamilyIds: Set<string>;
+  try {
+    excludedFamilyIds = await fetchExcludedFamilyIdSet(
+      supabase,
+      member.organization_id,
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Error al cargar exclusiones" },
+      { status: 500 },
+    );
   }
 
   // `*` evita error si la migración 0007 aún no está aplicada (columna source_id).
@@ -41,7 +63,8 @@ export async function GET() {
         concept_catalog (
           id,
           label,
-          concept_families ( name )
+          family_id,
+          concept_families ( id, name )
         )
       `,
       )
@@ -77,13 +100,21 @@ export async function GET() {
       concept_catalog?: {
         id?: string;
         label?: string;
-        concept_families?: { name?: string } | null;
+        family_id?: string | null;
+        concept_families?: { id?: string; name?: string } | null;
       } | null;
     };
     const familia =
       cat.concept_catalog?.concept_families?.name?.trim() || null;
     const labelCatalogo = cat.concept_catalog?.label?.trim() || "";
     const conceptoEfectivo = labelCatalogo || conceptoCol;
+    const categoriaMostrada = categoriaMostradaDesdeRawTx({
+      concepto: conceptoCol,
+      concept_catalog: cat.concept_catalog ?? null,
+    });
+    const familyId = familyIdDesdeRawTx({
+      concept_catalog: cat.concept_catalog ?? null,
+    });
     const idOrigen = String(
       (row as { source_id?: string }).source_id ?? "",
     ).trim();
@@ -100,8 +131,16 @@ export async function GET() {
       concept_id: conceptId,
       familia,
       necesitaConcepto: necesitaConcepto(conceptoEfectivo),
+      categoriaMostrada,
+      familyId,
     };
   });
 
-  return NextResponse.json({ rows });
+  const filtered = rows.filter((r) => {
+    const fid = (r as { familyId?: string | null }).familyId ?? null;
+    const excl = rowMatchesExcludedFamily(fid, excludedFamilyIds);
+    return soloExcluidos ? excl : !excl;
+  });
+
+  return NextResponse.json({ rows: filtered });
 }

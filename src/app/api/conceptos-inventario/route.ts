@@ -111,6 +111,37 @@ export async function GET() {
     from += PAGE_SIZE;
   }
 
+  let fromInc = 0;
+  while (true) {
+    const to = fromInc + PAGE_SIZE - 1;
+    const { data: page, error: tErr } = await supabase
+      .from("transactions")
+      .select("concepto, concept_id")
+      .eq("organization_id", orgId)
+      .eq("type", "income")
+      .order("id", { ascending: true })
+      .range(fromInc, to);
+
+    if (tErr) {
+      return NextResponse.json({ error: tErr.message }, { status: 500 });
+    }
+
+    const chunk = page ?? [];
+    for (const row of chunk) {
+      const label = etiquetaMostradaEnGasto(
+        row.concepto as string | null,
+        (row.concept_id as string | null) ?? null,
+      );
+      if (!label.trim()) continue;
+      if (conceptoEsVacioOPlaceholder(label)) continue;
+      if (catalogLabelsTrim.has(label)) continue;
+      orphanTrimmed.add(label);
+    }
+
+    if (chunk.length < PAGE_SIZE) break;
+    fromInc += PAGE_SIZE;
+  }
+
   const conceptosPlanilla = [...orphanTrimmed].sort((a, b) =>
     a.localeCompare(b, "es"),
   ).map((label) => ({
