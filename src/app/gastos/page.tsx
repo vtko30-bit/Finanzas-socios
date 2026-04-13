@@ -115,11 +115,11 @@ function findConceptInCatalog(
   label: string,
   catalogo: CatalogFamily[],
 ): { id: string; familyId: string; label: string } | null {
-  const t = label.trim().toLowerCase();
+  const t = label.trim().replace(/\s+/g, " ").toLowerCase();
   if (!t) return null;
   for (const f of catalogo) {
     for (const c of f.concepts) {
-      if (c.label.trim().toLowerCase() === t) {
+      if (c.label.trim().replace(/\s+/g, " ").toLowerCase() === t) {
         return { id: c.id, familyId: f.id, label: c.label };
       }
     }
@@ -326,6 +326,7 @@ function filtrarGastos(
     rangoDesde: string;
     rangoHasta: string;
     nombreDestino: string;
+    descripcion: string;
     familia: string;
     origen: string;
     categoria: string;
@@ -338,6 +339,13 @@ function filtrarGastos(
   if (nd) {
     out = out.filter((r) =>
       (r.nombreDestino || "").toLowerCase().includes(nd),
+    );
+  }
+
+  const desc = opts.descripcion.trim().toLowerCase();
+  if (desc) {
+    out = out.filter((r) =>
+      (r.descripcion || "").toLowerCase().includes(desc),
     );
   }
 
@@ -448,6 +456,7 @@ export default function GastosPage() {
   const [rangoDesde, setRangoDesde] = useState("");
   const [rangoHasta, setRangoHasta] = useState("");
   const [filtroNombreDestino, setFiltroNombreDestino] = useState("");
+  const [filtroDescripcion, setFiltroDescripcion] = useState("");
   const [filtroFamilia, setFiltroFamilia] = useState("");
   const [filtroOrigen, setFiltroOrigen] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
@@ -563,6 +572,7 @@ export default function GastosPage() {
         rangoDesde,
         rangoHasta,
         nombreDestino: filtroNombreDestino,
+        descripcion: filtroDescripcion,
         familia: filtroFamilia,
         origen: filtroOrigen,
         categoria: filtroCategoria,
@@ -577,6 +587,7 @@ export default function GastosPage() {
       rangoDesde,
       rangoHasta,
       filtroNombreDestino,
+      filtroDescripcion,
       filtroFamilia,
       filtroOrigen,
       filtroCategoria,
@@ -609,6 +620,7 @@ export default function GastosPage() {
     rangoDesde,
     rangoHasta,
     filtroNombreDestino,
+    filtroDescripcion,
     filtroFamilia,
     filtroOrigen,
     filtroCategoria,
@@ -639,6 +651,7 @@ export default function GastosPage() {
     setRangoDesde("");
     setRangoHasta("");
     setFiltroNombreDestino("");
+    setFiltroDescripcion("");
     setFiltroFamilia("");
     setFiltroOrigen("");
     setFiltroCategoria("");
@@ -772,9 +785,12 @@ export default function GastosPage() {
     const existingConcept = findConceptInCatalog(catTrim, families);
 
     if (existingConcept) {
+      let targetFamilyId = existingConcept.familyId;
       if (famTrim) {
-        let targetFamilyId = findFamilyByName(famTrim, families)?.id;
-        if (!targetFamilyId) {
+        const matched = findFamilyByName(famTrim, families)?.id;
+        if (matched) {
+          targetFamilyId = matched;
+        } else {
           const resFam = await fetch("/api/familias", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -785,32 +801,39 @@ export default function GastosPage() {
             targetFamilyId = dataFam.family.id as string;
           } else if (resFam.status === 409) {
             families = await fetchFamilies();
-            targetFamilyId = findFamilyByName(famTrim, families)?.id;
+            const retryFamilyId = findFamilyByName(famTrim, families)?.id;
+            if (!retryFamilyId) {
+              mostrarAviso("No se pudo resolver la familia.");
+              return;
+            }
+            targetFamilyId = retryFamilyId;
           } else {
             mostrarAviso(dataFam.error || "No se pudo crear la familia");
             return;
           }
         }
-        if (
-          targetFamilyId &&
-          targetFamilyId !== existingConcept.familyId
-        ) {
-          const resPatch = await fetch(
-            `/api/conceptos-catalogo/${existingConcept.id}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ family_id: targetFamilyId }),
-            },
-          );
-          if (!resPatch.ok) {
-            const err = await resPatch.json();
-            mostrarAviso(
-              err.error || "No se pudo actualizar la familia de la categoría",
-            );
-            return;
-          }
-        }
+      }
+      const resUpsert = await fetch("/api/conceptos-catalogo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          family_id: targetFamilyId,
+          label: existingConcept.label,
+          vincular_gastos_sin_catalogo: true,
+        }),
+      });
+      const dataUpsert = await resUpsert.json();
+      if (!resUpsert.ok) {
+        mostrarAviso(
+          dataUpsert.error || "No se pudo actualizar/vincular la categoría",
+        );
+        return;
+      }
+      const vinculados = Number(dataUpsert.gastos_vinculados ?? 0);
+      if (vinculados > 0) {
+        mostrarAviso(
+          `Se vincularon ${vinculados} gasto(s) a la categoría "${existingConcept.label}".`,
+        );
       }
       await cargarCatalogo();
       const ok = await guardarConceptoCatalogo(
@@ -859,12 +882,20 @@ export default function GastosPage() {
     const resCreate = await fetch("/api/conceptos-catalogo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ family_id: familyId, label: catTrim }),
+      body: JSON.stringify({
+        family_id: familyId,
+        label: catTrim,
+        vincular_gastos_sin_catalogo: true,
+      }),
     });
     const dataCreate = await resCreate.json();
     if (!resCreate.ok) {
       mostrarAviso(dataCreate.error || "No se pudo crear la categoría");
       return;
+    }
+    const vinculados = Number(dataCreate.gastos_vinculados ?? 0);
+    if (vinculados > 0) {
+      mostrarAviso(`Se vincularon ${vinculados} gasto(s) a la categoría "${catTrim}".`);
     }
     const newConceptId = dataCreate.concept.id as string;
     await cargarCatalogo();
@@ -1004,7 +1035,7 @@ export default function GastosPage() {
                 Día
                 <input
                   type="date"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
@@ -1015,7 +1046,7 @@ export default function GastosPage() {
                 Mes
                 <input
                   type="month"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
@@ -1029,7 +1060,7 @@ export default function GastosPage() {
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
@@ -1041,7 +1072,7 @@ export default function GastosPage() {
                   Desde
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
@@ -1050,7 +1081,7 @@ export default function GastosPage() {
                   Hasta
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm"
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
@@ -1060,6 +1091,16 @@ export default function GastosPage() {
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
+            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+              Origen
+              <input
+                type="text"
+                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                placeholder="Ej: Banco, Mercado Pago…"
+                value={filtroOrigen}
+                onChange={(e) => setFiltroOrigen(e.target.value)}
+              />
+            </label>
             <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Nombre
               <input
@@ -1105,13 +1146,13 @@ export default function GastosPage() {
               </select>
             </label>
             <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
-              Origen
+              Descripción
               <input
                 type="text"
                 className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
-                placeholder="Ej: Banco, Mercado Pago…"
-                value={filtroOrigen}
-                onChange={(e) => setFiltroOrigen(e.target.value)}
+                placeholder="Buscar…"
+                value={filtroDescripcion}
+                onChange={(e) => setFiltroDescripcion(e.target.value)}
               />
             </label>
           </div>

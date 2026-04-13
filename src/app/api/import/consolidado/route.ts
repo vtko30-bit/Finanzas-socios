@@ -8,6 +8,15 @@ import { logAudit } from "@/lib/audit";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk, DEDUPE_HASH_IN_CHUNK } from "@/lib/array-chunk";
 
+function normalizarEtiquetaConcepto(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function etiquetaExcluidaParaAutoVinculo(raw: string): boolean {
+  const n = normalizarEtiquetaConcepto(raw);
+  return !n || n === "sin categoria" || n === "otros";
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -157,7 +166,32 @@ export async function POST(request: Request) {
   });
 
   if (uniqueToInsert.length) {
+    const { data: catalogRows, error: catalogErr } = await supabase
+      .from("concept_catalog")
+      .select("id, label")
+      .eq("organization_id", orgId);
+    if (catalogErr) {
+      return NextResponse.json({ error: supabaseErrorMessage(catalogErr) }, { status: 500 });
+    }
+    const conceptByLabel = new Map<string, { id: string; label: string }>();
+    for (const row of catalogRows ?? []) {
+      const key = normalizarEtiquetaConcepto(String(row.label ?? ""));
+      if (etiquetaExcluidaParaAutoVinculo(key)) continue;
+      conceptByLabel.set(key, { id: row.id, label: row.label });
+    }
+
     const tx = uniqueToInsert.map((m) => ({
+      ...(() => {
+        const rawConcepto = String(m.category_name ?? "").trim();
+        const key = normalizarEtiquetaConcepto(rawConcepto);
+        const fromCatalog = etiquetaExcluidaParaAutoVinculo(key)
+          ? undefined
+          : conceptByLabel.get(key);
+        return {
+          concept_id: fromCatalog?.id ?? null,
+          concepto: fromCatalog?.label ?? rawConcepto,
+        };
+      })(),
       id: randomUUID(),
       organization_id: orgId,
       account_id: null,
@@ -172,7 +206,6 @@ export async function POST(request: Request) {
       source_id: m.source_id ?? "",
       external_ref: m.external_ref,
       origen_cuenta: m.account_name ?? "",
-      concepto: m.category_name ?? "",
       source: "excel_egresos",
       import_batch_id: batchId,
       dedupe_hash: m.dedupe_hash,

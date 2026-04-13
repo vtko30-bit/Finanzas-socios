@@ -346,10 +346,25 @@ export default function ResumenPage() {
   const thNum = `${thCls} text-right tabular-nums`;
   const tdCls = "border-t border-slate-200 px-2 py-2 text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
+  const trTotal = "bg-sky-100/70 ring-1 ring-inset ring-sky-200";
   /** Primera columna fija al hacer scroll horizontal en móvil (solo meses + total se desplazan). */
   const thStickyFirst = `${thCls} max-sm:sticky max-sm:left-0 max-sm:z-20 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-[#5AC4FF] max-sm:border-r max-sm:border-sky-700/30 max-sm:shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
   const tdStickyFirst = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-slate-50 max-sm:border-r max-sm:border-slate-200 max-sm:shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
-  const tdStickyFirstTotal = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-white/80 max-sm:border-r max-sm:border-slate-200`;
+  const tdStickyFirstTotal = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-sky-100/70 max-sm:border-r max-sm:border-slate-200`;
+  const COL_FIRST = 150;
+  const COL_MONTH = 100;
+  const COL_TOTAL = 120;
+  const tableMinWidth = (monthCount: number) =>
+    `${COL_FIRST + monthCount * COL_MONTH + COL_TOTAL}px`;
+  const renderResumenColgroup = (monthCount: number) => (
+    <colgroup>
+      <col style={{ width: `${COL_FIRST}px` }} />
+      {Array.from({ length: monthCount }, (_, i) => (
+        <col key={`col-m-${i}`} style={{ width: `${COL_MONTH}px` }} />
+      ))}
+      <col style={{ width: `${COL_TOTAL}px` }} />
+    </colgroup>
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 pb-10 pt-4">
@@ -541,7 +556,11 @@ export default function ResumenPage() {
                           <h3 className="border-b border-slate-200 bg-white/80 px-4 py-3 text-base font-semibold text-sky-900">
                             {bloque.sucursal}
                           </h3>
-                          <table className="w-full min-w-[640px] border-collapse text-sm">
+                          <table
+                            className="w-full border-collapse text-sm table-fixed"
+                            style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                          >
+                            {renderResumenColgroup(data.monthKeys.length)}
                             <thead>
                               <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                                 <th className={thStickyFirst}>Forma de pago</th>
@@ -577,7 +596,7 @@ export default function ResumenPage() {
                                   </td>
                                 </tr>
                               ) : (
-                                <tr className="bg-white/80">
+                                <tr className={trTotal}>
                                   <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
@@ -603,7 +622,11 @@ export default function ResumenPage() {
                       ? `Resumen de ventas ${sucursalSel.v.trim()}`
                       : "Resumen de ventas"}
                   </h2>
-                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                  <table
+                    className="w-full border-collapse text-sm table-fixed"
+                    style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                  >
+                    {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
                       <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                         <th className={thStickyFirst}>Forma de pago</th>
@@ -643,7 +666,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr className="bg-white/80">
+                        <tr className={trTotal}>
                           <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
@@ -681,7 +704,11 @@ export default function ResumenPage() {
                           <h3 className="border-b border-slate-200 bg-white/80 px-4 py-3 text-base font-semibold text-rose-900">
                             {bloque.sucursal}
                           </h3>
-                          <table className="w-full min-w-[640px] border-collapse text-sm">
+                          <table
+                            className="w-full border-collapse text-sm table-fixed"
+                            style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                          >
+                            {renderResumenColgroup(data.monthKeys.length)}
                             <thead>
                               <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                                 <th className={thStickyFirst}>Familia</th>
@@ -717,7 +744,7 @@ export default function ResumenPage() {
                                   </td>
                                 </tr>
                               ) : (
-                                <tr className="bg-white/80">
+                                <tr className={trTotal}>
                                   <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
@@ -743,7 +770,11 @@ export default function ResumenPage() {
                       ? `Resumen de gastos ${sucursalSel.v.trim()}`
                       : "Resumen de gastos"}
                   </h2>
-                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                  <table
+                    className="w-full border-collapse text-sm table-fixed"
+                    style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                  >
+                    {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
                       <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                         <th className={thStickyFirst}>Familia</th>
@@ -783,7 +814,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr className="bg-white/80">
+                        <tr className={trTotal}>
                           <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
@@ -813,7 +844,11 @@ export default function ResumenPage() {
                     </Link>
                     .
                   </p>
-                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                  <table
+                    className="w-full border-collapse text-sm table-fixed"
+                    style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                  >
+                    {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
                       <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                         <th className={thStickyFirst}>Familia</th>
@@ -849,7 +884,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr className="bg-white/80">
+                        <tr className={trTotal}>
                           <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
@@ -874,7 +909,11 @@ export default function ResumenPage() {
                   Por mes y total del período: ventas menos todos los egresos (gastos del negocio más gastos
                   de socios).
                 </p>
-                <table className="w-full min-w-[640px] border-collapse text-sm">
+                <table
+                  className="w-full border-collapse text-sm table-fixed"
+                  style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                >
+                  {renderResumenColgroup(data.monthKeys.length)}
                   <thead>
                     <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
                       <th className={thStickyFirst}>Concepto</th>
@@ -887,7 +926,7 @@ export default function ResumenPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="bg-white">
+                    <tr className={trTotal}>
                       <td className={`${tdStickyFirstTotal} font-semibold text-slate-900`}>
                         Ingresos − egresos
                       </td>
