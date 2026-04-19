@@ -16,6 +16,12 @@ type PivotRowGasto = {
   total: number;
 };
 
+type PivotRowCredito = {
+  credito: string;
+  byMonth: Record<string, number>;
+  total: number;
+};
+
 type PivotResponse = {
   desde: string;
   hasta: string;
@@ -28,6 +34,7 @@ type PivotResponse = {
   ventas: { rows: PivotRowVenta[] };
   gastos: { rows: PivotRowGasto[] };
   gastosSocios?: { rows: PivotRowGasto[] };
+  creditos?: { rows: PivotRowCredito[] };
   error?: string;
 };
 
@@ -275,6 +282,24 @@ export default function ResumenPage() {
 
   const totalGastosSocios = useMemo(() => {
     const rows = data?.gastosSocios?.rows ?? [];
+    return rows.reduce((s, r) => s + r.total, 0);
+  }, [data]);
+
+  const totalesPorMesCreditos = useMemo(() => {
+    if (!data?.monthKeys.length) return {};
+    const rows = data.creditos?.rows ?? [];
+    const acc: Record<string, number> = {};
+    for (const mk of data.monthKeys) acc[mk] = 0;
+    for (const r of rows) {
+      for (const mk of data.monthKeys) {
+        acc[mk] += r.byMonth[mk] ?? 0;
+      }
+    }
+    return acc;
+  }, [data]);
+
+  const totalCreditos = useMemo(() => {
+    const rows = data?.creditos?.rows ?? [];
     return rows.reduce((s, r) => s + r.total, 0);
   }, [data]);
 
@@ -831,19 +856,77 @@ export default function ResumenPage() {
                 </section>
               )}
 
+              {data.creditos ? (
+                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
+                    Resumen de pagos de créditos
+                  </h2>
+                  
+                  <table
+                    className="w-full border-collapse text-sm table-fixed"
+                    style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
+                  >
+                    {renderResumenColgroup(data.monthKeys.length)}
+                    <thead>
+                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                        <th className={thStickyFirst}>Crédito</th>
+                        {data.monthLabels.map((label, i) => (
+                          <th key={data.monthKeys[i]} className={thNum}>
+                            {label}
+                          </th>
+                        ))}
+                        <th className={thNum}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.creditos.rows ?? []).map((r) => (
+                        <tr key={r.credito}>
+                          <td className={tdStickyFirst}>{r.credito}</td>
+                          {data.monthKeys.map((mk) => (
+                            <td key={mk} className={tdNum}>
+                              {formatClp(r.byMonth[mk] ?? 0)}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-medium text-slate-50`}>
+                            {formatClp(r.total)}
+                          </td>
+                        </tr>
+                      ))}
+                      {(data.creditos.rows ?? []).length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={data.monthKeys.length + 2}
+                            className="px-4 py-6 text-center text-slate-500"
+                          >
+                            Sin pagos de créditos en este período.
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr className={trTotal}>
+                          <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>
+                            Total
+                          </td>
+                          {data.monthKeys.map((mk) => (
+                            <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
+                              {formatClp(totalesPorMesCreditos[mk] ?? 0)}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-semibold text-indigo-800`}>
+                            {formatClp(totalCreditos)}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </section>
+              ) : null}
+
               {data.gastosSocios ? (
                 <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
-                    Resumen de gastos socios (Mario, Mena, Victor)
+                    Resumen de gastos socios  
                   </h2>
-                  <p className="border-b border-slate-100 bg-white/70 px-4 py-2 text-xs text-slate-600">
-                    Estos gastos no se incluyen en el resumen general de gastos del negocio. Detalle
-                    por categoría y mes en{" "}
-                    <Link href="/socios" className="text-sky-700 underline hover:text-sky-900">
-                      Socios
-                    </Link>
-                    .
-                  </p>
+                 
                   <table
                     className="w-full border-collapse text-sm table-fixed"
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}

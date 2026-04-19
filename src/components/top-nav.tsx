@@ -17,6 +17,8 @@ const NAV_BASE: { href: string; label: string }[] = [
   { href: "/movimientos-excluidos", label: "Excluidos" },
   { href: "/analisis", label: "Análisis" },
   { href: "/reportes", label: "Reportes" },
+  { href: "/creditos", label: "Créditos" },
+  { href: "/prestamos-otorgados", label: "Préstamos otorgados" },
 ];
 
 const NAV_OWNER: { href: string; label: string }[] = [

@@ -1,12 +1,17 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const err = new URLSearchParams(window.location.search).get("error");
+    if (err) setStatus(`Error: ${decodeURIComponent(err)}`);
+  }, []);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

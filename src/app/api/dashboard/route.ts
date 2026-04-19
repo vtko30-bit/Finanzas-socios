@@ -39,6 +39,7 @@ async function dashboardMetricsFallback(
     .from("transactions")
     .select("amount, type")
     .eq("organization_id", orgId)
+    .eq("flow_kind", "operativo")
     .gte("date", monthStart)
     .lte("date", monthEnd);
 
@@ -47,7 +48,8 @@ async function dashboardMetricsFallback(
   const { data: totalRows, error: e2 } = await supabase
     .from("transactions")
     .select("amount, type")
-    .eq("organization_id", orgId);
+    .eq("organization_id", orgId)
+    .eq("flow_kind", "operativo");
 
   if (e2) throw e2;
 

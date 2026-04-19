@@ -92,6 +92,7 @@ export async function GET(request: Request) {
     `,
     )
     .eq("organization_id", member.organization_id)
+    .eq("flow_kind", "operativo")
     .eq("type", "income")
     .order("date", { ascending: false });
 

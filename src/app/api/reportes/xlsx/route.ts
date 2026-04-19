@@ -1,8 +1,40 @@
 import * as XLSX from "xlsx";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserOrganization } from "@/lib/organization";
 import { logAudit } from "@/lib/audit";
+import { getUserOrganization } from "@/lib/organization";
+import {
+  CATEGORIAS_CSV_HEADERS,
+  fetchCategoriasInventarioParaExporte,
+  fetchFamiliasParaExporte,
+  fetchTransaccionesParaExporte,
+  FAMILIAS_CSV_HEADERS,
+  filaMovimientoParaCsv,
+  flattenResumenParaFilas,
+  flattenResumenPorSucursalParaFilas,
+  MOVIMIENTOS_CSV_HEADERS,
+  parseReporteVista,
+  type ReporteVista,
+} from "@/lib/reportes-export";
+import {
+  isoDateOk,
+  loadResumenPivotMain,
+  loadResumenPivotPorSucursal,
+} from "@/lib/resumen-pivot-core";
+import { createClient } from "@/lib/supabase/server";
+
+function nombreArchivo(vista: ReporteVista): string {
+  const slug: Record<ReporteVista, string> = {
+    movimientos: "movimientos",
+    resumen: "resumen",
+    familias: "familias",
+    categorias: "categorias",
+    ventas: "ventas",
+    gastos: "gastos",
+    excluidos: "excluidos",
+    socios: "socios",
+  };
+  return `reporte-${slug[vista]}.xlsx`;
+}
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -18,25 +50,139 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
+  const vista = parseReporteVista(url.searchParams.get("vista"));
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
-
-  let query = supabase
-    .from("transactions")
-    .select("date, type, amount, currency, description, payment_method, external_ref, counterparty")
-    .eq("organization_id", member.organization_id)
-    .order("date", { ascending: true });
-  if (from) query = query.gte("date", from);
-  if (to) query = query.lte("date", to);
-
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  const type = url.searchParams.get("type");
+  const resumenPorSucursal =
+    url.searchParams.get("resumenPorSucursal") === "1" ||
+    url.searchParams.get("resumenPorSucursal") === "true";
 
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data ?? []);
-  XLSX.utils.book_append_sheet(wb, ws, "Transacciones");
+  let rowCount = 0;
+
+  if (vista === "resumen") {
+    if (!from || !to || !isoDateOk(from) || !isoDateOk(to)) {
+      return NextResponse.json(
+        { error: "Para Resumen indique desde y hasta (YYYY-MM-DD) válidos." },
+        { status: 400 },
+      );
+    }
+    if (from > to) {
+      return NextResponse.json(
+        { error: "La fecha desde no puede ser posterior a hasta." },
+        { status: 400 },
+      );
+    }
+    const { data, error } = await loadResumenPivotMain({
+      supabase,
+      organizationId: member.organization_id,
+      desde: from,
+      hasta: to,
+    });
+    if (error || !data) {
+      return NextResponse.json(
+        { error: error ?? "Error al generar resumen" },
+        { status: 500 },
+      );
+    }
+    const flat = flattenResumenParaFilas(data);
+    rowCount = flat.length;
+    const wsCons = XLSX.utils.json_to_sheet(flat);
+    XLSX.utils.book_append_sheet(
+      wb,
+      wsCons,
+      resumenPorSucursal ? "Consolidado" : "Resumen",
+    );
+    if (resumenPorSucursal) {
+      const { data: ps, error: psErr } = await loadResumenPivotPorSucursal({
+        supabase,
+        organizationId: member.organization_id,
+        desde: from,
+        hasta: to,
+      });
+      if (psErr || !ps) {
+        return NextResponse.json(
+          { error: psErr ?? "Error al generar desglose por sucursal" },
+          { status: 500 },
+        );
+      }
+      const flatPs = flattenResumenPorSucursalParaFilas(ps);
+      rowCount += flatPs.length;
+      const wsPs = XLSX.utils.json_to_sheet(flatPs);
+      XLSX.utils.book_append_sheet(wb, wsPs, "Por sucursal");
+    }
+  } else if (vista === "familias") {
+    const { rows, error } = await fetchFamiliasParaExporte({
+      supabase,
+      organizationId: member.organization_id,
+    });
+    if (error) {
+      return NextResponse.json({ error }, { status: 500 });
+    }
+    rowCount = rows.length;
+    const asObj = rows.map((r) => ({
+      [FAMILIAS_CSV_HEADERS[0]]: r.id,
+      [FAMILIAS_CSV_HEADERS[1]]: r.nombre,
+      [FAMILIAS_CSV_HEADERS[2]]: r.orden,
+    }));
+    const ws = XLSX.utils.json_to_sheet(asObj);
+    XLSX.utils.book_append_sheet(wb, ws, "Familias");
+  } else if (vista === "categorias") {
+    const { rows, error } = await fetchCategoriasInventarioParaExporte({
+      supabase,
+      organizationId: member.organization_id,
+    });
+    if (error) {
+      return NextResponse.json({ error }, { status: 500 });
+    }
+    rowCount = rows.length;
+    const asObj = rows.map((r) => ({
+      [CATEGORIAS_CSV_HEADERS[0]]: r.concept_id,
+      [CATEGORIAS_CSV_HEADERS[1]]: r.categoria,
+      [CATEGORIAS_CSV_HEADERS[2]]: r.familia_id,
+      [CATEGORIAS_CSV_HEADERS[3]]: r.familia,
+      [CATEGORIAS_CSV_HEADERS[4]]: r.solo_planilla,
+    }));
+    const ws = XLSX.utils.json_to_sheet(asObj);
+    XLSX.utils.book_append_sheet(wb, ws, "Categorías");
+  } else {
+    const typeFilter =
+      type === "income" || type === "expense" ? type : "all";
+    const { rows, error } = await fetchTransaccionesParaExporte({
+      supabase,
+      organizationId: member.organization_id,
+      from,
+      to,
+      typeFilter,
+      vista,
+    });
+    if (error) {
+      return NextResponse.json({ error }, { status: 500 });
+    }
+    rowCount = rows.length;
+    const asObj = rows.map((row) => {
+      const rec = filaMovimientoParaCsv(row);
+      const o: Record<string, string | number> = {};
+      for (const h of MOVIMIENTOS_CSV_HEADERS) {
+        o[h] = rec[h];
+      }
+      return o;
+    });
+    const nombreHoja =
+      vista === "ventas"
+        ? "Ventas"
+        : vista === "gastos"
+          ? "Gastos"
+          : vista === "excluidos"
+            ? "Excluidos"
+            : vista === "socios"
+              ? "Socios"
+              : "Movimientos";
+    const ws = XLSX.utils.json_to_sheet(asObj);
+    XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+  }
+
   const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
   await logAudit(supabase, {
@@ -44,8 +190,15 @@ export async function GET(request: Request) {
     actor_user_id: user.id,
     action: "export_xlsx",
     entity_type: "report",
-    entity_id: "transactions_xlsx",
-    changes_json: { from, to, rows: data?.length ?? 0 },
+    entity_id: `report_${vista}`,
+    changes_json: {
+      vista,
+      from,
+      to,
+      type,
+      resumenPorSucursal: vista === "resumen" ? resumenPorSucursal : undefined,
+      rows: rowCount,
+    },
   });
 
   return new Response(buffer, {
@@ -53,7 +206,7 @@ export async function GET(request: Request) {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="reporte-transacciones.xlsx"`,
+      "Content-Disposition": `attachment; filename="${nombreArchivo(vista)}"`,
     },
   });
 }

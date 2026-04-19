@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
+import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 
 const GASTOS_ROW_GRID =
   "grid w-full min-w-[1042px] grid-cols-[minmax(0,6rem)_minmax(0,0.3fr)_minmax(0,0.85fr)_minmax(0,130px)_minmax(0,200px)_minmax(0,0.6fr)_minmax(0,5rem)] items-start gap-0";
@@ -31,6 +32,8 @@ type CatalogFamily = {
 type GastoRow = {
   fecha: string;
   origen: string;
+  /** Origen técnico (`transactions.source`), p. ej. excel_egresos. */
+  source: string;
   /** UUID del movimiento en la app (API / edición). */
   id: string;
   /** ID de la fila en el archivo de egresos (columna Id), si existe. */
@@ -448,6 +451,25 @@ export default function GastosPage() {
     familia: string;
   } | null>(null);
   const [detailRow, setDetailRow] = useState<GastoRow | null>(null);
+  const [reconcileModal, setReconcileModal] = useState<{
+    transactionId: string;
+    monto: number;
+    alreadyPaid?: boolean;
+  } | null>(null);
+  const [reconcileCreditId, setReconcileCreditId] = useState("");
+  const [reconcileCuotaStr, setReconcileCuotaStr] = useState("");
+  const [creditosLista, setCreditosLista] = useState<
+    {
+      id: string;
+      lender: string;
+      description: string | null;
+      status: string;
+    }[]
+  >([]);
+  const [cuotaPreviewTotal, setCuotaPreviewTotal] = useState<number | null>(
+    null,
+  );
+  const [reconcileBusy, setReconcileBusy] = useState(false);
 
   const [modoFecha, setModoFecha] = useState<FechaFiltroModo>("todo");
   const [dia, setDia] = useState("");
@@ -490,7 +512,13 @@ export default function GastosPage() {
         if (!res.ok) {
           throw new Error(data.error || "No se pudo cargar detalle");
         }
-        setRows(data.rows ?? []);
+        const raw = (data.rows ?? []) as GastoRow[];
+        setRows(
+          raw.map((r) => ({
+            ...r,
+            source: r.source ?? "",
+          })),
+        );
         setStatus("");
       })
       .catch((e: Error) => {
@@ -509,6 +537,81 @@ export default function GastosPage() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    if (!reconcileModal) return;
+    let cancelled = false;
+    fetch("/api/creditos")
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Créditos");
+        return data.credits as {
+          id: string;
+          lender: string;
+          description: string | null;
+          status: string;
+        }[];
+      })
+      .then((list) => {
+        if (!cancelled) setCreditosLista(list ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCreditosLista([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reconcileModal]);
+
+  useEffect(() => {
+    if (!reconcileModal || !reconcileCreditId) {
+      setCuotaPreviewTotal(null);
+      return;
+    }
+    const n = Number(reconcileCuotaStr);
+    if (!Number.isFinite(n) || n < 1) {
+      setCuotaPreviewTotal(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/creditos/${reconcileCreditId}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Detalle");
+        return data as {
+          installments?: {
+            installment_number: number;
+            total_amount: number;
+            status: string;
+          }[];
+        };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const row = (data.installments ?? []).find(
+          (i) => i.installment_number === n,
+        );
+        if (!row) {
+          setCuotaPreviewTotal(null);
+          return;
+        }
+        setCuotaPreviewTotal(Number(row.total_amount) || 0);
+      })
+      .catch(() => {
+        if (!cancelled) setCuotaPreviewTotal(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reconcileModal, reconcileCreditId, reconcileCuotaStr]);
+
+  useEffect(() => {
+    if (reconcileModal) {
+      setReconcileCreditId("");
+      setReconcileCuotaStr("");
+      setCuotaPreviewTotal(null);
+    }
+  }, [reconcileModal?.transactionId]);
 
   /** Catálogo fresco al abrir el modal (solo al cambiar el gasto, no al editar el select). */
   useEffect(() => {
@@ -991,7 +1094,66 @@ export default function GastosPage() {
     savingId === rowId;
 
   const uiBloqueadoGuardado =
-    saveInProgress || savingId !== null || (!capsLoading && !canWrite);
+    saveInProgress ||
+    savingId !== null ||
+    reconcileBusy ||
+    (!capsLoading && !canWrite);
+
+  const aplicarConciliacionCredito = async () => {
+    if (!reconcileModal) return;
+    if (!reconcileCreditId) {
+      mostrarAviso("Selecciona un crédito.");
+      return;
+    }
+    const n = Number(reconcileCuotaStr);
+    if (!Number.isFinite(n) || n < 1) {
+      mostrarAviso("Indica el número de cuota (1, 2, 3…).");
+      return;
+    }
+    setReconcileBusy(true);
+    try {
+      const endpoint = reconcileModal.alreadyPaid
+        ? `/api/creditos/${reconcileCreditId}/link-existing-transaction`
+        : `/api/creditos/${reconcileCreditId}/reconcile-transaction`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transaction_id: reconcileModal.transactionId,
+          installment_number: n,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        expected_total?: number;
+        transaction_amount?: number;
+      };
+      if (!res.ok) {
+        mostrarAviso(data.error || "No se pudo registrar");
+        return;
+      }
+      if (reconcileModal.alreadyPaid) {
+        mostrarAviso(
+          "Movimiento vinculado a una cuota ya pagada. No se modificaron montos, solo la trazabilidad.",
+        );
+      } else {
+        mostrarAviso(
+          "Movimiento conciliado: se registró el pago de la cuota y se eliminó el egreso importado.",
+        );
+      }
+      setReconcileModal(null);
+      cargar();
+    } catch {
+      mostrarAviso("Error de red al registrar la vinculación");
+    } finally {
+      setReconcileBusy(false);
+    }
+  };
+
+  const creditosActivos = useMemo(
+    () => creditosLista.filter((c) => c.status === "active"),
+    [creditosLista],
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
@@ -1654,10 +1816,180 @@ export default function GastosPage() {
               >
                 Editar categoría
               </button>
+              {canWrite && isReconcilableImportSource(detailRow.source) ? (
+                <button
+                  type="button"
+                  className="rounded border border-emerald-700 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  disabled={uiBloqueadoGuardado}
+                  title="Vincular este egreso importado con el pago de una cuota (reemplaza el movimiento por el desglose contable)"
+                  onClick={() => {
+                    setReconcileModal({
+                      transactionId: detailRow.id,
+                      monto: detailRow.monto,
+                    });
+                    setDetailRow(null);
+                  }}
+                >
+                  Conciliar con cuota de crédito
+                </button>
+              ) : null}
+              {canWrite && isReconcilableImportSource(detailRow.source) ? (
+                <button
+                  type="button"
+                  className="rounded border border-indigo-700 bg-indigo-50 px-4 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                  disabled={uiBloqueadoGuardado}
+                  title="Marcar este egreso importado como correspondiente a una cuota ya pagada (no modifica montos, solo vincula)"
+                  onClick={() => {
+                    setReconcileModal({
+                      transactionId: detailRow.id,
+                      monto: detailRow.monto,
+                      alreadyPaid: true,
+                    });
+                    setDetailRow(null);
+                  }}
+                >
+                  Vincular como cuota ya pagada
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
       ) : null}
+
+      {mounted && reconcileModal
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gasto-reconcile-titulo"
+              onClick={(e) => {
+                if (e.target === e.currentTarget && !reconcileBusy)
+                  setReconcileModal(null);
+              }}
+            >
+              <div
+                className="pointer-events-auto w-full max-w-md overflow-visible rounded-xl border border-slate-300 bg-slate-50 p-6 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3
+                  id="gasto-reconcile-titulo"
+                  className="text-lg font-semibold text-slate-900"
+                >
+                  {reconcileModal.alreadyPaid
+                    ? "Vincular como cuota ya pagada"
+                    : "Conciliar con pago de crédito"}
+                </h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Solo aplica a egresos cargados desde planilla (origen{" "}
+                  <code className="text-xs">excel_…</code>).
+                  {reconcileModal.alreadyPaid ? (
+                    <>
+                      {" "}
+                      No se modifican montos: el movimiento se marcará como relacionado a una
+                      cuota ya pagada del crédito para trazabilidad.
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      El movimiento se eliminará y se crearán interés, comisión y capital con la
+                      misma fecha y referencias. El monto debe coincidir con el total de la cuota.
+                    </>
+                  )}
+                </p>
+                <p className="mt-2 text-sm font-medium text-slate-800">
+                  Monto del movimiento: {formatClp(reconcileModal.monto)}
+                </p>
+                <div className="mt-4">
+                  <label
+                    className="block text-xs font-medium text-slate-700"
+                    htmlFor="reconcile-credito"
+                  >
+                    Crédito
+                  </label>
+                  <select
+                    id="reconcile-credito"
+                    className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    value={reconcileCreditId}
+                    disabled={reconcileBusy}
+                    onChange={(e) => setReconcileCreditId(e.target.value)}
+                  >
+                    <option value="">— Elegir —</option>
+                    {creditosActivos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {(c.lender || "Préstamo").trim()}
+                        {c.description
+                          ? ` — ${String(c.description).slice(0, 48)}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {creditosActivos.length === 0 && reconcileModal ? (
+                    <p className="mt-1 text-xs text-amber-800">
+                      No hay créditos activos. Crea o activa un crédito en
+                      Créditos tomados.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="mt-4">
+                  <label
+                    className="block text-xs font-medium text-slate-700"
+                    htmlFor="reconcile-cuota"
+                  >
+                    N.º de cuota
+                  </label>
+                  <input
+                    id="reconcile-cuota"
+                    type="number"
+                    min={1}
+                    step={1}
+                    className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    value={reconcileCuotaStr}
+                    disabled={reconcileBusy}
+                    onChange={(e) => setReconcileCuotaStr(e.target.value)}
+                    placeholder="Ej: 3"
+                  />
+                  {cuotaPreviewTotal != null && reconcileCuotaStr.trim() ? (
+                    <p className="mt-1 text-xs text-slate-600">
+                      Total de la cuota según plan: {formatClp(cuotaPreviewTotal)}
+                    </p>
+                  ) : null}
+                  {cuotaPreviewTotal != null &&
+                  reconcileModal &&
+                  Math.abs(
+                    Math.round(cuotaPreviewTotal) -
+                      Math.round(reconcileModal.monto),
+                  ) > 1 ? (
+                    <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                      El total de la cuota no coincide con el monto del
+                      movimiento; la conciliación será rechazada hasta que
+                      coincidan.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="mt-6 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
+                    disabled={reconcileBusy}
+                    onClick={() => setReconcileModal(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-emerald-700 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                    disabled={reconcileBusy || creditosActivos.length === 0}
+                    onClick={() => void aplicarConciliacionCredito()}
+                  >
+                    {reconcileBusy ? "Conciliando…" : "Conciliar"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {mounted && editModal
         ? createPortal(

@@ -19,7 +19,8 @@ async function analyticsMonthlyTotalsFallback(
   const { data: rows, error } = await supabase
     .from("transactions")
     .select("date, amount, type")
-    .eq("organization_id", orgId);
+    .eq("organization_id", orgId)
+    .eq("flow_kind", "operativo");
 
   if (error) throw error;
 

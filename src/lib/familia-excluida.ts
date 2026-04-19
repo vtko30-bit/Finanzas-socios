@@ -19,3 +19,20 @@ export function familyIdDesdeRawTx(raw: {
   }
   return null;
 }
+
+/** Nombre de familia para mostrar (mismo criterio que resumen / detalle). */
+export function familiaNombreDesdeRawTx(raw: {
+  concept_catalog?: {
+    concept_families?: { name?: string | null } | null;
+  } | null;
+}): string {
+  const cat = raw.concept_catalog;
+  if (!cat || typeof cat !== "object") return "Sin familia";
+  const fam = cat.concept_families;
+  if (!fam) return "Sin familia";
+  const f = Array.isArray(fam) ? fam[0] : fam;
+  if (!f || typeof f !== "object") return "Sin familia";
+  const name = (f as { name?: string }).name;
+  return String(name ?? "").trim() || "Sin familia";
+}
+

@@ -69,6 +69,7 @@ export async function GET(request: Request) {
       `,
       )
       .eq("organization_id", member.organization_id)
+      .eq("flow_kind", "operativo")
       .in("type", EXPENSE_TYPES)
       .order("date", { ascending: false })
       .order("id", { ascending: false })
@@ -118,9 +119,11 @@ export async function GET(request: Request) {
     const idOrigen = String(
       (row as { source_id?: string }).source_id ?? "",
     ).trim();
+    const sourceRaw = String((row as { source?: string }).source ?? "").trim();
     return {
       fecha: row.date,
       origen: origenCuenta || row.source || "",
+      source: sourceRaw,
       id: row.id,
       idOrigen,
       nroOperacion: row.external_ref || "",
