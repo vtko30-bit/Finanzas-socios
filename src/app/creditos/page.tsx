@@ -444,7 +444,7 @@ export default function CreditosPage() {
             <label className="text-sm sm:col-span-2">
               Prestamista / entidad
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={lender}
                 onChange={(e) => setLender(e.target.value)}
                 required
@@ -453,18 +453,18 @@ export default function CreditosPage() {
             <label className="text-sm sm:col-span-2">
               Descripción (opcional)
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </label>
             <label className="text-sm">
-              Monto desembolsado
+              Monto
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={principal}
                 onChange={(e) => setPrincipal(e.target.value)}
                 required
@@ -474,7 +474,7 @@ export default function CreditosPage() {
               Fecha desembolso
               <input
                 type="date"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={disbursementDate}
                 onChange={(e) => setDisbursementDate(e.target.value)}
                 required
@@ -485,7 +485,7 @@ export default function CreditosPage() {
               <input
                 type="number"
                 min="1"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={nCuotas}
                 onChange={(e) => setNCuotas(e.target.value)}
                 required
@@ -497,7 +497,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={interestTotal}
                 onChange={(e) => setInterestTotal(e.target.value)}
               />
@@ -508,7 +508,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={feePerInstallment}
                 onChange={(e) => setFeePerInstallment(e.target.value)}
               />
@@ -525,7 +525,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={firstCuotaTotal}
                 onChange={(e) => setFirstCuotaTotal(e.target.value)}
                 placeholder={Number(nCuotas) === 1 ? "Obligatorio si personalizas 1 cuota" : ""}
@@ -537,7 +537,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400 disabled:bg-slate-100 disabled:text-slate-600"
                 value={recurringCuotaTotal}
                 onChange={(e) => setRecurringCuotaTotal(e.target.value)}
                 disabled={Number(nCuotas) < 2}
@@ -547,7 +547,7 @@ export default function CreditosPage() {
             <label className="text-sm">
               Origen cuenta (sucursal / caja)
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={origenCuenta}
                 onChange={(e) => setOrigenCuenta(e.target.value)}
               />
@@ -555,7 +555,7 @@ export default function CreditosPage() {
             <label className="text-sm">
               Medio de pago (opcional)
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
               />
@@ -578,18 +578,8 @@ export default function CreditosPage() {
       ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            className="text-sm text-sky-700 underline"
-            onClick={() => void load()}
-            disabled={loading || !authenticated}
-          >
-            Actualizar
-          </button>
-        </div>
-        {loading ? <p className="mt-2 text-sm text-slate-500">Cargando…</p> : null}
-        <ul className="mt-3 divide-y divide-slate-100">
+        {loading ? <p className="text-sm text-slate-500">Cargando…</p> : null}
+        <ul className="divide-y divide-slate-100">
           {credits.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <div>
@@ -651,6 +641,16 @@ export default function CreditosPage() {
         {!loading && credits.length === 0 && authenticated ? (
           <p className="mt-2 text-sm text-slate-500">No hay créditos registrados.</p>
         ) : null}
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            className="text-sm text-sky-700 underline"
+            onClick={() => void load()}
+            disabled={loading || !authenticated}
+          >
+            Actualizar
+          </button>
+        </div>
       </section>
 
       {detail && detailId ? (
@@ -814,7 +814,7 @@ export default function CreditosPage() {
             <label className="mt-3 block text-sm">
               Prestamista / entidad
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={editModal.lender}
                 onChange={(e) =>
                   setEditModal((m) => (m ? { ...m, lender: e.target.value } : m))
@@ -825,7 +825,7 @@ export default function CreditosPage() {
             <label className="mt-3 block text-sm">
               Descripción
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={editModal.description}
                 onChange={(e) =>
                   setEditModal((m) => (m ? { ...m, description: e.target.value } : m))
@@ -836,7 +836,7 @@ export default function CreditosPage() {
               Fecha desembolso
               <input
                 type="date"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={editModal.disbursementDate}
                 onChange={(e) =>
                   setEditModal((m) =>
@@ -852,7 +852,7 @@ export default function CreditosPage() {
             <label className="mt-3 block text-sm">
               Estado
               <select
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
                 value={editModal.status}
                 onChange={(e) =>
                   setEditModal((m) =>
