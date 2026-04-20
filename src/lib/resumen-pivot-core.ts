@@ -385,6 +385,7 @@ type FinancingTxRow = {
   flow_kind: string | null;
   source: string | null;
   credit_component: string | null;
+  credit_id: string | null;
   concepto: string | null;
   description: string | null;
 };
@@ -469,7 +470,7 @@ export async function fetchFinancingTxRowsPaged(args: {
     const to = from + PAGE_SIZE - 1;
     const { data, error } = await args.supabase
       .from("transactions")
-      .select("date, amount, type, flow_kind, source, credit_component, concepto, description")
+      .select("date, amount, type, flow_kind, source, credit_component, credit_id, concepto, description")
       .eq("organization_id", args.organizationId)
       .in("type", ["income", "ingreso", "expense", "gasto", "egreso"])
       .gte("date", args.desde)
@@ -499,6 +500,8 @@ function esMovimientoFinanciamiento(row: FinancingTxRow): boolean {
 function esIngresoDesembolsoCredito(row: FinancingTxRow): boolean {
   const type = String(row.type ?? "").trim().toLowerCase();
   if (type !== "income" && type !== "ingreso") return false;
+  // Señal más robusta para históricos: ingreso asociado a credit_id.
+  if (row.credit_id) return true;
   const source = String(row.source ?? "").trim().toLowerCase();
   const component = String(row.credit_component ?? "").trim().toLowerCase();
   if (source === "creditos" && (component === "desembolso" || component === "")) return true;
