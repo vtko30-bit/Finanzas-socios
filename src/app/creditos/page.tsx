@@ -582,12 +582,18 @@ export default function CreditosPage() {
         <ul className="divide-y divide-slate-100">
           {credits.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <div>
+              <button
+                type="button"
+                className="min-w-0 rounded-md px-1 py-1 text-left hover:bg-slate-50"
+                onClick={() => void openDetail(c.id)}
+                title="Ver detalle del crédito"
+                aria-label={`Ver detalle del crédito de ${c.lender}`}
+              >
                 <div className="font-medium text-slate-900">{c.lender}</div>
                 <div className="text-xs text-slate-600">
                   {c.principal} {c.currency} · {c.total_installments} cuotas · {c.status}
                 </div>
-              </div>
+              </button>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
