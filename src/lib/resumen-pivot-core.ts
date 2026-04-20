@@ -382,8 +382,11 @@ type FinancingTxRow = {
   date: string;
   amount: number | string;
   type: string | null;
+  flow_kind: string | null;
   source: string | null;
   credit_component: string | null;
+  concepto: string | null;
+  description: string | null;
 };
 
 export async function fetchCreditInstallmentsPaidRows(args: {
@@ -466,9 +469,8 @@ export async function fetchFinancingTxRowsPaged(args: {
     const to = from + PAGE_SIZE - 1;
     const { data, error } = await args.supabase
       .from("transactions")
-      .select("date, amount, type, source, credit_component")
+      .select("date, amount, type, flow_kind, source, credit_component, concepto, description")
       .eq("organization_id", args.organizationId)
-      .eq("flow_kind", "financiamiento")
       .in("type", ["income", "ingreso", "expense", "gasto", "egreso"])
       .gte("date", args.desde)
       .lte("date", args.hasta)
@@ -482,6 +484,36 @@ export async function fetchFinancingTxRowsPaged(args: {
     from += PAGE_SIZE;
   }
   return { data: out, error: null };
+}
+
+function esMovimientoFinanciamiento(row: FinancingTxRow): boolean {
+  const flowKind = String(row.flow_kind ?? "").trim().toLowerCase();
+  if (flowKind === "financiamiento") return true;
+  const source = String(row.source ?? "").trim().toLowerCase();
+  if (source === "creditos" || source === "prestamos_otorgados") return true;
+  const component = String(row.credit_component ?? "").trim().toLowerCase();
+  if (component) return true;
+  return false;
+}
+
+function esIngresoDesembolsoCredito(row: FinancingTxRow): boolean {
+  const type = String(row.type ?? "").trim().toLowerCase();
+  if (type !== "income" && type !== "ingreso") return false;
+  const source = String(row.source ?? "").trim().toLowerCase();
+  const component = String(row.credit_component ?? "").trim().toLowerCase();
+  if (source === "creditos" && (component === "desembolso" || component === "")) return true;
+  if (component === "desembolso") return true;
+
+  // Compatibilidad para históricos sin source/credit_component poblados.
+  const concepto = String(row.concepto ?? "").trim().toLowerCase();
+  const desc = String(row.description ?? "").trim().toLowerCase();
+  const text = `${concepto} ${desc}`;
+  return (
+    text.includes("desembolso credito") ||
+    text.includes("desembolso crédito") ||
+    text.includes("prestamo recibido") ||
+    text.includes("préstamo recibido")
+  );
 }
 
 function sumFinancingByMonth(
@@ -647,23 +679,24 @@ export async function loadResumenPivotMain(args: {
   const financiamientoIngresos = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
-    (r) => String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso",
+    (r) =>
+      esMovimientoFinanciamiento(r) &&
+      (String(r.type ?? "").toLowerCase() === "income" ||
+        String(r.type ?? "").toLowerCase() === "ingreso"),
   );
   const financiamientoEgresos = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
     (r) =>
-      String(r.type ?? "").toLowerCase() === "expense" ||
-      String(r.type ?? "").toLowerCase() === "gasto" ||
-      String(r.type ?? "").toLowerCase() === "egreso",
+      esMovimientoFinanciamiento(r) &&
+      (String(r.type ?? "").toLowerCase() === "expense" ||
+        String(r.type ?? "").toLowerCase() === "gasto" ||
+        String(r.type ?? "").toLowerCase() === "egreso"),
   );
   const ingresoCreditos = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
-    (r) =>
-      (String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso") &&
-      String(r.source ?? "").toLowerCase() === "creditos" &&
-      String(r.credit_component ?? "").toLowerCase() === "desembolso",
+    (r) => esIngresoDesembolsoCredito(r),
   );
 
   return {
@@ -835,23 +868,24 @@ export async function loadResumenPivotPorSucursal(args: {
   const financiamientoIngresos = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
-    (r) => String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso",
+    (r) =>
+      esMovimientoFinanciamiento(r) &&
+      (String(r.type ?? "").toLowerCase() === "income" ||
+        String(r.type ?? "").toLowerCase() === "ingreso"),
   );
   const financiamientoEgresos = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
     (r) =>
-      String(r.type ?? "").toLowerCase() === "expense" ||
-      String(r.type ?? "").toLowerCase() === "gasto" ||
-      String(r.type ?? "").toLowerCase() === "egreso",
+      esMovimientoFinanciamiento(r) &&
+      (String(r.type ?? "").toLowerCase() === "expense" ||
+        String(r.type ?? "").toLowerCase() === "gasto" ||
+        String(r.type ?? "").toLowerCase() === "egreso"),
   );
   const ingresoCreditos = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
-    (r) =>
-      (String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso") &&
-      String(r.source ?? "").toLowerCase() === "creditos" &&
-      String(r.credit_component ?? "").toLowerCase() === "desembolso",
+    (r) => esIngresoDesembolsoCredito(r),
   );
 
   return {
