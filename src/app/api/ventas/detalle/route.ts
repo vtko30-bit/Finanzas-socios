@@ -9,6 +9,8 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
+const PAGE_SIZE = 1000;
+
 /** Dos letras del nombre de sucursal (solo A–Z) para prefijo de Id corto. */
 function prefijoSucursal(s: string): string {
   const t = (s || "")
@@ -70,37 +72,50 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data, error } = await supabase
-    .from("transactions")
-    .select(
-      `
-      id,
-      date,
-      source,
-      origen_cuenta,
-      concepto,
-      concept_id,
-      external_ref,
-      payment_method,
-      amount,
-      concept_catalog (
+  const data: Array<Record<string, unknown>> = [];
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    const { data: page, error } = await supabase
+      .from("transactions")
+      .select(
+        `
         id,
-        label,
-        family_id,
-        concept_families ( id, name )
+        date,
+        source,
+        origen_cuenta,
+        concepto,
+        concept_id,
+        external_ref,
+        payment_method,
+        amount,
+        concept_catalog (
+          id,
+          label,
+          family_id,
+          concept_families ( id, name )
+        )
+      `,
       )
-    `,
-    )
-    .eq("organization_id", member.organization_id)
-    .eq("flow_kind", "operativo")
-    .eq("type", "income")
-    .order("date", { ascending: false });
+      .eq("organization_id", member.organization_id)
+      // Compatibilidad con filas históricas previas a flow_kind (null).
+      .or("flow_kind.eq.operativo,flow_kind.is.null")
+      .eq("type", "income")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    const chunk = (page ?? []) as Array<Record<string, unknown>>;
+    data.push(...chunk);
+    if (chunk.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
 
-  const rows = (data ?? []).map((row) => {
+  const rows = data.map((row) => {
+    const txId = String((row as { id?: string }).id ?? "");
     const origenCuenta =
       (row as { origen_cuenta?: string }).origen_cuenta ?? "";
     const conceptoCol = (row as { concepto?: string }).concepto ?? "";
@@ -126,15 +141,16 @@ export async function GET(request: Request) {
       concept_catalog: cat.concept_catalog ?? null,
     });
     const externalRef = String((row as { external_ref?: string }).external_ref ?? "").trim();
-    const sucursalLabel = origenCuenta || row.source || "";
+    const sucursalLabel = String(origenCuenta || (row as { source?: string }).source || "");
+    const fecha = String((row as { date?: string }).date ?? "");
     return {
-      id: row.id,
-      idVenta: idVentaCorto(sucursalLabel, row.id),
+      id: txId,
+      idVenta: idVentaCorto(sucursalLabel, txId),
       externalRef,
       sucursal: sucursalLabel,
-      fecha: row.date,
+      fecha,
       medioPago,
-      monto: Number(row.amount) || 0,
+      monto: Number((row as { amount?: unknown }).amount) || 0,
       concepto: conceptoCol,
       concept_id: conceptId,
       familia,

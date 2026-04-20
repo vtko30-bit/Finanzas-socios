@@ -9,6 +9,13 @@ import {
 export const EXPENSE_TYPES = ["expense", "gasto", "egreso"] as const;
 const PAGE_SIZE = 1000;
 
+function esSucursalFija(origenCuenta: string | null | undefined): boolean {
+  const t = String(origenCuenta ?? "").trim().toLowerCase();
+  if (!t) return false;
+  if (t === "rg" || t.startsWith("rg ") || t.startsWith("rg-")) return true;
+  return t.includes("happy");
+}
+
 const MESES_CORTO = [
   "Enero",
   "Febrero",
@@ -77,6 +84,7 @@ export async function fetchIncomeRowsPaged(args: {
   desde: string;
   hasta: string;
   sucursal?: string;
+  soloSucursalesFijas?: boolean;
 }): Promise<{ data: IncomeRow[]; error: string | null }> {
   const out: IncomeRow[] = [];
   let from = 0;
@@ -112,7 +120,9 @@ export async function fetchIncomeRowsPaged(args: {
     const { data, error } = await q;
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as IncomeRow[];
-    out.push(...page);
+    out.push(
+      ...page.filter((r) => (args.soloSucursalesFijas ? esSucursalFija(r.origen_cuenta) : true)),
+    );
     if (page.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
@@ -125,6 +135,7 @@ export async function fetchExpenseRowsPaged(args: {
   desde: string;
   hasta: string;
   sucursal?: string;
+  soloSucursalesFijas?: boolean;
 }): Promise<{ data: unknown[]; error: string | null }> {
   const out: unknown[] = [];
   let from = 0;
@@ -159,7 +170,13 @@ export async function fetchExpenseRowsPaged(args: {
     const { data, error } = await q;
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as unknown[];
-    out.push(...page);
+    out.push(
+      ...page.filter((raw) => {
+        if (!args.soloSucursalesFijas) return true;
+        const row = raw as { origen_cuenta?: string | null };
+        return esSucursalFija(row.origen_cuenta);
+      }),
+    );
     if (page.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
@@ -375,6 +392,7 @@ export async function loadResumenPivotMain(args: {
   desde: string;
   hasta: string;
   sucursal?: string;
+  soloSucursalesFijas?: boolean;
 }): Promise<{ data: ResumenPivotMainPayload | null; error: string | null }> {
   const monthKeys = monthKeysInRange(args.desde, args.hasta);
   const monthLabels = buildMonthLabels(monthKeys);
@@ -417,6 +435,7 @@ export async function loadResumenPivotMain(args: {
     desde: args.desde,
     hasta: args.hasta,
     sucursal,
+    soloSucursalesFijas: args.soloSucursalesFijas,
   });
   if (incomeErr) return { data: null, error: incomeErr };
 
@@ -431,6 +450,7 @@ export async function loadResumenPivotMain(args: {
     desde: args.desde,
     hasta: args.hasta,
     sucursal,
+    soloSucursalesFijas: args.soloSucursalesFijas,
   });
   if (expenseErr) return { data: null, error: expenseErr };
 
@@ -493,6 +513,7 @@ export async function loadResumenPivotPorSucursal(args: {
   organizationId: string;
   desde: string;
   hasta: string;
+  soloSucursalesFijas?: boolean;
 }): Promise<{ data: ResumenPivotPorSucursalPayload | null; error: string | null }> {
   const monthKeys = monthKeysInRange(args.desde, args.hasta);
   const monthLabels = buildMonthLabels(monthKeys);
@@ -532,6 +553,7 @@ export async function loadResumenPivotPorSucursal(args: {
     desde: args.desde,
     hasta: args.hasta,
     sucursal: undefined,
+    soloSucursalesFijas: args.soloSucursalesFijas,
   });
   if (incomeErr) return { data: null, error: incomeErr };
 
@@ -558,6 +580,7 @@ export async function loadResumenPivotPorSucursal(args: {
     organizationId: args.organizationId,
     desde: args.desde,
     hasta: args.hasta,
+    soloSucursalesFijas: args.soloSucursalesFijas,
   });
   if (expenseErr) return { data: null, error: expenseErr };
 

@@ -45,6 +45,7 @@ type SucursalVentasSel =
   | { k: "una"; v: string };
 
 const LABEL_POR_SUCURSAL = "Por sucursal";
+const EVENTO_PREFIX = "EVENTO -";
 
 type FiltroModo = "anio" | "mes" | "rango";
 
@@ -132,8 +133,12 @@ export default function ResumenPage() {
   const [data, setData] = useState<PivotResponse | null>(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
 
   const textoSucursalCampo = textoMostradoSucursal(sucursalSel);
+  const filtroEventoActivo =
+    sucursalSel.k === "una" &&
+    sucursalSel.v.trim().toLowerCase() === EVENTO_PREFIX.toLowerCase();
 
   const queryListaSucursal = useMemo(() => {
     if (sucursalSel.k === "una") return sucursalSel.v.trim().toLowerCase();
@@ -178,6 +183,9 @@ export default function ResumenPage() {
         } else if (sel.k === "una" && sel.v.trim()) {
           q.set("sucursal", sel.v.trim());
         }
+        if (soloSucursalesFijas) {
+          q.set("soloSucursalesFijas", "1");
+        }
         const res = await fetch(`/api/resumen/pivot?${q}`);
         const json = (await res.json()) as PivotResponse & { error?: string };
         if (!res.ok) {
@@ -193,7 +201,7 @@ export default function ResumenPage() {
         setLoading(false);
       }
     },
-    [authenticated, rangoEfectivo],
+    [authenticated, rangoEfectivo, soloSucursalesFijas],
   );
 
   useEffect(() => {
@@ -231,6 +239,29 @@ export default function ResumenPage() {
       sucursalBlurT.current = null;
     }
     void cargar(sel);
+  };
+
+  const toggleFiltroEventos = () => {
+    const sel: SucursalVentasSel = filtroEventoActivo
+      ? { k: "todas" }
+      : { k: "una", v: EVENTO_PREFIX };
+    if (!filtroEventoActivo) setSoloSucursalesFijas(false);
+    setSucursalSel(sel);
+    setSucursalAbierta(false);
+    void cargar(sel);
+  };
+
+  const toggleSucursalesFijas = () => {
+    const next = !soloSucursalesFijas;
+    if (next && filtroEventoActivo) {
+      setSucursalSel({ k: "todas" });
+      setSucursalAbierta(false);
+      setSoloSucursalesFijas(true);
+      void cargar({ k: "todas" });
+      return;
+    }
+    setSoloSucursalesFijas(next);
+    void cargar();
   };
 
   const totalesPorMesVentas = useMemo(() => {
@@ -537,6 +568,28 @@ export default function ResumenPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                    filtroEventoActivo
+                      ? "border border-white/40 bg-white/20 text-white"
+                      : "border border-slate-900/20 bg-white/90 text-slate-900"
+                  }`}
+                  onClick={toggleFiltroEventos}
+                >
+                  {filtroEventoActivo ? "Ver todas" : "Solo eventos"}
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                    soloSucursalesFijas
+                      ? "border border-white/40 bg-white/20 text-white"
+                      : "border border-slate-900/20 bg-white/90 text-slate-900"
+                  }`}
+                  onClick={toggleSucursalesFijas}
+                >
+                  {soloSucursalesFijas ? "Ver todas" : "Solo Rg/Happy"}
+                </button>
                 <button
                   type="button"
                   disabled={loading}

@@ -31,6 +31,9 @@ export async function GET(request: Request) {
   const ventasPorSucursal =
     searchParams.get("ventasPorSucursal") === "1" ||
     searchParams.get("ventasPorSucursal") === "true";
+  const soloSucursalesFijas =
+    searchParams.get("soloSucursalesFijas") === "1" ||
+    searchParams.get("soloSucursalesFijas") === "true";
 
   if (!isoDateOk(desde) || !isoDateOk(hasta)) {
     return NextResponse.json(
@@ -71,6 +74,7 @@ export async function GET(request: Request) {
       organizationId: member.organization_id,
       desde,
       hasta,
+      soloSucursalesFijas,
     });
 
     if (error || !data) {
@@ -99,6 +103,7 @@ export async function GET(request: Request) {
     desde,
     hasta,
     sucursal,
+    soloSucursalesFijas,
   });
 
   if (error || !data) {

@@ -11,6 +11,7 @@ const VENTAS_ROW_GRID_MOVIL =
   "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,4.75rem)] items-center gap-1";
 
 const VENTAS_POR_PAGINA = 40;
+const EVENTO_PREFIX = "EVENTO -";
 
 /** Columnas de detalle (escritorio): Id, Fecha, Sucursal, Medio de pago, Total */
 type VentaRow = {
@@ -115,6 +116,7 @@ function filtrarVentas(
     rangoHasta: string;
     formaPago: string;
     sucursal: string;
+    soloSucursalesFijas: boolean;
   },
 ): VentaRow[] {
   let out = rows;
@@ -127,6 +129,9 @@ function filtrarVentas(
   const su = opts.sucursal.trim().toLowerCase();
   if (su) {
     out = out.filter((r) => (r.sucursal || "").toLowerCase().includes(su));
+  }
+  if (opts.soloSucursalesFijas) {
+    out = out.filter((r) => sucursalGrupo(r.sucursal) <= 1);
   }
 
   if (opts.modoFecha === "todo") {
@@ -203,6 +208,8 @@ export default function VentasPage() {
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaVentas, setPaginaVentas] = useState(1);
+  const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
+  const filtroEventoActivo = filtroSucursal.trim().toLowerCase() === EVENTO_PREFIX.toLowerCase();
 
   const cargar = useCallback(() => {
     setStatus("Cargando...");
@@ -247,6 +254,7 @@ export default function VentasPage() {
         rangoHasta,
         formaPago: filtroFormaPago,
         sucursal: filtroSucursal,
+        soloSucursalesFijas,
       }),
     [
       rows,
@@ -258,6 +266,7 @@ export default function VentasPage() {
       rangoHasta,
       filtroFormaPago,
       filtroSucursal,
+      soloSucursalesFijas,
     ],
   );
 
@@ -270,8 +279,9 @@ export default function VentasPage() {
     () =>
       modoFecha !== "todo" ||
       filtroFormaPago.trim() !== "" ||
-      filtroSucursal.trim() !== "",
-    [modoFecha, filtroFormaPago, filtroSucursal],
+      filtroSucursal.trim() !== "" ||
+      soloSucursalesFijas,
+    [modoFecha, filtroFormaPago, filtroSucursal, soloSucursalesFijas],
   );
 
   /** Suma del monto de todas las filas que cumplen el filtro (todas las páginas de la tabla). */
@@ -302,6 +312,7 @@ export default function VentasPage() {
     rangoHasta,
     filtroFormaPago,
     filtroSucursal,
+    soloSucursalesFijas,
   ]);
 
   useEffect(() => {
@@ -331,6 +342,22 @@ export default function VentasPage() {
     setRangoHasta("");
     setFiltroFormaPago("");
     setFiltroSucursal("");
+    setSoloSucursalesFijas(false);
+  };
+
+  const toggleFiltroEventos = () => {
+    setFiltroSucursal((prev) => {
+      const activarEventos = prev.trim().toLowerCase() !== EVENTO_PREFIX.toLowerCase();
+      if (activarEventos) setSoloSucursalesFijas(false);
+      return activarEventos ? EVENTO_PREFIX : "";
+    });
+  };
+
+  const toggleSucursalesFijas = () => {
+    setSoloSucursalesFijas((prev) => !prev);
+    setFiltroSucursal((prev) =>
+      prev.trim().toLowerCase() === EVENTO_PREFIX.toLowerCase() ? "" : prev,
+    );
   };
 
   const thBtn =
@@ -452,6 +479,28 @@ export default function VentasPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`rounded border px-2.5 py-0.5 text-sm ${
+                filtroEventoActivo
+                  ? "border-sky-900/40 bg-sky-900/20 text-white"
+                  : "border-slate-900/20 bg-white/90 text-slate-900 hover:bg-white"
+              }`}
+              onClick={toggleFiltroEventos}
+            >
+              {filtroEventoActivo ? "Ver todas" : "Solo eventos"}
+            </button>
+            <button
+              type="button"
+              className={`rounded border px-2.5 py-0.5 text-sm ${
+                soloSucursalesFijas
+                  ? "border-sky-900/40 bg-sky-900/20 text-white"
+                  : "border-slate-900/20 bg-white/90 text-slate-900 hover:bg-white"
+              }`}
+              onClick={toggleSucursalesFijas}
+            >
+              {soloSucursalesFijas ? "Ver todas" : "Solo Rg/Happy"}
+            </button>
             <button
               type="button"
               className="rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white"
