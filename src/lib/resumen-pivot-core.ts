@@ -7,6 +7,7 @@ import {
 } from "@/lib/org-excluded-families-db";
 
 export const EXPENSE_TYPES = ["expense", "gasto", "egreso"] as const;
+const INCOME_TYPES = ["income", "ingreso"] as const;
 const PAGE_SIZE = 1000;
 const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
 
@@ -115,7 +116,7 @@ export async function fetchIncomeRowsPaged(args: {
       .eq("organization_id", args.organizationId)
       // Compatibilidad con filas históricas previas a flow_kind (null).
       .or("flow_kind.eq.operativo,flow_kind.is.null")
-      .eq("type", "income")
+      .in("type", [...INCOME_TYPES])
       .gte("date", args.desde)
       .lte("date", args.hasta)
       .order("date", { ascending: false })

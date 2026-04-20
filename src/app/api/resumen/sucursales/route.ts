@@ -22,8 +22,9 @@ export async function GET() {
     .from("transactions")
     .select("origen_cuenta")
     .eq("organization_id", member.organization_id)
-    .eq("flow_kind", "operativo")
-    .in("type", ["income", "expense"]);
+    // Compatibilidad con datos históricos previos a flow_kind.
+    .or("flow_kind.eq.operativo,flow_kind.is.null")
+    .in("type", ["income", "ingreso", "expense", "gasto", "egreso"]);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

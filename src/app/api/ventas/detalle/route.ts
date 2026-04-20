@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
 const PAGE_SIZE = 1000;
+const INCOME_TYPES = ["income", "ingreso"] as const;
 
 /** Dos letras del nombre de sucursal (solo A–Z) para prefijo de Id corto. */
 function prefijoSucursal(s: string): string {
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
       .eq("organization_id", member.organization_id)
       // Compatibilidad con filas históricas previas a flow_kind (null).
       .or("flow_kind.eq.operativo,flow_kind.is.null")
-      .eq("type", "income")
+      .in("type", [...INCOME_TYPES])
       .order("date", { ascending: false })
       .order("id", { ascending: false })
       .range(from, to);
