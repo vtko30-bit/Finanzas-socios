@@ -2,6 +2,25 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
+function sucursalOrderGroup(name: string): number {
+  const t = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (t === "rg" || t.startsWith("rg ") || t.startsWith("rg-")) return 0;
+  if (t.includes("happy")) return 1;
+  if (t.includes("evento")) return 2;
+  return 3;
+}
+
+function compareSucursalOrder(a: string, b: string): number {
+  const ga = sucursalOrderGroup(a);
+  const gb = sucursalOrderGroup(b);
+  if (ga !== gb) return ga - gb;
+  return a.localeCompare(b, "es", { sensitivity: "base" });
+}
+
 /** Valores distintos de origen_cuenta en ingresos y egresos (sucursal / origen en imports). */
 export async function GET() {
   const supabase = await createClient();
@@ -36,7 +55,7 @@ export async function GET() {
     if (s) seen.add(s);
   }
 
-  const sucursales = Array.from(seen).sort((a, b) => a.localeCompare(b, "es"));
+  const sucursales = Array.from(seen).sort(compareSucursalOrder);
 
   return NextResponse.json({ sucursales });
 }

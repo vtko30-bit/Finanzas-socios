@@ -48,10 +48,28 @@ type SucursalVentasSel =
 const LABEL_POR_SUCURSAL = "Por sucursal";
 const EVENTO_PREFIX = "EVENTO_";
 const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
+const EVENTO_PREFIX_RE = /^\s*evento(?:[_\-\s]|$)/i;
+
+function normalizarTextoEvento(v: string): string {
+  return v
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^[^a-z0-9]+/, "")
+    .trim();
+}
 
 function esTextoFiltroEvento(v: string): boolean {
-  const t = (v || "").trim().toLowerCase();
-  return EVENTO_PREFIXES.some((p) => t === p);
+  const t = normalizarTextoEvento(v || "");
+  if (!t) return false;
+  return (
+    EVENTO_PREFIX_RE.test(t) ||
+    EVENTO_PREFIXES.some((p) => t === p) ||
+    t.includes("evento_") ||
+    t.includes("evento-") ||
+    t.includes("evento ") ||
+    t.includes("evento")
+  );
 }
 
 type FiltroModo = "anio" | "mes" | "rango";
@@ -584,28 +602,24 @@ export default function ResumenPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                    filtroEventoActivo
-                      ? "border border-white/40 bg-white/20 text-white"
-                      : "border border-slate-900/20 bg-white/90 text-slate-900"
-                  }`}
-                  onClick={toggleFiltroEventos}
-                >
-                  {filtroEventoActivo ? "Ver todas" : "Solo eventos"}
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                    soloSucursalesFijas
-                      ? "border border-white/40 bg-white/20 text-white"
-                      : "border border-slate-900/20 bg-white/90 text-slate-900"
-                  }`}
-                  onClick={toggleSucursalesFijas}
-                >
-                  {soloSucursalesFijas ? "Ver todas" : "Solo sucursales fijas"}
-                </button>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-900/20 bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-900">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-sky-700"
+                    checked={filtroEventoActivo}
+                    onChange={toggleFiltroEventos}
+                  />
+                  Solo eventos
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-900/20 bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-900">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-sky-700"
+                    checked={soloSucursalesFijas}
+                    onChange={toggleSucursalesFijas}
+                  />
+                  Solo sucursales fijas
+                </label>
                 <button
                   type="button"
                   disabled={loading}

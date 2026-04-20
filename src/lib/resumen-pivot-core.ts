@@ -10,17 +10,53 @@ export const EXPENSE_TYPES = ["expense", "gasto", "egreso"] as const;
 const INCOME_TYPES = ["income", "ingreso"] as const;
 const PAGE_SIZE = 1000;
 const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
+const EVENTO_PREFIX_RE = /^\s*evento(?:[_\-\s]|$)/i;
+
+function normalizarTextoEvento(v: string): string {
+  return v
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^[^a-z0-9]+/, "")
+    .trim();
+}
 
 function esEventoSucursal(origenCuenta: string | null | undefined): boolean {
-  const t = String(origenCuenta ?? "").trim().toLowerCase();
+  const t = normalizarTextoEvento(String(origenCuenta ?? ""));
   if (!t) return false;
-  return EVENTO_PREFIXES.some((p) => t.startsWith(p));
+  return (
+    EVENTO_PREFIX_RE.test(t) ||
+    EVENTO_PREFIXES.some((p) => t.startsWith(p)) ||
+    t.includes("evento_") ||
+    t.includes("evento-") ||
+    t.includes("evento ") ||
+    t.includes("evento")
+  );
 }
 
 function esSucursalFija(origenCuenta: string | null | undefined): boolean {
   const t = String(origenCuenta ?? "").trim().toLowerCase();
   if (!t) return false;
   return !esEventoSucursal(t);
+}
+
+function sucursalOrderGroup(name: string): number {
+  const t = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (t === "rg" || t.startsWith("rg ") || t.startsWith("rg-")) return 0;
+  if (t.includes("happy")) return 1;
+  if (t.includes("evento")) return 2;
+  return 3;
+}
+
+function compareSucursalOrder(a: string, b: string): number {
+  const ga = sucursalOrderGroup(a);
+  const gb = sucursalOrderGroup(b);
+  if (ga !== gb) return ga - gb;
+  return a.localeCompare(b, "es", { sensitivity: "base" });
 }
 
 const MESES_CORTO = [
@@ -633,7 +669,7 @@ export async function loadResumenPivotPorSucursal(args: {
       sucursal: sucursalNombre,
       rows: ventasRowsFromIncome(incomeRows, monthKeys),
     }))
-    .sort((a, b) => a.sucursal.localeCompare(b.sucursal, "es"));
+    .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
 
   const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
     supabase: args.supabase,
@@ -665,7 +701,7 @@ export async function loadResumenPivotPorSucursal(args: {
       sucursal: sucursalNombre,
       rows: gastosRowsFromExpenseRows(expenseRows, monthKeys),
     }))
-    .sort((a, b) => a.sucursal.localeCompare(b.sucursal, "es"));
+    .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
 
   const gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
   const { data: creditPaidRows, error: creditErr } = await fetchCreditInstallmentsPaidRows({
