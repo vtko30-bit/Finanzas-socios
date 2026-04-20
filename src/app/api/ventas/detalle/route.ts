@@ -141,7 +141,8 @@ export async function GET(request: Request) {
       concept_catalog: cat.concept_catalog ?? null,
     });
     const externalRef = String((row as { external_ref?: string }).external_ref ?? "").trim();
-    const sucursalLabel = String(origenCuenta || (row as { source?: string }).source || "");
+    // No usar `source` como sucursal: ese campo es técnico (p. ej. "excel_ventas").
+    const sucursalLabel = String(origenCuenta || "Sin sucursal");
     const fecha = String((row as { date?: string }).date ?? "");
     return {
       id: txId,

@@ -11,7 +11,19 @@ const VENTAS_ROW_GRID_MOVIL =
   "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,4.75rem)] items-center gap-1";
 
 const VENTAS_POR_PAGINA = 40;
-const EVENTO_PREFIX = "EVENTO -";
+const EVENTO_PREFIX = "EVENTO_";
+const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
+
+function esTextoFiltroEvento(v: string): boolean {
+  const t = (v || "").trim().toLowerCase();
+  return EVENTO_PREFIXES.some((p) => t === p);
+}
+
+function esSucursalFijaNombre(sucursal: string): boolean {
+  const t = (sucursal || "").trim().toLowerCase();
+  if (!t) return false;
+  return !EVENTO_PREFIXES.some((p) => t.startsWith(p));
+}
 
 /** Columnas de detalle (escritorio): Id, Fecha, Sucursal, Medio de pago, Total */
 type VentaRow = {
@@ -131,7 +143,7 @@ function filtrarVentas(
     out = out.filter((r) => (r.sucursal || "").toLowerCase().includes(su));
   }
   if (opts.soloSucursalesFijas) {
-    out = out.filter((r) => sucursalGrupo(r.sucursal) <= 1);
+    out = out.filter((r) => esSucursalFijaNombre(r.sucursal));
   }
 
   if (opts.modoFecha === "todo") {
@@ -209,7 +221,7 @@ export default function VentasPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaVentas, setPaginaVentas] = useState(1);
   const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
-  const filtroEventoActivo = filtroSucursal.trim().toLowerCase() === EVENTO_PREFIX.toLowerCase();
+  const filtroEventoActivo = esTextoFiltroEvento(filtroSucursal);
 
   const cargar = useCallback(() => {
     setStatus("Cargando...");
@@ -347,7 +359,7 @@ export default function VentasPage() {
 
   const toggleFiltroEventos = () => {
     setFiltroSucursal((prev) => {
-      const activarEventos = prev.trim().toLowerCase() !== EVENTO_PREFIX.toLowerCase();
+      const activarEventos = !esTextoFiltroEvento(prev);
       if (activarEventos) setSoloSucursalesFijas(false);
       return activarEventos ? EVENTO_PREFIX : "";
     });
@@ -355,9 +367,7 @@ export default function VentasPage() {
 
   const toggleSucursalesFijas = () => {
     setSoloSucursalesFijas((prev) => !prev);
-    setFiltroSucursal((prev) =>
-      prev.trim().toLowerCase() === EVENTO_PREFIX.toLowerCase() ? "" : prev,
-    );
+    setFiltroSucursal((prev) => (esTextoFiltroEvento(prev) ? "" : prev));
   };
 
   const thBtn =
@@ -499,7 +509,7 @@ export default function VentasPage() {
               }`}
               onClick={toggleSucursalesFijas}
             >
-              {soloSucursalesFijas ? "Ver todas" : "Solo Rg/Happy"}
+              {soloSucursalesFijas ? "Ver todas" : "Solo sucursales fijas"}
             </button>
             <button
               type="button"

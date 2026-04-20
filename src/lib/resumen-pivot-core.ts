@@ -8,12 +8,12 @@ import {
 
 export const EXPENSE_TYPES = ["expense", "gasto", "egreso"] as const;
 const PAGE_SIZE = 1000;
+const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
 
 function esSucursalFija(origenCuenta: string | null | undefined): boolean {
   const t = String(origenCuenta ?? "").trim().toLowerCase();
   if (!t) return false;
-  if (t === "rg" || t.startsWith("rg ") || t.startsWith("rg-")) return true;
-  return t.includes("happy");
+  return !EVENTO_PREFIXES.some((p) => t.startsWith(p));
 }
 
 const MESES_CORTO = [

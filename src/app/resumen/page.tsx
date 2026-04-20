@@ -45,7 +45,13 @@ type SucursalVentasSel =
   | { k: "una"; v: string };
 
 const LABEL_POR_SUCURSAL = "Por sucursal";
-const EVENTO_PREFIX = "EVENTO -";
+const EVENTO_PREFIX = "EVENTO_";
+const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
+
+function esTextoFiltroEvento(v: string): boolean {
+  const t = (v || "").trim().toLowerCase();
+  return EVENTO_PREFIXES.some((p) => t === p);
+}
 
 type FiltroModo = "anio" | "mes" | "rango";
 
@@ -138,7 +144,7 @@ export default function ResumenPage() {
   const textoSucursalCampo = textoMostradoSucursal(sucursalSel);
   const filtroEventoActivo =
     sucursalSel.k === "una" &&
-    sucursalSel.v.trim().toLowerCase() === EVENTO_PREFIX.toLowerCase();
+    esTextoFiltroEvento(sucursalSel.v);
 
   const queryListaSucursal = useMemo(() => {
     if (sucursalSel.k === "una") return sucursalSel.v.trim().toLowerCase();
@@ -588,7 +594,7 @@ export default function ResumenPage() {
                   }`}
                   onClick={toggleSucursalesFijas}
                 >
-                  {soloSucursalesFijas ? "Ver todas" : "Solo Rg/Happy"}
+                  {soloSucursalesFijas ? "Ver todas" : "Solo sucursales fijas"}
                 </button>
                 <button
                   type="button"
