@@ -32,6 +32,7 @@ type PivotResponse = {
   monthKeys: string[];
   monthLabels: string[];
   ventas: { rows: PivotRowVenta[] };
+  ventasEventos?: { rows: Array<{ evento: string; byMonth: Record<string, number>; total: number }> };
   gastos: { rows: PivotRowGasto[] };
   gastosSocios?: { rows: PivotRowGasto[] };
   creditos?: { rows: PivotRowCredito[] };
@@ -279,11 +280,20 @@ export default function ResumenPage() {
         acc[mk] += r.byMonth[mk] ?? 0;
       }
     }
+    for (const ev of data.ventasEventos?.rows ?? []) {
+      for (const mk of data.monthKeys) {
+        acc[mk] += ev.byMonth[mk] ?? 0;
+      }
+    }
     return acc;
   }, [data]);
 
   const totalVentas = useMemo(
-    () => (data ? data.ventas.rows.reduce((s, r) => s + r.total, 0) : 0),
+    () =>
+      data
+        ? data.ventas.rows.reduce((s, r) => s + r.total, 0) +
+          (data.ventasEventos?.rows ?? []).reduce((s, r) => s + r.total, 0)
+        : 0,
     [data],
   );
 
@@ -736,7 +746,20 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {data.ventas.rows.length === 0 ? (
+                      {(data.ventasEventos?.rows ?? []).map((ev) => (
+                        <tr key={`ev-${ev.evento}`}>
+                          <td className={`${tdStickyFirst} font-semibold text-sky-900`}>{ev.evento}</td>
+                          {data.monthKeys.map((mk) => (
+                            <td key={mk} className={`${tdNum} font-medium text-sky-900`}>
+                              {formatClp(ev.byMonth[mk] ?? 0)}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-semibold text-sky-900`}>
+                            {formatClp(ev.total)}
+                          </td>
+                        </tr>
+                      ))}
+                      {data.ventas.rows.length === 0 && (data.ventasEventos?.rows?.length ?? 0) === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}

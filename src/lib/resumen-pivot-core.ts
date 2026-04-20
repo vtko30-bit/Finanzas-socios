@@ -10,10 +10,16 @@ export const EXPENSE_TYPES = ["expense", "gasto", "egreso"] as const;
 const PAGE_SIZE = 1000;
 const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
 
+function esEventoSucursal(origenCuenta: string | null | undefined): boolean {
+  const t = String(origenCuenta ?? "").trim().toLowerCase();
+  if (!t) return false;
+  return EVENTO_PREFIXES.some((p) => t.startsWith(p));
+}
+
 function esSucursalFija(origenCuenta: string | null | undefined): boolean {
   const t = String(origenCuenta ?? "").trim().toLowerCase();
   if (!t) return false;
-  return !EVENTO_PREFIXES.some((p) => t.startsWith(p));
+  return !esEventoSucursal(t);
 }
 
 const MESES_CORTO = [
@@ -107,7 +113,8 @@ export async function fetchIncomeRowsPaged(args: {
     `,
       )
       .eq("organization_id", args.organizationId)
-      .eq("flow_kind", "operativo")
+      // Compatibilidad con filas históricas previas a flow_kind (null).
+      .or("flow_kind.eq.operativo,flow_kind.is.null")
       .eq("type", "income")
       .gte("date", args.desde)
       .lte("date", args.hasta)
@@ -157,7 +164,8 @@ export async function fetchExpenseRowsPaged(args: {
     `,
       )
       .eq("organization_id", args.organizationId)
-      .eq("flow_kind", "operativo")
+      // Compatibilidad con filas históricas previas a flow_kind (null).
+      .or("flow_kind.eq.operativo,flow_kind.is.null")
       .in("type", [...EXPENSE_TYPES])
       .gte("date", args.desde)
       .lte("date", args.hasta)
@@ -209,6 +217,51 @@ export function ventasRowsFromIncome(
       return { formaPago, byMonth, total };
     })
     .sort((a, b) => a.formaPago.localeCompare(b.formaPago, "es"));
+}
+
+export function ventasTotalesFromIncome(
+  rows: IncomeRow[],
+  monthKeys: string[],
+): { byMonth: Record<string, number>; total: number } {
+  const byMonth: Record<string, number> = {};
+  for (const mk of monthKeys) byMonth[mk] = 0;
+  let total = 0;
+  for (const row of rows) {
+    const ym = String(row.date || "").slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    const amt = Number(row.amount) || 0;
+    byMonth[ym] = (byMonth[ym] ?? 0) + amt;
+    total += amt;
+  }
+  return { byMonth, total };
+}
+
+export function ventasEventosRowsFromIncome(
+  rows: IncomeRow[],
+  monthKeys: string[],
+): Array<{ evento: string; byMonth: Record<string, number>; total: number }> {
+  const eventMap = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    const evento = String(row.origen_cuenta ?? "").trim() || "EVENTO_SinSucursal";
+    const ym = String(row.date || "").slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    const amt = Number(row.amount) || 0;
+    if (!eventMap.has(evento)) eventMap.set(evento, new Map());
+    const inner = eventMap.get(evento)!;
+    inner.set(ym, (inner.get(ym) ?? 0) + amt);
+  }
+  return Array.from(eventMap.entries())
+    .map(([evento, byM]) => {
+      let total = 0;
+      const byMonth: Record<string, number> = {};
+      for (const mk of monthKeys) {
+        const v = byM.get(mk) ?? 0;
+        byMonth[mk] = v;
+        total += v;
+      }
+      return { evento, byMonth, total };
+    })
+    .sort((a, b) => a.evento.localeCompare(b.evento, "es"));
 }
 
 const FAMILIAS_SOCIOS = new Set(["mario", "mena", "victor"]);
@@ -381,6 +434,7 @@ export type ResumenPivotMainPayload = {
   monthKeys: string[];
   monthLabels: string[];
   ventas: { rows: ReturnType<typeof ventasRowsFromIncome> };
+  ventasEventos: { rows: ReturnType<typeof ventasEventosRowsFromIncome> };
   gastos: { rows: ReturnType<typeof gastosRowsFromExpenseRows> };
   gastosSocios: { rows: ReturnType<typeof gastosRowsFromExpenseRows> };
   creditos: { rows: ReturnType<typeof creditosRowsFromPaidInstallments> };
@@ -419,6 +473,7 @@ export async function loadResumenPivotMain(args: {
         monthKeys: [],
         monthLabels: [],
         ventas: { rows: [] },
+        ventasEventos: { rows: [] },
         gastos: { rows: [] },
         gastosSocios: { rows: [] },
         creditos: { rows: [] },
@@ -443,6 +498,8 @@ export async function loadResumenPivotMain(args: {
     (incomeData ?? []) as IncomeRow[],
     excludedFamilyIds,
   );
+  const incomeEventos = incomeFiltrados.filter((r) => esEventoSucursal(r.origen_cuenta));
+  const incomeNoEventos = incomeFiltrados.filter((r) => !esEventoSucursal(r.origen_cuenta));
 
   const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
     supabase: args.supabase,
@@ -459,7 +516,8 @@ export async function loadResumenPivotMain(args: {
     excludedFamilyIds,
   );
 
-  const ventasRows = ventasRowsFromIncome(incomeFiltrados, monthKeys);
+  const ventasRows = ventasRowsFromIncome(incomeNoEventos, monthKeys);
+  const ventasEventosRows = ventasEventosRowsFromIncome(incomeEventos, monthKeys);
   const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
     expenseFiltradosMain,
   );
@@ -482,6 +540,7 @@ export async function loadResumenPivotMain(args: {
       monthKeys,
       monthLabels,
       ventas: { rows: ventasRows },
+      ventasEventos: { rows: ventasEventosRows },
       gastos: { rows: gastosRows },
       gastosSocios: { rows: gastosSociosRows },
       creditos: { rows: creditosRows },
