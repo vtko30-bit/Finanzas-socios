@@ -390,6 +390,12 @@ type FinancingTxRow = {
   description: string | null;
 };
 
+type CreditDisbursementRow = {
+  id: string;
+  disbursement_date: string | null;
+  principal: number | string | null;
+};
+
 export async function fetchCreditInstallmentsPaidRows(args: {
   supabase: SupabaseClient;
   organizationId: string;
@@ -487,6 +493,34 @@ export async function fetchFinancingTxRowsPaged(args: {
   return { data: out, error: null };
 }
 
+export async function fetchCreditDisbursementRowsPaged(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+}): Promise<{ data: CreditDisbursementRow[]; error: string | null }> {
+  const out: CreditDisbursementRow[] = [];
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await args.supabase
+      .from("credits")
+      .select("id, disbursement_date, principal")
+      .eq("organization_id", args.organizationId)
+      .gte("disbursement_date", args.desde)
+      .lte("disbursement_date", args.hasta)
+      .order("disbursement_date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (error) return { data: [], error: error.message };
+    const page = (data ?? []) as CreditDisbursementRow[];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return { data: out, error: null };
+}
+
 function esMovimientoFinanciamiento(row: FinancingTxRow): boolean {
   const flowKind = String(row.flow_kind ?? "").trim().toLowerCase();
   if (flowKind === "financiamiento") return true;
@@ -536,6 +570,36 @@ function sumFinancingByMonth(
     total += amt;
   }
   return { byMonth, total };
+}
+
+function sumCreditDisbursementsByMonth(
+  rows: CreditDisbursementRow[],
+  monthKeys: string[],
+): { byMonth: Record<string, number>; total: number } {
+  const byMonth: Record<string, number> = {};
+  for (const mk of monthKeys) byMonth[mk] = 0;
+  let total = 0;
+  for (const row of rows) {
+    const ym = String(row.disbursement_date ?? "").slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    const amt = Number(row.principal) || 0;
+    if (!Number.isFinite(amt) || amt === 0) continue;
+    byMonth[ym] = (byMonth[ym] ?? 0) + amt;
+    total += amt;
+  }
+  return { byMonth, total };
+}
+
+function mergeMonthlySums(
+  a: { byMonth: Record<string, number>; total: number },
+  b: { byMonth: Record<string, number>; total: number },
+  monthKeys: string[],
+): { byMonth: Record<string, number>; total: number } {
+  const byMonth: Record<string, number> = {};
+  for (const mk of monthKeys) {
+    byMonth[mk] = (a.byMonth[mk] ?? 0) + (b.byMonth[mk] ?? 0);
+  }
+  return { byMonth, total: (a.total ?? 0) + (b.total ?? 0) };
 }
 
 export function partitionExpenseRowsSocios(rows: unknown[]): {
@@ -696,10 +760,27 @@ export async function loadResumenPivotMain(args: {
         String(r.type ?? "").toLowerCase() === "gasto" ||
         String(r.type ?? "").toLowerCase() === "egreso"),
   );
-  const ingresoCreditos = sumFinancingByMonth(
+  const ingresoCreditosLegacyTx = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
-    (r) => esIngresoDesembolsoCredito(r),
+    (r) => esIngresoDesembolsoCredito(r) && !r.credit_id,
+  );
+  const { data: creditDisburseRows, error: creditDisburseErr } =
+    await fetchCreditDisbursementRowsPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+    });
+  if (creditDisburseErr) return { data: null, error: creditDisburseErr };
+  const ingresoCreditosDesdeCredits = sumCreditDisbursementsByMonth(
+    creditDisburseRows ?? [],
+    monthKeys,
+  );
+  const ingresoCreditos = mergeMonthlySums(
+    ingresoCreditosDesdeCredits,
+    ingresoCreditosLegacyTx,
+    monthKeys,
   );
 
   return {
@@ -885,10 +966,27 @@ export async function loadResumenPivotPorSucursal(args: {
         String(r.type ?? "").toLowerCase() === "gasto" ||
         String(r.type ?? "").toLowerCase() === "egreso"),
   );
-  const ingresoCreditos = sumFinancingByMonth(
+  const ingresoCreditosLegacyTx = sumFinancingByMonth(
     financingRows ?? [],
     monthKeys,
-    (r) => esIngresoDesembolsoCredito(r),
+    (r) => esIngresoDesembolsoCredito(r) && !r.credit_id,
+  );
+  const { data: creditDisburseRows, error: creditDisburseErr } =
+    await fetchCreditDisbursementRowsPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+    });
+  if (creditDisburseErr) return { data: null, error: creditDisburseErr };
+  const ingresoCreditosDesdeCredits = sumCreditDisbursementsByMonth(
+    creditDisburseRows ?? [],
+    monthKeys,
+  );
+  const ingresoCreditos = mergeMonthlySums(
+    ingresoCreditosDesdeCredits,
+    ingresoCreditosLegacyTx,
+    monthKeys,
   );
 
   return {
