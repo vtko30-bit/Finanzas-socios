@@ -32,6 +32,30 @@ type VentaExclRow = {
 type ExclItem = { familyId: string; familyName: string };
 
 type FamiliaOpt = { id: string; name: string };
+type CatalogFamily = {
+  id: string;
+  name: string;
+  concepts: Array<{ id: string; label: string }>;
+};
+type SelectedLine =
+  | {
+      kind: "gasto";
+      id: string;
+      fecha: string;
+      familia: string;
+      categoria: string;
+      detalle: string;
+      monto: number;
+    }
+  | {
+      kind: "venta";
+      id: string;
+      fecha: string;
+      familia: string;
+      categoria: string;
+      detalle: string;
+      monto: number;
+    };
 
 const formatClp = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -56,6 +80,11 @@ export default function MovimientosExcluidosPage() {
   const [pickerFilter, setPickerFilter] = useState("");
   const [mgmtMsg, setMgmtMsg] = useState("");
   const [savingFamilyId, setSavingFamilyId] = useState<string | null>(null);
+  const [selectedLine, setSelectedLine] = useState<SelectedLine | null>(null);
+  const [editLineModalOpen, setEditLineModalOpen] = useState(false);
+  const [catalogoFamilias, setCatalogoFamilias] = useState<CatalogFamily[]>([]);
+  const [editLineFilter, setEditLineFilter] = useState("");
+  const [savingConceptId, setSavingConceptId] = useState<string | null>(null);
 
   const cargar = useCallback(async (t: Tab) => {
     setLoading(true);
@@ -67,12 +96,18 @@ export default function MovimientosExcluidosPage() {
         if (!res.ok) throw new Error(data.error || "Error al cargar egresos");
         const raw = (data.rows ?? []) as GastoExclRow[];
         setGastos(raw);
+        setSelectedLine((prev) =>
+          prev && prev.kind === "gasto" && raw.some((r) => r.id === prev.id) ? prev : null,
+        );
       } else {
         const res = await fetch("/api/ventas/detalle?soloExcluidos=1");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error al cargar ingresos");
         const raw = (data.rows ?? []) as VentaExclRow[];
         setVentas(raw);
+        setSelectedLine((prev) =>
+          prev && prev.kind === "venta" && raw.some((r) => r.id === prev.id) ? prev : null,
+        );
       }
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Error");
@@ -171,6 +206,26 @@ export default function MovimientosExcluidosPage() {
     return familiasLista.filter((f) => f.name.toLowerCase().includes(q));
   }, [familiasLista, pickerFilter]);
 
+  const conceptosFiltrados = useMemo(() => {
+    const q = editLineFilter.trim().toLowerCase();
+    const conceptos = catalogoFamilias.flatMap((f) =>
+      (f.concepts ?? []).map((c) => ({
+        conceptId: c.id,
+        label: c.label,
+        familyName: f.name,
+      })),
+    );
+    conceptos.sort((a, b) =>
+      a.familyName === b.familyName
+        ? a.label.localeCompare(b.label, "es")
+        : a.familyName.localeCompare(b.familyName, "es"),
+    );
+    if (!q) return conceptos;
+    return conceptos.filter(
+      (c) => c.label.toLowerCase().includes(q) || c.familyName.toLowerCase().includes(q),
+    );
+  }, [catalogoFamilias, editLineFilter]);
+
   const elegirFamiliaExcluir = async (familyId: string) => {
     if (excludedFamilyIdSet.has(familyId)) {
       setMgmtMsg("Esa familia ya está excluida.");
@@ -215,6 +270,96 @@ export default function MovimientosExcluidosPage() {
       void cargar(tab);
     } catch {
       setMgmtMsg("Error de red");
+    }
+  };
+
+  const seleccionarGasto = (r: GastoExclRow) => {
+    setSelectedLine({
+      kind: "gasto",
+      id: r.id,
+      fecha: r.fecha,
+      familia: (r.familia ?? "").trim() || "—",
+      categoria: r.categoriaMostrada?.trim() || "—",
+      detalle: r.nombreDestino || r.descripcion || "—",
+      monto: r.monto,
+    });
+    setStatus("");
+  };
+
+  const seleccionarVenta = (r: VentaExclRow) => {
+    setSelectedLine({
+      kind: "venta",
+      id: r.id,
+      fecha: r.fecha,
+      familia: (r.familia ?? "").trim() || "—",
+      categoria: r.categoriaMostrada?.trim() || "—",
+      detalle: r.sucursal || "—",
+      monto: r.monto,
+    });
+    setStatus("");
+  };
+
+  const abrirModalEditarLinea = async () => {
+    if (!selectedLine || !canWrite) return;
+    setEditLineModalOpen(true);
+    setEditLineFilter("");
+    setStatus("");
+    try {
+      const res = await fetch("/api/familias");
+      const data = (await res.json()) as { families?: CatalogFamily[]; error?: string };
+      if (!res.ok) {
+        setStatus(data.error || "No se pudo cargar el catálogo");
+        setEditLineModalOpen(false);
+        return;
+      }
+      setCatalogoFamilias(data.families ?? []);
+    } catch {
+      setStatus("Error de red al cargar categorías");
+      setEditLineModalOpen(false);
+    }
+  };
+
+  const cerrarModalEditarLinea = useCallback(() => {
+    setEditLineModalOpen(false);
+    setEditLineFilter("");
+    setSavingConceptId(null);
+  }, []);
+
+  useEffect(() => {
+    if (!editLineModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cerrarModalEditarLinea();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [editLineModalOpen, cerrarModalEditarLinea]);
+
+  const aplicarConceptoALinea = async (conceptId: string) => {
+    if (!selectedLine) return;
+    const endpoint =
+      selectedLine.kind === "gasto"
+        ? `/api/gastos/${selectedLine.id}`
+        : `/api/ventas/${selectedLine.id}`;
+    setSavingConceptId(conceptId);
+    setStatus("");
+    try {
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ concept_id: conceptId }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setStatus(data.error || "No se pudo actualizar la categoría");
+        return;
+      }
+      setStatus("Categoría actualizada.");
+      cerrarModalEditarLinea();
+      await cargar(tab);
+    } catch {
+      setStatus("Error de red al actualizar la línea");
+    } finally {
+      setSavingConceptId(null);
     }
   };
 
@@ -367,6 +512,30 @@ export default function MovimientosExcluidosPage() {
             </span>
           </div>
 
+          {selectedLine ? (
+            <section className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-amber-950">
+                  Línea seleccionada: {selectedLine.fecha} · {selectedLine.familia} ·{" "}
+                  {selectedLine.categoria} · {formatClp(selectedLine.monto)}
+                </div>
+                {!capsLoading && canWrite ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-amber-600 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+                    onClick={() => void abrirModalEditarLinea()}
+                  >
+                    Editar categoría de esta línea
+                  </button>
+                ) : (
+                  <span className="text-xs text-amber-800">
+                    Solo el administrador puede editar la línea seleccionada.
+                  </span>
+                )}
+              </div>
+            </section>
+          ) : null}
+
           {tab === "gastos" ? (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full min-w-[720px] border-collapse text-sm">
@@ -393,7 +562,24 @@ export default function MovimientosExcluidosPage() {
                     </tr>
                   ) : (
                     gastos.map((r) => (
-                      <tr key={r.id} className="border-t border-slate-200">
+                      <tr
+                        key={r.id}
+                        className={`border-t border-slate-200 cursor-pointer ${
+                          selectedLine?.kind === "gasto" && selectedLine.id === r.id
+                            ? "bg-amber-100/70"
+                            : "hover:bg-slate-50"
+                        }`}
+                        onClick={() => seleccionarGasto(r)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            seleccionarGasto(r);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Seleccionar egreso del ${r.fecha}`}
+                      >
                         <td className="px-3 py-2 text-slate-800">{r.fecha}</td>
                         <td className="px-3 py-2 text-slate-800">
                           {(r.familia ?? "").trim() || "—"}
@@ -440,7 +626,24 @@ export default function MovimientosExcluidosPage() {
                     </tr>
                   ) : (
                     ventas.map((r) => (
-                      <tr key={r.id} className="border-t border-slate-200">
+                      <tr
+                        key={r.id}
+                        className={`border-t border-slate-200 cursor-pointer ${
+                          selectedLine?.kind === "venta" && selectedLine.id === r.id
+                            ? "bg-amber-100/70"
+                            : "hover:bg-slate-50"
+                        }`}
+                        onClick={() => seleccionarVenta(r)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            seleccionarVenta(r);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Seleccionar ingreso del ${r.fecha}`}
+                      >
                         <td className="px-3 py-2 text-slate-800">{r.fecha}</td>
                         <td className="px-3 py-2 text-slate-800">
                           {(r.familia ?? "").trim() || "—"}
@@ -538,6 +741,79 @@ export default function MovimientosExcluidosPage() {
                 type="button"
                 className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
                 onClick={cerrarModal}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editLineModalOpen && selectedLine ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="editar-linea-titulo"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) cerrarModalEditarLinea();
+          }}
+        >
+          <div className="flex max-h-[min(85vh,32rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h2 id="editar-linea-titulo" className="text-base font-semibold text-slate-900">
+                Editar categoría de línea excluida
+              </h2>
+              <p className="mt-1 text-xs text-slate-600">
+                Selecciona una categoría. Si la nueva familia no está excluida, la línea dejará de
+                aparecer aquí.
+              </p>
+              <label className="mt-2 block text-xs text-slate-600">
+                Buscar categoría o familia
+                <input
+                  type="search"
+                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                  placeholder="Ej: Ventas locales, Operación, etc."
+                  value={editLineFilter}
+                  onChange={(e) => setEditLineFilter(e.target.value)}
+                  autoFocus
+                />
+              </label>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+              {conceptosFiltrados.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-slate-500">
+                  No hay categorías disponibles o no coincide con la búsqueda.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-0.5">
+                  {conceptosFiltrados.map((c) => {
+                    const busy = savingConceptId === c.conceptId;
+                    return (
+                      <li key={c.conceptId}>
+                        <button
+                          type="button"
+                          disabled={!!savingConceptId}
+                          className="flex w-full flex-col items-start rounded-md px-2 py-2 text-left text-sm hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => void aplicarConceptoALinea(c.conceptId)}
+                        >
+                          <span className="font-medium text-slate-900">{c.label}</span>
+                          <span className="text-xs text-slate-500">
+                            {c.familyName}
+                            {busy ? " · Guardando…" : ""}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="border-t border-slate-200 px-4 py-3">
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+                onClick={cerrarModalEditarLinea}
               >
                 Cerrar
               </button>
