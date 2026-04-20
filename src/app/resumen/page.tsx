@@ -36,6 +36,11 @@ type PivotResponse = {
   gastos: { rows: PivotRowGasto[] };
   gastosSocios?: { rows: PivotRowGasto[] };
   creditos?: { rows: PivotRowCredito[] };
+  financiamiento?: {
+    ingresos: { byMonth: Record<string, number>; total: number };
+    egresos: { byMonth: Record<string, number>; total: number };
+    ingresoCreditos: { byMonth: Record<string, number>; total: number };
+  };
   error?: string;
 };
 
@@ -431,6 +436,32 @@ export default function ResumenPage() {
       total: ingresosAgregados.total - egresosAgregados.total,
     };
   }, [data, ingresosAgregados, egresosAgregados]);
+
+  const ingresoCreditosAgregado = useMemo(() => {
+    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const porMes: Record<string, number> = {};
+    for (const mk of data.monthKeys) {
+      porMes[mk] = data.financiamiento?.ingresoCreditos.byMonth?.[mk] ?? 0;
+    }
+    return {
+      porMes,
+      total: data.financiamiento?.ingresoCreditos.total ?? 0,
+    };
+  }, [data]);
+
+  const resultadoCajaConCredito = useMemo(() => {
+    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const porMes: Record<string, number> = {};
+    for (const mk of data.monthKeys) {
+      porMes[mk] =
+        (resultadoIngresosMenosEgresos.porMes[mk] ?? 0) +
+        (ingresoCreditosAgregado.porMes[mk] ?? 0);
+    }
+    return {
+      porMes,
+      total: resultadoIngresosMenosEgresos.total + ingresoCreditosAgregado.total,
+    };
+  }, [data, ingresoCreditosAgregado, resultadoIngresosMenosEgresos]);
 
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
@@ -1082,11 +1113,11 @@ export default function ResumenPage() {
 
               <section className="overflow-x-auto rounded-xl border-2 border-slate-400 bg-slate-100 shadow-sm">
                 <h2 className="border-b border-slate-300 bg-slate-200/90 px-4 py-3 text-base font-semibold text-slate-900">
-                  Total ingresos − egresos
+                  Resultado operativo y caja
                 </h2>
                 <p className="border-b border-slate-200 px-4 py-2 text-xs text-slate-600">
-                  Por mes y total del período: ventas menos todos los egresos (gastos del negocio más gastos
-                  de socios).
+                  Muestra el resultado operativo (ventas menos egresos) y además el efecto del
+                  desembolso de créditos para ver la caja mensual.
                 </p>
                 <table
                   className="w-full border-collapse text-sm table-fixed"
@@ -1105,12 +1136,52 @@ export default function ResumenPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className={trTotal}>
-                      <td className={`${tdStickyFirstTotal} font-semibold text-slate-900`}>
+                    <tr>
+                      <td className={`${tdStickyFirst} font-medium text-slate-900`}>
                         Ingresos − egresos
                       </td>
                       {data.monthKeys.map((mk) => {
                         const v = resultadoIngresosMenosEgresos.porMes[mk] ?? 0;
+                        return (
+                          <td
+                            key={mk}
+                            className={`${tdNum} font-medium ${
+                              v >= 0 ? "text-sky-900" : "text-red-800"
+                            }`}
+                          >
+                            {formatClp(v)}
+                          </td>
+                        );
+                      })}
+                      <td
+                        className={`${tdNum} font-semibold ${
+                          resultadoIngresosMenosEgresos.total >= 0
+                            ? "text-sky-900"
+                            : "text-red-800"
+                        }`}
+                      >
+                        {formatClp(resultadoIngresosMenosEgresos.total)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className={`${tdStickyFirst} font-medium text-emerald-900`}>
+                        Ingreso por crédito (desembolso)
+                      </td>
+                      {data.monthKeys.map((mk) => (
+                        <td key={mk} className={`${tdNum} font-medium text-emerald-900`}>
+                          {formatClp(ingresoCreditosAgregado.porMes[mk] ?? 0)}
+                        </td>
+                      ))}
+                      <td className={`${tdNum} font-semibold text-emerald-900`}>
+                        {formatClp(ingresoCreditosAgregado.total)}
+                      </td>
+                    </tr>
+                    <tr className={trTotal}>
+                      <td className={`${tdStickyFirstTotal} font-semibold text-slate-900`}>
+                        Resultado caja (incluye crédito)
+                      </td>
+                      {data.monthKeys.map((mk) => {
+                        const v = resultadoCajaConCredito.porMes[mk] ?? 0;
                         return (
                           <td
                             key={mk}
@@ -1124,12 +1195,12 @@ export default function ResumenPage() {
                       })}
                       <td
                         className={`${tdNum} font-bold ${
-                          resultadoIngresosMenosEgresos.total >= 0
+                          resultadoCajaConCredito.total >= 0
                             ? "text-sky-900"
                             : "text-red-800"
                         }`}
                       >
-                        {formatClp(resultadoIngresosMenosEgresos.total)}
+                        {formatClp(resultadoCajaConCredito.total)}
                       </td>
                     </tr>
                   </tbody>

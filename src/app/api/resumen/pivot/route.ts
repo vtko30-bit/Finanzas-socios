@@ -66,6 +66,11 @@ export async function GET(request: Request) {
       gastos: { rows: [] },
       gastosSocios: { rows: [] },
       creditos: { rows: [] },
+      financiamiento: {
+        ingresos: { byMonth: {}, total: 0 },
+        egresos: { byMonth: {}, total: 0 },
+        ingresoCreditos: { byMonth: {}, total: 0 },
+      },
     });
   }
 
@@ -96,6 +101,7 @@ export async function GET(request: Request) {
       gastosPorSucursalLista: data.gastosPorSucursalLista,
       gastosSocios: { rows: data.gastosSocios.rows },
       creditos: { rows: data.creditos.rows },
+      financiamiento: data.financiamiento,
     });
   }
 
@@ -126,5 +132,6 @@ export async function GET(request: Request) {
     gastos: data.gastos,
     gastosSocios: data.gastosSocios,
     creditos: data.creditos,
+    financiamiento: data.financiamiento,
   });
 }

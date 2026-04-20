@@ -514,23 +514,23 @@ export default function VentasPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm !text-slate-900 hover:bg-white">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-sky-700"
                 checked={filtroEventoActivo}
                 onChange={toggleFiltroEventos}
               />
-              Solo eventos
+              <span className="!text-slate-900">Solo eventos</span>
             </label>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm !text-slate-900 hover:bg-white">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-sky-700"
                 checked={soloSucursalesFijas}
                 onChange={toggleSucursalesFijas}
               />
-              Solo sucursales fijas
+              <span className="!text-slate-900">Solo sucursales fijas</span>
             </label>
             <button
               type="button"

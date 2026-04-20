@@ -378,6 +378,14 @@ type CreditInstallmentPaidRow = {
   } | null;
 };
 
+type FinancingTxRow = {
+  date: string;
+  amount: number | string;
+  type: string | null;
+  source: string | null;
+  credit_component: string | null;
+};
+
 export async function fetchCreditInstallmentsPaidRows(args: {
   supabase: SupabaseClient;
   organizationId: string;
@@ -446,6 +454,55 @@ export function creditosRowsFromPaidInstallments(
     .sort((a, b) => a.credito.localeCompare(b.credito, "es"));
 }
 
+export async function fetchFinancingTxRowsPaged(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+}): Promise<{ data: FinancingTxRow[]; error: string | null }> {
+  const out: FinancingTxRow[] = [];
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await args.supabase
+      .from("transactions")
+      .select("date, amount, type, source, credit_component")
+      .eq("organization_id", args.organizationId)
+      .eq("flow_kind", "financiamiento")
+      .in("type", ["income", "ingreso", "expense", "gasto", "egreso"])
+      .gte("date", args.desde)
+      .lte("date", args.hasta)
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (error) return { data: [], error: error.message };
+    const page = (data ?? []) as FinancingTxRow[];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return { data: out, error: null };
+}
+
+function sumFinancingByMonth(
+  rows: FinancingTxRow[],
+  monthKeys: string[],
+  predicate: (row: FinancingTxRow) => boolean,
+): { byMonth: Record<string, number>; total: number } {
+  const byMonth: Record<string, number> = {};
+  for (const mk of monthKeys) byMonth[mk] = 0;
+  let total = 0;
+  for (const row of rows) {
+    if (!predicate(row)) continue;
+    const ym = String(row.date || "").slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    const amt = Number(row.amount) || 0;
+    byMonth[ym] = (byMonth[ym] ?? 0) + amt;
+    total += amt;
+  }
+  return { byMonth, total };
+}
+
 export function partitionExpenseRowsSocios(rows: unknown[]): {
   negocio: unknown[];
   socios: unknown[];
@@ -475,6 +532,11 @@ export type ResumenPivotMainPayload = {
   gastos: { rows: ReturnType<typeof gastosRowsFromExpenseRows> };
   gastosSocios: { rows: ReturnType<typeof gastosRowsFromExpenseRows> };
   creditos: { rows: ReturnType<typeof creditosRowsFromPaidInstallments> };
+  financiamiento: {
+    ingresos: { byMonth: Record<string, number>; total: number };
+    egresos: { byMonth: Record<string, number>; total: number };
+    ingresoCreditos: { byMonth: Record<string, number>; total: number };
+  };
 };
 
 export async function loadResumenPivotMain(args: {
@@ -514,6 +576,11 @@ export async function loadResumenPivotMain(args: {
         gastos: { rows: [] },
         gastosSocios: { rows: [] },
         creditos: { rows: [] },
+        financiamiento: {
+          ingresos: { byMonth: {}, total: 0 },
+          egresos: { byMonth: {}, total: 0 },
+          ingresoCreditos: { byMonth: {}, total: 0 },
+        },
       },
       error: null,
     };
@@ -569,6 +636,36 @@ export async function loadResumenPivotMain(args: {
   if (creditErr) return { data: null, error: creditErr };
   const creditosRows = creditosRowsFromPaidInstallments(creditPaidRows ?? [], monthKeys);
 
+  const { data: financingRows, error: financingErr } = await fetchFinancingTxRowsPaged({
+    supabase: args.supabase,
+    organizationId: args.organizationId,
+    desde: args.desde,
+    hasta: args.hasta,
+  });
+  if (financingErr) return { data: null, error: financingErr };
+
+  const financiamientoIngresos = sumFinancingByMonth(
+    financingRows ?? [],
+    monthKeys,
+    (r) => String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso",
+  );
+  const financiamientoEgresos = sumFinancingByMonth(
+    financingRows ?? [],
+    monthKeys,
+    (r) =>
+      String(r.type ?? "").toLowerCase() === "expense" ||
+      String(r.type ?? "").toLowerCase() === "gasto" ||
+      String(r.type ?? "").toLowerCase() === "egreso",
+  );
+  const ingresoCreditos = sumFinancingByMonth(
+    financingRows ?? [],
+    monthKeys,
+    (r) =>
+      (String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso") &&
+      String(r.source ?? "").toLowerCase() === "creditos" &&
+      String(r.credit_component ?? "").toLowerCase() === "desembolso",
+  );
+
   return {
     data: {
       desde: args.desde,
@@ -581,6 +678,11 @@ export async function loadResumenPivotMain(args: {
       gastos: { rows: gastosRows },
       gastosSocios: { rows: gastosSociosRows },
       creditos: { rows: creditosRows },
+      financiamiento: {
+        ingresos: financiamientoIngresos,
+        egresos: financiamientoEgresos,
+        ingresoCreditos,
+      },
     },
     error: null,
   };
@@ -601,6 +703,11 @@ export type ResumenPivotPorSucursalPayload = {
   }>;
   gastosSocios: { rows: ReturnType<typeof gastosRowsFromExpenseRows> };
   creditos: { rows: ReturnType<typeof creditosRowsFromPaidInstallments> };
+  financiamiento: {
+    ingresos: { byMonth: Record<string, number>; total: number };
+    egresos: { byMonth: Record<string, number>; total: number };
+    ingresoCreditos: { byMonth: Record<string, number>; total: number };
+  };
 };
 
 /** Misma agregación que el API de resumen con `ventasPorSucursal=1`. */
@@ -638,6 +745,11 @@ export async function loadResumenPivotPorSucursal(args: {
         gastosPorSucursalLista: [],
         gastosSocios: { rows: [] },
         creditos: { rows: [] },
+        financiamiento: {
+          ingresos: { byMonth: {}, total: 0 },
+          egresos: { byMonth: {}, total: 0 },
+          ingresoCreditos: { byMonth: {}, total: 0 },
+        },
       },
       error: null,
     };
@@ -713,6 +825,35 @@ export async function loadResumenPivotPorSucursal(args: {
   if (creditErr) return { data: null, error: creditErr };
   const creditosRows = creditosRowsFromPaidInstallments(creditPaidRows ?? [], monthKeys);
 
+  const { data: financingRows, error: financingErr } = await fetchFinancingTxRowsPaged({
+    supabase: args.supabase,
+    organizationId: args.organizationId,
+    desde: args.desde,
+    hasta: args.hasta,
+  });
+  if (financingErr) return { data: null, error: financingErr };
+  const financiamientoIngresos = sumFinancingByMonth(
+    financingRows ?? [],
+    monthKeys,
+    (r) => String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso",
+  );
+  const financiamientoEgresos = sumFinancingByMonth(
+    financingRows ?? [],
+    monthKeys,
+    (r) =>
+      String(r.type ?? "").toLowerCase() === "expense" ||
+      String(r.type ?? "").toLowerCase() === "gasto" ||
+      String(r.type ?? "").toLowerCase() === "egreso",
+  );
+  const ingresoCreditos = sumFinancingByMonth(
+    financingRows ?? [],
+    monthKeys,
+    (r) =>
+      (String(r.type ?? "").toLowerCase() === "income" || String(r.type ?? "").toLowerCase() === "ingreso") &&
+      String(r.source ?? "").toLowerCase() === "creditos" &&
+      String(r.credit_component ?? "").toLowerCase() === "desembolso",
+  );
+
   return {
     data: {
       desde: args.desde,
@@ -723,6 +864,11 @@ export async function loadResumenPivotPorSucursal(args: {
       gastosPorSucursalLista,
       gastosSocios: { rows: gastosSociosRows },
       creditos: { rows: creditosRows },
+      financiamiento: {
+        ingresos: financiamientoIngresos,
+        egresos: financiamientoEgresos,
+        ingresoCreditos,
+      },
     },
     error: null,
   };
