@@ -10,6 +10,7 @@ import { getUserOrganization } from "@/lib/organization";
 
 const EXPENSE_TYPES = ["expense", "gasto", "egreso"];
 const PAGE_SIZE = 1000;
+const SOURCE_PAGO_SERVICIOS_BANCOESTADO = "excel_egresos_banco_estado_servicios";
 
 function necesitaConcepto(raw: string) {
   const t = (raw || "").trim().toLowerCase();
@@ -35,6 +36,10 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const soloExcluidos = searchParams.get("soloExcluidos") === "1";
+  const incluirFinanciamiento =
+    searchParams.get("incluirFinanciamiento") === "1" ||
+    searchParams.get("incluirFinanciamiento") === "true";
+  const sourceExact = searchParams.get("source")?.trim().toLowerCase() ?? "";
 
   let excludedFamilyIds: Set<string>;
   try {
@@ -55,7 +60,7 @@ export async function GET(request: Request) {
   let from = 0;
   while (true) {
     const to = from + PAGE_SIZE - 1;
-    const { data: page, error } = await supabase
+    let query = supabase
       .from("transactions")
       .select(
         `
@@ -69,11 +74,25 @@ export async function GET(request: Request) {
       `,
       )
       .eq("organization_id", member.organization_id)
-      .eq("flow_kind", "operativo")
       .in("type", EXPENSE_TYPES)
       .order("date", { ascending: false })
       .order("id", { ascending: false })
       .range(from, to);
+
+    if (incluirFinanciamiento) {
+      query = query.in("flow_kind", ["operativo", "financiamiento"]);
+    } else {
+      query = query.eq("flow_kind", "operativo");
+    }
+    if (sourceExact) {
+      query = query.eq("source", sourceExact);
+    } else {
+      query = query.or(
+        `source.is.null,source.neq.${SOURCE_PAGO_SERVICIOS_BANCOESTADO}`,
+      );
+    }
+
+    const { data: page, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -120,11 +139,18 @@ export async function GET(request: Request) {
       (row as { source_id?: string }).source_id ?? "",
     ).trim();
     const sourceRaw = String((row as { source?: string }).source ?? "").trim();
+    const createdAt = (row as { created_at?: string | null }).created_at ?? null;
+    const importBatchId =
+      (row as { import_batch_id?: string | null }).import_batch_id ?? null;
     return {
       fecha: row.date,
       origen: origenCuenta || row.source || "",
       source: sourceRaw,
       id: row.id,
+      /** Momento en que se creó el registro en la app (p. ej. al importar). */
+      importadoEn: createdAt,
+      /** Lote de importación asociado, si aplica. */
+      importBatchId,
       idOrigen,
       nroOperacion: row.external_ref || "",
       nombreDestino: row.counterparty || "",

@@ -12,6 +12,13 @@ const formatClp = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n || 0);
 
+const formatIsoDate = (value: string | null | undefined) => {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("es-CL").format(date);
+};
+
 function IconPencil() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
@@ -54,6 +61,15 @@ type InstallmentRow = {
   status: string;
 };
 
+type CreditFormData = {
+  interest_total: number | null;
+  fee_per_installment: number | null;
+  first_installment_total: number | null;
+  recurring_installment_total: number | null;
+  origen_cuenta: string | null;
+  payment_method: string | null;
+};
+
 export default function CreditosPage() {
   const { ready, authenticated } = useAuthState();
   const { canWrite } = useOrgCapabilities();
@@ -81,6 +97,7 @@ export default function CreditosPage() {
   const [detail, setDetail] = useState<{
     credit: CreditRow;
     installments: InstallmentRow[];
+    formData: CreditFormData | null;
   } | null>(null);
   const [payNum, setPayNum] = useState("");
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -205,7 +222,11 @@ export default function CreditosPage() {
       setDetail(null);
       return;
     }
-    setDetail({ credit: data.credit, installments: data.installments ?? [] });
+    setDetail({
+      credit: data.credit,
+      installments: data.installments ?? [],
+      formData: data.form_data ?? null,
+    });
   };
 
   const cerrarDetalle = () => {
@@ -444,7 +465,7 @@ export default function CreditosPage() {
             <label className="text-sm sm:col-span-2">
               Prestamista / entidad
               <input
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={lender}
                 onChange={(e) => setLender(e.target.value)}
                 required
@@ -453,7 +474,7 @@ export default function CreditosPage() {
             <label className="text-sm sm:col-span-2">
               Descripción (opcional)
               <input
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -464,7 +485,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={principal}
                 onChange={(e) => setPrincipal(e.target.value)}
                 required
@@ -474,7 +495,7 @@ export default function CreditosPage() {
               Fecha desembolso
               <input
                 type="date"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={disbursementDate}
                 onChange={(e) => setDisbursementDate(e.target.value)}
                 required
@@ -485,7 +506,7 @@ export default function CreditosPage() {
               <input
                 type="number"
                 min="1"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={nCuotas}
                 onChange={(e) => setNCuotas(e.target.value)}
                 required
@@ -497,7 +518,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={interestTotal}
                 onChange={(e) => setInterestTotal(e.target.value)}
               />
@@ -508,7 +529,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={feePerInstallment}
                 onChange={(e) => setFeePerInstallment(e.target.value)}
               />
@@ -525,7 +546,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={firstCuotaTotal}
                 onChange={(e) => setFirstCuotaTotal(e.target.value)}
                 placeholder={Number(nCuotas) === 1 ? "Obligatorio si personalizas 1 cuota" : ""}
@@ -537,7 +558,7 @@ export default function CreditosPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400 disabled:bg-slate-100 disabled:text-slate-600"
+                className="mt-1 w-full ui-field px-3 py-2 disabled:bg-slate-100 disabled:text-slate-600"
                 value={recurringCuotaTotal}
                 onChange={(e) => setRecurringCuotaTotal(e.target.value)}
                 disabled={Number(nCuotas) < 2}
@@ -547,7 +568,7 @@ export default function CreditosPage() {
             <label className="text-sm">
               Origen cuenta (sucursal / caja)
               <input
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={origenCuenta}
                 onChange={(e) => setOrigenCuenta(e.target.value)}
               />
@@ -555,7 +576,7 @@ export default function CreditosPage() {
             <label className="text-sm">
               Medio de pago (opcional)
               <input
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
               />
@@ -661,6 +682,124 @@ export default function CreditosPage() {
 
       {detail && detailId ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          {(() => {
+            const paidInstallments = detail.installments.filter((i) => i.status === "paid");
+            const totalPaid = paidInstallments.reduce(
+              (acc, installment) => acc + (Number(installment.paid_amount) || 0),
+              0,
+            );
+            return (
+              <>
+                <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    Datos del formulario del crédito
+                  </h3>
+                  <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs text-slate-500">Prestamista / entidad</dt>
+                      <dd className="font-medium text-slate-900">{detail.credit.lender}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Descripción</dt>
+                      <dd className="text-slate-900">{detail.credit.description || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Monto</dt>
+                      <dd className="text-slate-900">
+                        {formatClp(detail.credit.principal)} {detail.credit.currency}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Fecha desembolso</dt>
+                      <dd className="text-slate-900">
+                        {formatIsoDate(detail.credit.disbursement_date)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Número de cuotas</dt>
+                      <dd className="text-slate-900">{detail.credit.total_installments}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Interés total</dt>
+                      <dd className="text-slate-900">
+                        {formatClp(detail.formData?.interest_total ?? 0)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Comisión por cuota</dt>
+                      <dd className="text-slate-900">
+                        {detail.formData?.fee_per_installment != null
+                          ? formatClp(detail.formData.fee_per_installment)
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Total primera cuota</dt>
+                      <dd className="text-slate-900">
+                        {detail.formData?.first_installment_total != null
+                          ? formatClp(detail.formData.first_installment_total)
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Total cuotas 2..N</dt>
+                      <dd className="text-slate-900">
+                        {detail.formData?.recurring_installment_total != null
+                          ? formatClp(detail.formData.recurring_installment_total)
+                          : "Variable"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Origen cuenta</dt>
+                      <dd className="text-slate-900">
+                        {detail.formData?.origen_cuenta?.trim() || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Medio de pago</dt>
+                      <dd className="text-slate-900">
+                        {detail.formData?.payment_method?.trim() || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Estado del crédito</dt>
+                      <dd className="text-slate-900">{detail.credit.status}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-emerald-900">Cuotas pagadas</h3>
+                    <span className="text-xs text-emerald-800">
+                      {paidInstallments.length} de {detail.installments.length} pagadas · total{" "}
+                      {formatClp(totalPaid)}
+                    </span>
+                  </div>
+                  {paidInstallments.length === 0 ? (
+                    <p className="mt-2 text-sm text-emerald-900/80">
+                      Este crédito aún no registra cuotas pagadas.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {paidInstallments.map((i) => (
+                        <li
+                          key={`paid-${i.id}`}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded border border-emerald-200 bg-white px-2 py-1"
+                        >
+                          <span className="text-slate-800">Cuota #{i.installment_number}</span>
+                          <span className="text-slate-700">
+                            Pago: {formatClp(i.paid_amount || i.total_amount)} · Fecha{" "}
+                            {formatIsoDate(i.paid_at)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            );
+          })()}
           <div className="flex items-start justify-between gap-3">
             <h2 className="font-medium text-slate-900">Cuotas — {detail.credit.lender}</h2>
             <button
@@ -703,7 +842,7 @@ export default function CreditosPage() {
                 <input
                   type="number"
                   min="1"
-                  className="mt-1 w-24 rounded border border-slate-300 px-2 py-1"
+                  className="mt-1 w-24 ui-field px-2 py-1"
                   value={payNum}
                   onChange={(e) => setPayNum(e.target.value)}
                   required
@@ -713,7 +852,7 @@ export default function CreditosPage() {
                 Fecha pago
                 <input
                   type="date"
-                  className="mt-1 rounded border border-slate-300 px-2 py-1"
+                  className="mt-1 ui-field px-2 py-1"
                   value={payDate}
                   onChange={(e) => setPayDate(e.target.value)}
                   required
@@ -820,7 +959,7 @@ export default function CreditosPage() {
             <label className="mt-3 block text-sm">
               Prestamista / entidad
               <input
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.lender}
                 onChange={(e) =>
                   setEditModal((m) => (m ? { ...m, lender: e.target.value } : m))
@@ -831,7 +970,7 @@ export default function CreditosPage() {
             <label className="mt-3 block text-sm">
               Descripción
               <input
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.description}
                 onChange={(e) =>
                   setEditModal((m) => (m ? { ...m, description: e.target.value } : m))
@@ -842,7 +981,7 @@ export default function CreditosPage() {
               Fecha desembolso
               <input
                 type="date"
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.disbursementDate}
                 onChange={(e) =>
                   setEditModal((m) =>
@@ -858,7 +997,7 @@ export default function CreditosPage() {
             <label className="mt-3 block text-sm">
               Estado
               <select
-                className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-400"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.status}
                 onChange={(e) =>
                   setEditModal((m) =>

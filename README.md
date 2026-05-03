@@ -22,6 +22,22 @@ Copiar `.env.example` a `.env.local` y completar:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+### Separar DEV y PROD (recomendado)
+
+Para evitar mezclar datos reales con pruebas:
+
+1. Crea dos archivos locales (no se suben a git):
+   - `.env.local.dev`
+   - `.env.local.prod`
+2. Usa como base:
+   - `config/env/.env.local.dev.example`
+   - `config/env/.env.local.prod.example`
+3. Cambia rapido de entorno (PowerShell):
+   - DEV: `.\scripts\env\use-dev.ps1`
+   - PROD: `.\scripts\env\use-prod.ps1`
+4. Verifica a que proyecto estas apuntando:
+   - `npm run env:check`
+
 ## Levantar local
 
 ```bash

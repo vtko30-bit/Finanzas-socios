@@ -692,7 +692,7 @@ export default function MovimientosExcluidosPage() {
                 Buscar
                 <input
                   type="search"
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                  className="mt-0.5 w-full ui-field px-2 py-1.5 text-sm"
                   placeholder="Filtrar por nombre…"
                   value={pickerFilter}
                   onChange={(e) => setPickerFilter(e.target.value)}
@@ -772,7 +772,7 @@ export default function MovimientosExcluidosPage() {
                 Buscar categoría o familia
                 <input
                   type="search"
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                  className="mt-0.5 w-full ui-field px-2 py-1.5 text-sm"
                   placeholder="Ej: Ventas locales, Operación, etc."
                   value={editLineFilter}
                   onChange={(e) => setEditLineFilter(e.target.value)}

@@ -209,6 +209,9 @@ const toAmount = (value: unknown) => {
 const hash = (payload: string) =>
   createHash("sha256").update(payload).digest("hex");
 
+const normalizeReference = (value: string) =>
+  value.trim().replace(/\s+/g, "").toUpperCase();
+
 export type ParseConsolidatedExcelOptions = {
   /**
    * Tipo cuando el Excel no deja claro si es ingreso o egreso.
@@ -399,6 +402,9 @@ export const parseConsolidatedExcel = (
     const externalRefConsolidado = String(
       getField(row, ["nro operacion", "numero operacion", "referencia", "folio"]) || "",
     );
+    const sourceIdVentas = String(
+      getField(row, ["id.origen", "id origen", "idorigen"]) || "",
+    ).trim();
 
     const parsed = movementSchema.safeParse({
       date,
@@ -419,7 +425,7 @@ export const parseConsolidatedExcel = (
           "familia",
         ]) || "Sin categoria",
       ),
-      source_id: "",
+      source_id: ventasLayout ? sourceIdVentas : "",
       external_ref: ventasLayout ? externalRefVentas : externalRefConsolidado,
       payment_method: ventasLayout
         ? paymentMethodVentas
@@ -498,9 +504,10 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
   };
 
   const wb = XLSX.read(file, { type: "buffer", cellDates: true });
-  const egresosSheets = wb.SheetNames.filter((name) =>
-    normalizeKey(name).includes("egres"),
-  );
+  const egresosSheets = wb.SheetNames.filter((name) => {
+    const normalized = normalizeKey(name);
+    return normalized.includes("egres") || normalized.includes("movimientoscompletos");
+  });
 
   const rawRows: RawRow[] = [];
   egresosSheets.forEach((sheetName) => {
@@ -518,13 +525,13 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
       invalid: [
         {
           row_number: 1,
-          reason: 'No se encontró una hoja "Egresos" en el archivo.',
+          reason: 'No se encontró una hoja compatible ("Egresos" o "Movimientos_completos") en el archivo.',
         },
       ],
       invalidSample: [
         {
           row_number: 1,
-          reason: 'No se encontró una hoja "Egresos" en el archivo.',
+          reason: 'No se encontró una hoja compatible ("Egresos" o "Movimientos_completos") en el archivo.',
         },
       ],
     };
@@ -532,6 +539,7 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
 
   const valid: NormalizedMovement[] = [];
   const invalid: Array<{ row_number: number; reason: string }> = [];
+  const missingSourceIdRows: number[] = [];
 
   rawRows.forEach((row, index) => {
     const date = toISO(getField(row, ["fecha", "fecha documento", "date", "dia"]));
@@ -588,6 +596,9 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
         : origen || sucursal || "Sin origen");
 
     const sourceId = String(getField(row, ["id"]) || "").trim();
+    if (!sourceId) {
+      missingSourceIdRows.push(index + 1);
+    }
     const nroOperacion = String(
       getField(row, ["n° operacion", "nro operacion", "numero operacion"]) || "",
     ).trim();
@@ -614,13 +625,19 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
     }
 
     const entry = parsed.data;
-    const dedupe_hash = entry.source_id
+    const normalizedSourceId = normalizeReference(entry.source_id);
+    const normalizedExternalRef = normalizeReference(entry.external_ref);
+    const dedupe_hash = normalizedSourceId
       ? hash(
-          `${entry.source_id}|${entry.date}|${entry.type}|${entry.amount}`,
+          `${normalizedSourceId}|${entry.type}`,
         )
-      : hash(
-          `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}`,
-        );
+      : normalizedExternalRef
+        ? hash(
+            `${normalizedExternalRef}|${entry.date}|${entry.type}|${entry.amount}`,
+          )
+        : hash(
+            `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}`,
+          );
     valid.push({
       ...entry,
       dedupe_hash,
@@ -632,6 +649,8 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
     totalRows: rawRows.length,
     validRows: valid.length,
     invalidRows: invalid.length,
+    missingSourceIdCount: missingSourceIdRows.length,
+    missingSourceIdSample: missingSourceIdRows.slice(0, 40),
     valid,
     invalid,
     invalidSample: invalid.slice(0, 40),

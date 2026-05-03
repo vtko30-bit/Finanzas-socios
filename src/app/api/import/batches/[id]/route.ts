@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 const EXCEL_KINDS = new Set([
   "excel_ventas",
   "excel_egresos",
+  "excel_egresos_bancoestado_servicios",
   "excel_otros_ingresos",
 ]);
 

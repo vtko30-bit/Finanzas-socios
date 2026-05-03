@@ -1,0 +1,105 @@
+-- Verificación y limpieza opcional tras eliminar lotes importados (p. ej. 2026-04-27).
+-- 1) Sustituye ORG_ID por tu organization_id (uuid).
+-- 2) Ejecuta solo las secciones que necesites; la limpieza va en transacción.
+
+-- ---------------------------------------------------------------------------
+-- A) Lotes que aún existen creados el 27-04-2026 (zona: America/Santiago)
+--    Ajusta el time zone si tu proyecto usa otro.
+-- ---------------------------------------------------------------------------
+-- select b.id, b.filename, b.status, b.created_at,
+--        ((b.created_at at time zone 'America/Santiago'))::date as dia_cl
+-- from public.import_batches b
+-- where b.organization_id = 'ORG_ID'
+--   and ((b.created_at at time zone 'America/Santiago'))::date = date '2026-04-27'
+-- order by b.created_at desc;
+
+-- ---------------------------------------------------------------------------
+-- B) Egresos BancoEstado: grupos duplicados por “huella de negocio”
+--    (misma lógica que el import: fecha, monto, destino, descripción, origen normalizados)
+-- ---------------------------------------------------------------------------
+-- with huella as (
+--   select
+--     t.id,
+--     t.organization_id,
+--     t.source,
+--     t.date,
+--     round(t.amount::numeric, 2) as amount_n,
+--     lower(regexp_replace(coalesce(t.counterparty, ''), '\s+', ' ', 'g')) as cp,
+--     lower(regexp_replace(coalesce(t.description, ''), '\s+', ' ', 'g')) as desc_n,
+--     lower(regexp_replace(coalesce(t.origen_cuenta, ''), '\s+', ' ', 'g')) as orig_n,
+--     t.created_at,
+--     t.import_batch_id,
+--     t.concept_id
+--   from public.transactions t
+--   where t.organization_id = 'ORG_ID'
+--     and t.source = 'excel_egresos_banco_estado_servicios'
+--     and t.type = 'expense'
+-- ),
+-- grupos as (
+--   select
+--     date, amount_n, cp, desc_n, orig_n,
+--     count(*) as filas,
+--     array_agg(id order by created_at asc, id asc) as ids
+--   from huella
+--   group by 1, 2, 3, 4, 5
+--   having count(*) > 1
+-- )
+-- select * from grupos order by filas desc, date desc;
+
+-- ---------------------------------------------------------------------------
+-- C) Limpieza opcional: por grupo, conservar UNA fila (la más antigua) y borrar el resto
+--    OJO: pierdes ediciones en las filas borradas. Revisa el preview (B) antes.
+-- ---------------------------------------------------------------------------
+-- begin;
+--
+-- create table if not exists public.transactions_backup_dup_huella_20260427 as
+-- with huella as (
+--   select
+--     t.id,
+--     row_number() over (
+--       partition by
+--         t.organization_id,
+--         t.source,
+--         t.type,
+--         t.date,
+--         round(t.amount::numeric, 2),
+--         lower(regexp_replace(coalesce(t.counterparty, ''), '\s+', ' ', 'g')),
+--         lower(regexp_replace(coalesce(t.description, ''), '\s+', ' ', 'g')),
+--         lower(regexp_replace(coalesce(t.origen_cuenta, ''), '\s+', ' ', 'g'))
+--       order by t.created_at asc, t.id asc
+--     ) as rn
+--   from public.transactions t
+--   where t.organization_id = 'ORG_ID'
+--     and t.source = 'excel_egresos_banco_estado_servicios'
+--     and t.type = 'expense'
+-- )
+-- select t.*
+-- from public.transactions t
+-- join huella h on h.id = t.id
+-- where h.rn > 1;
+--
+-- with huella as (
+--   select
+--     t.id,
+--     row_number() over (
+--       partition by
+--         t.organization_id,
+--         t.source,
+--         t.type,
+--         t.date,
+--         round(t.amount::numeric, 2),
+--         lower(regexp_replace(coalesce(t.counterparty, ''), '\s+', ' ', 'g')),
+--         lower(regexp_replace(coalesce(t.description, ''), '\s+', ' ', 'g')),
+--         lower(regexp_replace(coalesce(t.origen_cuenta, ''), '\s+', ' ', 'g'))
+--       order by t.created_at asc, t.id asc
+--     ) as rn
+--   from public.transactions t
+--   where t.organization_id = 'ORG_ID'
+--     and t.source = 'excel_egresos_banco_estado_servicios'
+--     and t.type = 'expense'
+-- ),
+-- a_borrar as (select id from huella where rn > 1)
+-- delete from public.transactions t using a_borrar d where t.id = d.id;
+--
+-- commit;
+-- -- rollback;

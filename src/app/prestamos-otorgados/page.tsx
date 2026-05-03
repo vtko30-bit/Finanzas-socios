@@ -38,6 +38,8 @@ type LoanRow = {
   disbursement_date: string;
   status: string;
   created_at: string;
+  disbursement_reconciled?: boolean;
+  disbursement_conciliated_amount?: number;
 };
 
 export default function PrestamosOtorgadosPage() {
@@ -56,12 +58,30 @@ export default function PrestamosOtorgadosPage() {
   );
   const [origenCuenta, setOrigenCuenta] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [createDisburseFilterName, setCreateDisburseFilterName] = useState("");
+  const [createDisburseFilterAmount, setCreateDisburseFilterAmount] = useState("");
+  const [createDisburseCandidates, setCreateDisburseCandidates] = useState<
+    {
+      id: string;
+      date: string;
+      amount: number;
+      description: string | null;
+      source: string | null;
+      origen_cuenta: string | null;
+      external_ref: string | null;
+    }[]
+  >([]);
+  const [createDisburseSelectedIds, setCreateDisburseSelectedIds] = useState<string[]>([]);
+  const [createDisburseLoading, setCreateDisburseLoading] = useState(false);
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailLoan, setDetailLoan] = useState<{
     borrower: string;
+    principal: number;
     pending: number;
     repaid_total: number;
+    disbursement_conciliated_amount: number;
+    disbursement_remaining_to_reconcile: number;
   } | null>(null);
   const [recoverAmount, setRecoverAmount] = useState("");
   const [recoverDate, setRecoverDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -78,6 +98,22 @@ export default function PrestamosOtorgadosPage() {
   const [editBusy, setEditBusy] = useState(false);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [revertBusy, setRevertBusy] = useState(false);
+  const [reconcileCand, setReconcileCand] = useState<
+    {
+      id: string;
+      date: string;
+      amount: number;
+      description: string | null;
+      source: string | null;
+      origen_cuenta: string | null;
+      external_ref: string | null;
+    }[]
+  >([]);
+  const [reconcileCandLoading, setReconcileCandLoading] = useState(false);
+  const [reconcilePickIds, setReconcilePickIds] = useState<string[]>([]);
+  const [reconcileWorking, setReconcileWorking] = useState(false);
+  const [recoverFilterName, setRecoverFilterName] = useState("");
+  const [recoverFilterAmount, setRecoverFilterAmount] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,12 +133,28 @@ export default function PrestamosOtorgadosPage() {
     if (authenticated) void load();
   }, [authenticated, load]);
 
+  useEffect(() => {
+    if (!detailId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cerrarDetalle();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [detailId]);
+
   const onDisburse = async (e: FormEvent) => {
     e.preventDefault();
     setMsg("");
     const p = Number(principal);
     if (!borrower.trim() || !Number.isFinite(p) || p <= 0) {
       setMsg("Indica prestatario y monto.");
+      return;
+    }
+    const selectedTotal = createDisburseCandidates
+      .filter((c) => createDisburseSelectedIds.includes(c.id))
+      .reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
+    if (selectedTotal > p + 0.02) {
+      setMsg("La suma de egresos seleccionados supera el monto del préstamo.");
       return;
     }
     const res = await fetch("/api/prestamos-otorgados/disburse", {
@@ -115,6 +167,7 @@ export default function PrestamosOtorgadosPage() {
         disbursement_date: disbursementDate,
         origen_cuenta: origenCuenta.trim(),
         payment_method: paymentMethod.trim(),
+        reconcile_transaction_ids: createDisburseSelectedIds,
       }),
     });
     const data = await res.json();
@@ -126,13 +179,64 @@ export default function PrestamosOtorgadosPage() {
     setBorrower("");
     setDescription("");
     setPrincipal("");
+    setCreateDisburseFilterName("");
+    setCreateDisburseFilterAmount("");
+    setCreateDisburseCandidates([]);
+    setCreateDisburseSelectedIds([]);
     setShowCreateForm(false);
     void load();
   };
 
+  const buscarEgresosParaOtorgamiento = async () => {
+    const p = Number(principal);
+    if (!Number.isFinite(p) || p <= 0) {
+      setMsg("Indica primero el monto del préstamo para buscar egresos.");
+      return;
+    }
+    setCreateDisburseLoading(true);
+    setMsg("");
+    try {
+      const params = new URLSearchParams();
+      params.set("principal", String(Math.round(p * 100) / 100));
+      if (createDisburseFilterName.trim()) params.set("name", createDisburseFilterName.trim());
+      const amountN = Number(createDisburseFilterAmount);
+      if (createDisburseFilterAmount.trim() && Number.isFinite(amountN) && amountN > 0) {
+        params.set("amount", String(Math.round(amountN * 100) / 100));
+      }
+      const res = await fetch(`/api/prestamos-otorgados/disburse-candidates?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo buscar egresos");
+        setCreateDisburseCandidates([]);
+        return;
+      }
+      const list = (data.candidates ?? []) as typeof createDisburseCandidates;
+      setCreateDisburseCandidates(list);
+      setCreateDisburseSelectedIds([]);
+      if (list.length === 0) {
+        setMsg("No se encontraron egresos en Gastos que coincidan con los filtros.");
+      } else {
+        setMsg(`Se encontraron ${list.length} egreso(s). Puedes elegir uno o varios.`);
+      }
+    } catch {
+      setMsg("Error de red al buscar egresos");
+      setCreateDisburseCandidates([]);
+    } finally {
+      setCreateDisburseLoading(false);
+    }
+  };
+
   const openDetail = async (id: string) => {
+    if (detailId === id) {
+      cerrarDetalle();
+      return;
+    }
     setDetailId(id);
     setMsg("");
+    setReconcileCand([]);
+    setReconcilePickIds([]);
+    setRecoverFilterName("");
+    setRecoverFilterAmount("");
     const res = await fetch(`/api/prestamos-otorgados/${id}`);
     const data = await res.json();
     if (!res.ok) {
@@ -144,11 +248,95 @@ export default function PrestamosOtorgadosPage() {
     if (loan) {
       setDetailLoan({
         borrower: String(loan.borrower ?? ""),
+        principal: Number(loan.principal) || 0,
         pending: Number(loan.pending) || 0,
         repaid_total: Number(loan.repaid_total) || 0,
+        disbursement_conciliated_amount: Number(loan.disbursement_conciliated_amount) || 0,
+        disbursement_remaining_to_reconcile:
+          Number(loan.disbursement_remaining_to_reconcile) || 0,
       });
     } else {
       setDetailLoan(null);
+    }
+  };
+
+  const cerrarDetalle = () => {
+    setDetailId(null);
+    setDetailLoan(null);
+    setReconcileCand([]);
+    setReconcilePickIds([]);
+    setRecoverFilterName("");
+    setRecoverFilterAmount("");
+    setRecoverAmount("");
+  };
+
+  const buscarConciliacionRecupero = async () => {
+    if (!detailId) return;
+    setReconcileCandLoading(true);
+    setMsg("");
+    try {
+      const params = new URLSearchParams();
+      if (recoverFilterName.trim()) params.set("name", recoverFilterName.trim());
+      const amountN = Number(recoverFilterAmount);
+      if (recoverFilterAmount.trim() && Number.isFinite(amountN) && amountN > 0) {
+        params.set("amount", String(Math.round(amountN * 100) / 100));
+      }
+      const qs = params.toString();
+      const res = await fetch(
+        `/api/prestamos-otorgados/${detailId}/reconcile-candidates${qs ? `?${qs}` : ""}`,
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Error");
+        setReconcileCand([]);
+        return;
+      }
+      const list = (data.candidates ?? []) as typeof reconcileCand;
+      setReconcileCand(list);
+      setReconcilePickIds([]);
+      if (list.length === 0) {
+        setMsg(
+          "No hay ingresos en Ventas sin vincular para los filtros ingresados.",
+        );
+      } else {
+        const pending = Number(data.pending) || 0;
+        setMsg(
+          `Se encontraron ${list.length} movimiento(s). Pendiente del préstamo: ${formatClp(pending)}.`,
+        );
+      }
+    } catch {
+      setMsg("Error de red al buscar candidatos");
+      setReconcileCand([]);
+    } finally {
+      setReconcileCandLoading(false);
+    }
+  };
+
+  const confirmarConciliacionRecupero = async () => {
+    if (!detailId || reconcilePickIds.length === 0) return;
+    setReconcileWorking(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/prestamos-otorgados/${detailId}/reconcile-transaction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_ids: reconcilePickIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo conciliar");
+        return;
+      }
+      setMsg(data.closed ? "Conciliado. Préstamo cerrado." : "Conciliado.");
+      setReconcileCand([]);
+      setReconcilePickIds([]);
+      setRecoverAmount("");
+      void openDetail(detailId);
+      void load();
+    } catch {
+      setMsg("Error de red al conciliar");
+    } finally {
+      setReconcileWorking(false);
     }
   };
 
@@ -284,7 +472,7 @@ export default function PrestamosOtorgadosPage() {
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <div className="rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold text-white">Préstamos otorgados</h1>
+          <h1 className="text-xl font-semibold text-white">Préstamos</h1>
           {authenticated && canWrite ? (
             <button
               type="button"
@@ -313,7 +501,7 @@ export default function PrestamosOtorgadosPage() {
               <label className="text-sm sm:col-span-2">
                 Prestatario (tercero)
                 <input
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={borrower}
                   onChange={(e) => setBorrower(e.target.value)}
                   required
@@ -322,7 +510,7 @@ export default function PrestamosOtorgadosPage() {
               <label className="text-sm sm:col-span-2">
                 Nota (opcional)
                 <input
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
@@ -333,7 +521,7 @@ export default function PrestamosOtorgadosPage() {
                   type="number"
                   step="0.01"
                   min="0"
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={principal}
                   onChange={(e) => setPrincipal(e.target.value)}
                   required
@@ -343,7 +531,7 @@ export default function PrestamosOtorgadosPage() {
                 Fecha
                 <input
                   type="date"
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={disbursementDate}
                   onChange={(e) => setDisbursementDate(e.target.value)}
                   required
@@ -352,7 +540,7 @@ export default function PrestamosOtorgadosPage() {
               <label className="text-sm">
                 Origen cuenta / caja
                 <input
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={origenCuenta}
                   onChange={(e) => setOrigenCuenta(e.target.value)}
                 />
@@ -360,11 +548,101 @@ export default function PrestamosOtorgadosPage() {
               <label className="text-sm">
                 Medio (opcional)
                 <input
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
                 />
               </label>
+              <div className="sm:col-span-2 mt-2 border-t border-slate-200 pt-3">
+                <h3 className="text-sm font-medium text-slate-800">
+                  Vincular egresos del otorgamiento (opcional)
+                </h3>
+                <p className="mt-1 text-xs text-slate-600">
+                  Puedes seleccionar uno o varios egresos de Gastos para evitar duplicidad en
+                  gastos.
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-600">
+                    Filtrar por Nombre (Detalle de gastos)
+                    <input
+                      type="text"
+                      className="mt-1 w-full ui-field px-2 py-1.5 text-sm"
+                      placeholder="Ej: proveedor, glosa, referencia"
+                      value={createDisburseFilterName}
+                      onChange={(e) => setCreateDisburseFilterName(e.target.value)}
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600">
+                    Filtrar por monto exacto (opcional)
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="mt-1 w-full ui-field px-2 py-1.5 text-sm"
+                      placeholder="Ej: 250000"
+                      value={createDisburseFilterAmount}
+                      onChange={(e) => setCreateDisburseFilterAmount(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-emerald-700 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                    disabled={createDisburseLoading}
+                    onClick={() => void buscarEgresosParaOtorgamiento()}
+                  >
+                    {createDisburseLoading ? "Buscando…" : "Buscar egresos en Gastos"}
+                  </button>
+                  {createDisburseSelectedIds.length > 0 ? (
+                    <span className="text-xs text-slate-700">
+                      Seleccionado:{" "}
+                      {formatClp(
+                        createDisburseCandidates
+                          .filter((c) => createDisburseSelectedIds.includes(c.id))
+                          .reduce((acc, c) => acc + (Number(c.amount) || 0), 0),
+                      )}{" "}
+                      de {formatClp(Number(principal) || 0)}
+                    </span>
+                  ) : null}
+                </div>
+                {createDisburseCandidates.length > 0 ? (
+                  <ul className="mt-3 max-h-48 space-y-2 overflow-auto text-sm">
+                    {createDisburseCandidates.map((c) => (
+                      <li
+                        key={`create-disb-${c.id}`}
+                        className="rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+                      >
+                        <label className="flex cursor-pointer gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 accent-emerald-700"
+                            checked={createDisburseSelectedIds.includes(c.id)}
+                            onChange={(e) =>
+                              setCreateDisburseSelectedIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, c.id]
+                                  : prev.filter((id) => id !== c.id),
+                              )
+                            }
+                          />
+                          <span className="min-w-0">
+                            <span className="font-medium text-slate-900">
+                              {c.date} · {formatClp(c.amount)}
+                            </span>
+                            {c.description ? (
+                              <span className="block truncate text-slate-700">{c.description}</span>
+                            ) : null}
+                            <span className="block break-all font-mono text-[10px] text-slate-500">
+                              {c.id}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
               <div className="sm:col-span-2">
                 <button
                   type="submit"
@@ -399,9 +677,23 @@ export default function PrestamosOtorgadosPage() {
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <div>
                 <div className="font-medium text-slate-900">{c.borrower}</div>
+                {detailId === c.id ? (
+                  <div className="mt-0.5 inline-flex rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-800">
+                    Detalle abierto
+                  </div>
+                ) : null}
                 <div className="text-xs text-slate-600">
                   Prestado {formatClp(c.principal)} · Pendiente {formatClp(c.pending)} · {c.status}
                 </div>
+                {c.disbursement_reconciled ? (
+                  <div className="mt-0.5 inline-flex rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-800">
+                    Desembolso conciliado
+                  </div>
+                ) : (Number(c.disbursement_conciliated_amount) || 0) > 0 ? (
+                  <div className="mt-0.5 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">
+                    Desembolso parcialmente conciliado ({formatClp(c.disbursement_conciliated_amount || 0)})
+                  </div>
+                ) : null}
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -409,7 +701,7 @@ export default function PrestamosOtorgadosPage() {
                   className="text-sm text-sky-700 underline"
                   onClick={() => void openDetail(c.id)}
                 >
-                  Ver / recuperar
+                  {detailId === c.id ? "Ocultar" : "Ver / recuperar"}
                 </button>
                 {canWrite ? (
                   <button
@@ -456,16 +748,34 @@ export default function PrestamosOtorgadosPage() {
           ))}
         </ul>
         {!loading && loans.length === 0 && authenticated ? (
-          <p className="mt-2 text-sm text-slate-500">No hay préstamos otorgados.</p>
+          <p className="mt-2 text-sm text-slate-500">No hay préstamos.</p>
         ) : null}
       </section>
 
       {detailId && detailLoan !== null ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-medium text-slate-900">Registrar recupero — {detailLoan.borrower}</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="font-medium text-slate-900">Registrar recupero — {detailLoan.borrower}</h2>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+              onClick={cerrarDetalle}
+            >
+              Cerrar
+            </button>
+          </div>
           <p className="mt-1 text-sm text-slate-600">
             Pendiente estimado: {formatClp(detailLoan.pending)}
           </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Monto prestado: {formatClp(detailLoan.principal)}
+          </p>
+          {detailLoan.disbursement_conciliated_amount > 0 ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Desembolso conciliado: {formatClp(detailLoan.disbursement_conciliated_amount)} ·
+              pendiente por conciliar: {formatClp(detailLoan.disbursement_remaining_to_reconcile)}
+            </p>
+          ) : null}
           {canWrite && detailLoan.repaid_total > 0.01 ? (
             <div className="mt-2">
               <button
@@ -486,7 +796,7 @@ export default function PrestamosOtorgadosPage() {
                   type="number"
                   step="0.01"
                   min="0"
-                  className="mt-1 w-32 rounded border border-slate-300 px-2 py-1"
+                  className="mt-1 w-32 ui-field px-2 py-1"
                   value={recoverAmount}
                   onChange={(e) => setRecoverAmount(e.target.value)}
                   required
@@ -496,7 +806,7 @@ export default function PrestamosOtorgadosPage() {
                 Fecha
                 <input
                   type="date"
-                  className="mt-1 rounded border border-slate-300 px-2 py-1"
+                  className="mt-1 ui-field px-2 py-1"
                   value={recoverDate}
                   onChange={(e) => setRecoverDate(e.target.value)}
                   required
@@ -511,6 +821,107 @@ export default function PrestamosOtorgadosPage() {
             </form>
           ) : detailLoan.pending <= 0 ? (
             <p className="mt-2 text-sm text-slate-500">Nada pendiente por recuperar.</p>
+          ) : null}
+          {canWrite && detailLoan.pending > 0 ? (
+            <div className="mt-6 border-t border-slate-200 pt-4">
+              <h3 className="text-sm font-medium text-slate-800">Conciliar con ingreso importado</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Usa el mismo <strong>monto recibido</strong> del formulario de recupero. Se listan
+                ingresos de Ventas sin vincular al préstamo y con el mismo monto.
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className="text-xs text-slate-600">
+                  Filtrar por Nombre (Detalle de ventas)
+                  <input
+                    type="text"
+                    className="mt-1 w-full ui-field px-2 py-1.5 text-sm"
+                    placeholder="Ej: cliente, glosa, referencia"
+                    value={recoverFilterName}
+                    onChange={(e) => setRecoverFilterName(e.target.value)}
+                  />
+                </label>
+                <label className="text-xs text-slate-600">
+                  Filtrar por monto exacto (opcional)
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="mt-1 w-full ui-field px-2 py-1.5 text-sm"
+                    placeholder="Ej: 50000"
+                    value={recoverFilterAmount}
+                    onChange={(e) => setRecoverFilterAmount(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-emerald-700 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  disabled={reconcileCandLoading || reconcileWorking}
+                  onClick={() => void buscarConciliacionRecupero()}
+                >
+                  {reconcileCandLoading ? "Buscando…" : "Buscar ingresos en Ventas"}
+                </button>
+                {reconcilePickIds.length > 0 ? (
+                  <span className="text-xs text-slate-700">
+                    Total seleccionado:{" "}
+                    {formatClp(
+                      reconcileCand
+                        .filter((c) => reconcilePickIds.includes(c.id))
+                        .reduce((acc, c) => acc + (Number(c.amount) || 0), 0),
+                    )}
+                  </span>
+                ) : null}
+              </div>
+              {reconcileCand.length > 0 ? (
+                <ul className="mt-3 max-h-48 space-y-2 overflow-auto text-sm">
+                  {reconcileCand.map((c) => (
+                    <li
+                      key={c.id}
+                      className="rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+                    >
+                      <label className="flex cursor-pointer gap-2">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 accent-emerald-700"
+                          checked={reconcilePickIds.includes(c.id)}
+                          onChange={(e) =>
+                            setReconcilePickIds((prev) =>
+                              e.target.checked
+                                ? [...prev, c.id]
+                                : prev.filter((id) => id !== c.id),
+                            )
+                          }
+                        />
+                        <span className="min-w-0">
+                          <span className="font-medium text-slate-900">
+                            {c.date} · {formatClp(c.amount)}
+                          </span>
+                          {c.description ? (
+                            <span className="block truncate text-slate-700">{c.description}</span>
+                          ) : null}
+                          <span className="block break-all font-mono text-[10px] text-slate-500">
+                            {c.id}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {reconcileCand.length > 0 ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+                    disabled={reconcilePickIds.length === 0 || reconcileWorking}
+                    onClick={() => void confirmarConciliacionRecupero()}
+                  >
+                    {reconcileWorking ? "Conciliando…" : "Conciliar selección"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </section>
       ) : null}
@@ -533,7 +944,7 @@ export default function PrestamosOtorgadosPage() {
             <label className="mt-3 block text-sm">
               Prestatario
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.borrower}
                 onChange={(e) =>
                   setEditModal((m) => (m ? { ...m, borrower: e.target.value } : m))
@@ -544,7 +955,7 @@ export default function PrestamosOtorgadosPage() {
             <label className="mt-3 block text-sm">
               Nota
               <input
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.description}
                 onChange={(e) =>
                   setEditModal((m) => (m ? { ...m, description: e.target.value } : m))
@@ -558,7 +969,7 @@ export default function PrestamosOtorgadosPage() {
                   type="number"
                   step="0.01"
                   min="0"
-                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  className="mt-1 w-full ui-field px-3 py-2"
                   value={editModal.principal}
                   onChange={(e) =>
                     setEditModal((m) => (m ? { ...m, principal: e.target.value } : m))
@@ -574,7 +985,7 @@ export default function PrestamosOtorgadosPage() {
               Fecha desembolso
               <input
                 type="date"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.disbursementDate}
                 onChange={(e) =>
                   setEditModal((m) =>
@@ -587,7 +998,7 @@ export default function PrestamosOtorgadosPage() {
             <label className="mt-3 block text-sm">
               Estado
               <select
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className="mt-1 w-full ui-field px-3 py-2"
                 value={editModal.status}
                 onChange={(e) =>
                   setEditModal((m) =>

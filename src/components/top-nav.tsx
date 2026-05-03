@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/browser";
 
 const NAV_BASE: { href: string; label: string }[] = [
   { href: "/gastos", label: "Gastos" },
+  { href: "/gastos-pago-servicios", label: "Pago servicios BE" },
   { href: "/ventas", label: "Ventas" },
   { href: "/familias", label: "Familias" },
   { href: "/categorias", label: "Categorías" },
@@ -18,12 +19,13 @@ const NAV_BASE: { href: string; label: string }[] = [
   { href: "/analisis", label: "Análisis" },
   { href: "/reportes", label: "Reportes" },
   { href: "/creditos", label: "Créditos" },
-  { href: "/prestamos-otorgados", label: "Préstamos otorgados" },
+  { href: "/prestamos-otorgados", label: "Préstamos" },
 ];
 
 const NAV_OWNER: { href: string; label: string }[] = [
   { href: "/importar", label: "Importar" },
   { href: "/importaciones", label: "Importaciones" },
+  { href: "/periodos-cerrados", label: "Períodos cerrados" },
   { href: "/equipo", label: "Equipo" },
 ];
 

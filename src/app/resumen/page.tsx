@@ -44,6 +44,19 @@ type PivotResponse = {
   error?: string;
 };
 
+type GastosFamiliaDetalleResponse = {
+  desde: string;
+  hasta: string;
+  sucursalFiltro: string | null;
+  soloSucursalesFijas: boolean;
+  familia: string;
+  alcance: "negocio" | "socios";
+  origen_cuenta_bloque: string | null;
+  monthKeys: string[];
+  monthLabels: string[];
+  rows: Array<{ categoria: string; byMonth: Record<string, number>; total: number }>;
+};
+
 /** Selección del filtro de sucursal / origen (ventas y gastos). */
 type SucursalVentasSel =
   | { k: "todas" }
@@ -165,6 +178,16 @@ export default function ResumenPage() {
   const [loading, setLoading] = useState(false);
   const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
 
+  const [familiaDetalleCtx, setFamiliaDetalleCtx] = useState<{
+    familia: string;
+    alcance: "negocio" | "socios";
+    origenBloque?: string;
+  } | null>(null);
+  const [familiaDetalleData, setFamiliaDetalleData] =
+    useState<GastosFamiliaDetalleResponse | null>(null);
+  const [familiaDetalleLoading, setFamiliaDetalleLoading] = useState(false);
+  const [familiaDetalleError, setFamiliaDetalleError] = useState("");
+
   const textoSucursalCampo = textoMostradoSucursal(sucursalSel);
   const filtroEventoActivo =
     sucursalSel.k === "una" &&
@@ -237,6 +260,84 @@ export default function ResumenPage() {
   useEffect(() => {
     if (ready && authenticated) void cargar();
   }, [ready, authenticated, cargar]);
+
+  const cerrarFamiliaDetalle = useCallback(() => {
+    setFamiliaDetalleCtx(null);
+    setFamiliaDetalleData(null);
+    setFamiliaDetalleError("");
+    setFamiliaDetalleLoading(false);
+  }, []);
+
+  const abrirFamiliaDetalle = useCallback(
+    async (
+      familia: string,
+      alcance: "negocio" | "socios",
+      origenBloque?: string,
+    ) => {
+      const { desde, hasta } = rangoEfectivo;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return;
+      setFamiliaDetalleCtx({ familia, alcance, origenBloque });
+      setFamiliaDetalleLoading(true);
+      setFamiliaDetalleError("");
+      setFamiliaDetalleData(null);
+      try {
+        const q = new URLSearchParams({
+          desde,
+          hasta,
+          familia,
+          alcance,
+        });
+        if (sucursalSel.k === "una" && sucursalSel.v.trim()) {
+          q.set("sucursal", sucursalSel.v.trim());
+        }
+        if (soloSucursalesFijas) q.set("soloSucursalesFijas", "1");
+        if (origenBloque) q.set("origen_cuenta_bloque", origenBloque);
+        const res = await fetch(`/api/resumen/gastos-familia-detalle?${q}`);
+        const json = (await res.json()) as GastosFamiliaDetalleResponse & { error?: string };
+        if (!res.ok) {
+          setFamiliaDetalleError(json.error ?? "No se pudo cargar el detalle");
+          return;
+        }
+        setFamiliaDetalleData(json);
+      } catch {
+        setFamiliaDetalleError("Error de red al cargar el detalle");
+      } finally {
+        setFamiliaDetalleLoading(false);
+      }
+    },
+    [rangoEfectivo, sucursalSel, soloSucursalesFijas],
+  );
+
+  useEffect(() => {
+    if (!familiaDetalleCtx) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cerrarFamiliaDetalle();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [familiaDetalleCtx, cerrarFamiliaDetalle]);
+
+  useEffect(() => {
+    cerrarFamiliaDetalle();
+  }, [modo, anio, mes, rangoDesde, rangoHasta, sucursalSel, soloSucursalesFijas, cerrarFamiliaDetalle]);
+
+  const familiaDetalleTotalesPorMes = useMemo(() => {
+    if (!familiaDetalleData?.monthKeys.length) return {};
+    const mapped: PivotRowGasto[] = familiaDetalleData.rows.map((r) => ({
+      familia: r.categoria,
+      byMonth: r.byMonth,
+      total: r.total,
+    }));
+    return totalesPorMesGastosDesdeRows(mapped, familiaDetalleData.monthKeys);
+  }, [familiaDetalleData]);
+
+  const familiaDetalleTotal = useMemo(
+    () =>
+      familiaDetalleData
+        ? familiaDetalleData.rows.reduce((s, r) => s + r.total, 0)
+        : 0,
+    [familiaDetalleData],
+  );
 
   useEffect(() => {
     if (!ready || !authenticated) return;
@@ -394,6 +495,10 @@ export default function ResumenPage() {
       total += r.total;
       for (const mk of keys) porMes[mk] += r.byMonth[mk] ?? 0;
     }
+    for (const ev of data.ventasEventos?.rows ?? []) {
+      total += ev.total;
+      for (const mk of keys) porMes[mk] += ev.byMonth[mk] ?? 0;
+    }
     return { porMes, total };
   }, [data]);
 
@@ -468,10 +573,10 @@ export default function ResumenPage() {
   const tdCls = "border-t border-slate-200 px-2 py-2 text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
   const trTotal = "bg-sky-100/70 ring-1 ring-inset ring-sky-200";
-  /** Primera columna fija al hacer scroll horizontal en móvil (solo meses + total se desplazan). */
-  const thStickyFirst = `${thCls} max-sm:sticky max-sm:left-0 max-sm:z-20 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-[#5AC4FF] max-sm:border-r max-sm:border-sky-700/30 max-sm:shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
-  const tdStickyFirst = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-slate-50 max-sm:border-r max-sm:border-slate-200 max-sm:shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
-  const tdStickyFirstTotal = `${tdCls} max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:min-w-[max(7.5rem,30vw)] max-sm:bg-sky-100/70 max-sm:border-r max-sm:border-slate-200`;
+  /** Primera columna fija al hacer scroll horizontal en cualquier tamaño. */
+  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[150px] bg-[#5AC4FF] border-r border-sky-700/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
+  const tdStickyFirst = `${tdCls} sticky left-0 z-10 min-w-[150px] bg-slate-50 border-r border-slate-200 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
+  const tdStickyFirstTotal = `${tdCls} sticky left-0 z-10 min-w-[150px] bg-sky-100/70 border-r border-slate-200`;
   const COL_FIRST = 150;
   const COL_MONTH = 100;
   const COL_TOTAL = 120;
@@ -874,7 +979,22 @@ export default function ResumenPage() {
                             </thead>
                             <tbody>
                               {bloque.rows.map((r) => (
-                                <tr key={r.familia}>
+                                <tr
+                                  key={r.familia}
+                                  role="button"
+                                  tabIndex={0}
+                                  title="Ver gastos por categoría"
+                                  className="cursor-pointer border-t border-slate-200 hover:bg-rose-50/90"
+                                  onClick={() =>
+                                    void abrirFamiliaDetalle(r.familia, "negocio", bloque.sucursal)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      void abrirFamiliaDetalle(r.familia, "negocio", bloque.sucursal);
+                                    }
+                                  }}
+                                >
                                   <td className={tdStickyFirst}>{r.familia}</td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={tdNum}>
@@ -940,7 +1060,20 @@ export default function ResumenPage() {
                     </thead>
                     <tbody>
                       {data.gastos.rows.map((r) => (
-                        <tr key={r.familia}>
+                        <tr
+                          key={r.familia}
+                          role="button"
+                          tabIndex={0}
+                          title="Ver gastos por categoría"
+                          className="cursor-pointer border-t border-slate-200 hover:bg-rose-50/90"
+                          onClick={() => void abrirFamiliaDetalle(r.familia, "negocio")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              void abrirFamiliaDetalle(r.familia, "negocio");
+                            }
+                          }}
+                        >
                           <td className={tdStickyFirst}>{r.familia}</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
@@ -1072,7 +1205,20 @@ export default function ResumenPage() {
                     </thead>
                     <tbody>
                       {(data.gastosSocios.rows ?? []).map((r) => (
-                        <tr key={r.familia}>
+                        <tr
+                          key={r.familia}
+                          role="button"
+                          tabIndex={0}
+                          title="Ver gastos por categoría"
+                          className="cursor-pointer border-t border-slate-200 hover:bg-violet-50/80"
+                          onClick={() => void abrirFamiliaDetalle(r.familia, "socios")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              void abrirFamiliaDetalle(r.familia, "socios");
+                            }
+                          }}
+                        >
                           <td className={tdStickyFirst}>{r.familia}</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
@@ -1209,6 +1355,127 @@ export default function ResumenPage() {
             </>
           ) : data && data.monthKeys.length === 0 ? (
             <p className="text-sm text-slate-500">No hay meses en el rango seleccionado.</p>
+          ) : null}
+
+          {familiaDetalleCtx ? (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="familia-detalle-titulo"
+              onClick={cerrarFamiliaDetalle}
+            >
+              <div
+                className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <h2
+                      id="familia-detalle-titulo"
+                      className="text-base font-semibold text-slate-900"
+                    >
+                      Gastos por categoría — {familiaDetalleCtx.familia}
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {familiaDetalleCtx.alcance === "socios"
+                        ? "Gastos de socios"
+                        : "Gastos del negocio"}
+                      {familiaDetalleCtx.origenBloque
+                        ? ` · ${familiaDetalleCtx.origenBloque}`
+                        : ""}
+                      {familiaDetalleData
+                        ? ` · ${familiaDetalleData.desde} a ${familiaDetalleData.hasta}`
+                        : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-100"
+                    onClick={cerrarFamiliaDetalle}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div className="overflow-y-auto px-4 pb-4 pt-2">
+                  {familiaDetalleLoading ? (
+                    <p className="py-8 text-center text-sm text-slate-600">Cargando…</p>
+                  ) : familiaDetalleError ? (
+                    <p className="py-8 text-center text-sm text-red-700">{familiaDetalleError}</p>
+                  ) : familiaDetalleData && familiaDetalleData.monthKeys.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table
+                        className="w-full border-collapse text-sm table-fixed"
+                        style={{
+                          minWidth: tableMinWidth(familiaDetalleData.monthKeys.length),
+                        }}
+                      >
+                        {renderResumenColgroup(familiaDetalleData.monthKeys.length)}
+                        <thead>
+                          <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                            <th className={thStickyFirst}>Categoría</th>
+                            {familiaDetalleData.monthLabels.map((label, i) => (
+                              <th key={familiaDetalleData.monthKeys[i]} className={thNum}>
+                                {label}
+                              </th>
+                            ))}
+                            <th className={thNum}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {familiaDetalleData.rows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={familiaDetalleData.monthKeys.length + 2}
+                                className="px-4 py-6 text-center text-slate-500"
+                              >
+                                Sin movimientos para esta familia en el período.
+                              </td>
+                            </tr>
+                          ) : (
+                            <>
+                              {familiaDetalleData.rows.map((r) => (
+                                <tr key={r.categoria}>
+                                  <td className={tdStickyFirst}>{r.categoria}</td>
+                                  {familiaDetalleData.monthKeys.map((mk) => (
+                                    <td key={mk} className={tdNum}>
+                                      {formatClp(r.byMonth[mk] ?? 0)}
+                                    </td>
+                                  ))}
+                                  <td className={`${tdNum} font-medium text-slate-50`}>
+                                    {formatClp(r.total)}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className={trTotal}>
+                                <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>
+                                  Total
+                                </td>
+                                {familiaDetalleData.monthKeys.map((mk) => (
+                                  <td
+                                    key={mk}
+                                    className={`${tdNum} font-medium text-slate-900`}
+                                  >
+                                    {formatClp(familiaDetalleTotalesPorMes[mk] ?? 0)}
+                                  </td>
+                                ))}
+                                <td className={`${tdNum} font-semibold text-rose-800`}>
+                                  {formatClp(familiaDetalleTotal)}
+                                </td>
+                              </tr>
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : familiaDetalleData && familiaDetalleData.monthKeys.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-slate-500">
+                      No hay meses en el rango para este detalle.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           ) : null}
         </>
       )}

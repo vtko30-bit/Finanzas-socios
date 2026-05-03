@@ -61,8 +61,33 @@ export async function GET(
   const repaid = Number(loan.repaid_total) || 0;
   const pending = Math.round((principal - repaid) * 100) / 100;
 
+  const { data: disbRows, error: disbErr } = await supabase
+    .from("transactions")
+    .select("id, credit_component, amount")
+    .eq("organization_id", member.organization_id)
+    .eq("loan_given_id", id)
+    .eq("source", "prestamos_otorgados")
+    .in("credit_component", ["prestamo_otorgado", "prestamo_otorgado_conciliado"])
+    .limit(300);
+  if (disbErr) {
+    return NextResponse.json({ error: disbErr.message }, { status: 500 });
+  }
+  const conciliatedAmount = round2(
+    (disbRows ?? [])
+      .filter((r) => String(r.credit_component ?? "") === "prestamo_otorgado_conciliado")
+      .reduce((acc, r) => acc + (Number(r.amount) || 0), 0),
+  );
+  const disbursementRemainingToReconcile = round2(Math.max(0, principal - conciliatedAmount));
+  const disbursementReconciled = disbursementRemainingToReconcile <= 0.02;
+
   return NextResponse.json({
-    loan: { ...loan, pending },
+    loan: {
+      ...loan,
+      pending,
+      disbursement_reconciled: disbursementReconciled,
+      disbursement_conciliated_amount: conciliatedAmount,
+      disbursement_remaining_to_reconcile: disbursementRemainingToReconcile,
+    },
   });
 }
 
@@ -169,6 +194,32 @@ export async function PATCH(
     );
   }
 
+  if (patch.principal !== undefined) {
+    const { data: disbParts, error: disbPartsErr } = await supabase
+      .from("transactions")
+      .select("id, amount")
+      .eq("organization_id", orgId)
+      .eq("loan_given_id", id)
+      .eq("source", "prestamos_otorgados")
+      .eq("credit_component", "prestamo_otorgado_conciliado")
+      .limit(300);
+    if (disbPartsErr) {
+      return NextResponse.json({ error: disbPartsErr.message }, { status: 500 });
+    }
+    const conciliatedAmount = round2(
+      (disbParts ?? []).reduce((acc, row) => acc + (Number(row.amount) || 0), 0),
+    );
+    if (conciliatedAmount > 0.001) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede cambiar el monto prestado cuando el desembolso ya tiene conciliaciones parciales.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const { data: updated, error: upErr } = await supabase
     .from("loans_given")
     .update(patch)
@@ -188,26 +239,39 @@ export async function PATCH(
       ? updated.currency.trim().toUpperCase()
       : "CLP";
 
-  const { data: disbTx, error: dErr } = await supabase
+  const { data: disbTxRows, error: dErr } = await supabase
     .from("transactions")
-    .select("id")
+    .select("id, credit_component")
     .eq("organization_id", orgId)
     .eq("loan_given_id", id)
     .eq("source", "prestamos_otorgados")
-    .eq("credit_component", "prestamo_otorgado")
-    .maybeSingle();
+    .in("credit_component", ["prestamo_otorgado", "prestamo_otorgado_conciliado"])
+    .limit(300);
 
-  if (!dErr && disbTx?.id) {
-    const txPatch: Record<string, unknown> = {};
-    if (patch.disbursement_date) txPatch.date = patch.disbursement_date;
-    if (patch.principal !== undefined) txPatch.amount = patch.principal;
+  if (!dErr && (disbTxRows?.length ?? 0) > 0) {
+    const rowIds = (disbTxRows ?? []).map((r) => String(r.id));
+    const commonPatch: Record<string, unknown> = {};
+    if (patch.disbursement_date) commonPatch.date = patch.disbursement_date;
     if (patch.borrower !== undefined || patch.description !== undefined) {
-      txPatch.description = `Préstamo otorgado — ${borrowerLabel}${descExtra ? ` — ${descExtra}` : ""}`;
-      txPatch.counterparty = borrowerLabel;
+      commonPatch.description = `Préstamo otorgado — ${borrowerLabel}${descExtra ? ` — ${descExtra}` : ""}`;
+      commonPatch.counterparty = borrowerLabel;
     }
-    if (Object.keys(txPatch).length > 0) {
-      txPatch.currency = currency;
-      await supabase.from("transactions").update(txPatch).eq("id", disbTx.id).eq("organization_id", orgId);
+    if (Object.keys(commonPatch).length > 0) {
+      commonPatch.currency = currency;
+      await supabase
+        .from("transactions")
+        .update(commonPatch)
+        .eq("organization_id", orgId)
+        .in("id", rowIds);
+    }
+    if (patch.principal !== undefined) {
+      await supabase
+        .from("transactions")
+        .update({ amount: patch.principal })
+        .eq("organization_id", orgId)
+        .eq("loan_given_id", id)
+        .eq("source", "prestamos_otorgados")
+        .eq("credit_component", "prestamo_otorgado");
     }
   }
 

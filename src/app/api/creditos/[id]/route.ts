@@ -79,9 +79,47 @@ export async function GET(
     return NextResponse.json({ error: iErr.message }, { status: 500 });
   }
 
+  const { data: disbursementTx, error: txErr } = await supabase
+    .from("transactions")
+    .select("origen_cuenta, payment_method")
+    .eq("credit_id", id)
+    .eq("organization_id", member.organization_id)
+    .eq("source", "creditos")
+    .eq("credit_component", "desembolso")
+    .order("date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (txErr) {
+    return NextResponse.json({ error: txErr.message }, { status: 500 });
+  }
+
+  const rows = installments ?? [];
+  const interestTotal = rows.reduce((acc, row) => acc + (Number(row.interest_amount) || 0), 0);
+  const feeValues = rows.map((row) => Number(row.fee_amount) || 0);
+  const firstInstallmentTotal = rows[0] ? Number(rows[0].total_amount) || 0 : null;
+  const recurringTotals = rows.slice(1).map((row) => Number(row.total_amount) || 0);
+  const recurringInstallmentTotal =
+    recurringTotals.length > 0 &&
+    recurringTotals.every((amount) => Math.abs(amount - recurringTotals[0]) < 0.01)
+      ? recurringTotals[0]
+      : null;
+  const feePerInstallment =
+    feeValues.length > 0 && feeValues.every((amount) => Math.abs(amount - feeValues[0]) < 0.01)
+      ? feeValues[0]
+      : null;
+
   return NextResponse.json({
     credit,
-    installments: installments ?? [],
+    installments: rows,
+    form_data: {
+      interest_total: interestTotal,
+      fee_per_installment: feePerInstallment,
+      first_installment_total: firstInstallmentTotal,
+      recurring_installment_total: recurringInstallmentTotal,
+      origen_cuenta: disbursementTx?.origen_cuenta ?? null,
+      payment_method: disbursementTx?.payment_method ?? null,
+    },
   });
 }
 

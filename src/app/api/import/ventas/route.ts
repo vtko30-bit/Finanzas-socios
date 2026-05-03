@@ -5,7 +5,12 @@ import { parseConsolidatedExcel } from "@/lib/import/excel";
 import { getUserOrganization } from "@/lib/organization";
 import { denyIfNotOwner } from "@/lib/org-permissions";
 import { logAudit } from "@/lib/audit";
-import { chunk, DEDUPE_HASH_IN_CHUNK } from "@/lib/array-chunk";
+import { chunk } from "@/lib/array-chunk";
+import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
+import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
+
+/** Importaciones grandes: muchas filas + RPC dedupe (Vercel / hosting). */
+export const maxDuration = 300;
 
 /** Importación de Excel de ventas: las filas se cargan como ingresos (`type = income`). */
 export async function POST(request: Request) {
@@ -62,6 +67,38 @@ export async function POST(request: Request) {
     defaultMovementType: "income",
     ventasLayout: true,
   });
+
+  const dedupeHashes = parsed.valid.map((item) => item.dedupe_hash);
+  let existing: Set<string>;
+  try {
+    existing = await fetchExistingDedupeHashesForOrg(supabase, orgId, dedupeHashes);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al consultar deduplicación";
+    return NextResponse.json(
+      {
+        error: msg,
+        hint:
+          "Si acabas de desplegar la app, aplica la migración SQL 0017_existing_dedupe_hashes_rpc.sql en Supabase.",
+      },
+      { status: 500 },
+    );
+  }
+
+  const newMovements = parsed.valid.filter((m) => !existing.has(m.dedupe_hash));
+  const seenInFile = new Set<string>();
+  const uniqueToInsert = newMovements.filter((m) => {
+    if (seenInFile.has(m.dedupe_hash)) return false;
+    seenInFile.add(m.dedupe_hash);
+    return true;
+  });
+
+  const lockedResp = await rejectIfImportDatesLocked(
+    supabase,
+    orgId,
+    uniqueToInsert.map((m) => m.date),
+  );
+  if (lockedResp) return lockedResp;
+
   const batchId = randomUUID();
 
   const { error: batchError } = await supabase.from("import_batches").insert({
@@ -104,33 +141,6 @@ export async function POST(request: Request) {
     }
   }
 
-  const dedupeHashes = parsed.valid.map((item) => item.dedupe_hash);
-  let existingHashes: Array<{ dedupe_hash: string }> = [];
-  if (dedupeHashes.length > 0) {
-    for (const hashChunk of chunk(dedupeHashes, DEDUPE_HASH_IN_CHUNK)) {
-      const { data: chunkData, error: chunkError } = await supabase
-        .from("transactions")
-        .select("dedupe_hash")
-        .eq("organization_id", orgId)
-        .in("dedupe_hash", hashChunk);
-      if (chunkError) {
-        return NextResponse.json({ error: chunkError.message }, { status: 500 });
-      }
-      if (chunkData?.length) {
-        existingHashes = existingHashes.concat(chunkData);
-      }
-    }
-  }
-  const existing = new Set((existingHashes ?? []).map((r) => r.dedupe_hash));
-
-  const newMovements = parsed.valid.filter((m) => !existing.has(m.dedupe_hash));
-  const seenInFile = new Set<string>();
-  const uniqueToInsert = newMovements.filter((m) => {
-    if (seenInFile.has(m.dedupe_hash)) return false;
-    seenInFile.add(m.dedupe_hash);
-    return true;
-  });
-
   if (uniqueToInsert.length) {
     const tx = uniqueToInsert.map((m) => ({
       id: randomUUID(),
@@ -144,6 +154,7 @@ export async function POST(request: Request) {
       description: m.description,
       counterparty: m.counterparty,
       payment_method: m.payment_method,
+      source_id: m.source_id ?? "",
       external_ref: m.external_ref,
       origen_cuenta: m.account_name ?? "",
       concepto: m.category_name ?? "",
@@ -153,10 +164,26 @@ export async function POST(request: Request) {
       created_by: user.id,
     }));
     for (const txChunk of chunk(tx, 500)) {
-      const { error: upsertError } = await supabase.from("transactions").upsert(txChunk, {
+      let { error: upsertError } = await supabase.from("transactions").upsert(txChunk, {
         onConflict: "organization_id,dedupe_hash",
         ignoreDuplicates: true,
       });
+      const msg = upsertError?.message ?? "";
+      if (
+        upsertError &&
+        msg.includes("source_id") &&
+        (msg.includes("does not exist") || msg.includes("schema cache"))
+      ) {
+        const withoutSourceId = txChunk.map(({ source_id, ...rest }) => {
+          void source_id;
+          return rest;
+        });
+        const retry = await supabase.from("transactions").upsert(withoutSourceId, {
+          onConflict: "organization_id,dedupe_hash",
+          ignoreDuplicates: true,
+        });
+        upsertError = retry.error;
+      }
       if (upsertError) {
         return NextResponse.json({ error: upsertError.message }, { status: 500 });
       }

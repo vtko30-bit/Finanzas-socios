@@ -246,11 +246,15 @@ export default function VentasPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaVentas, setPaginaVentas] = useState(1);
   const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
+  const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
   const filtroEventoActivo = esTextoFiltroEvento(filtroSucursal);
 
   const cargar = useCallback(() => {
     setStatus("Cargando...");
-    fetch("/api/ventas/detalle")
+    const params = new URLSearchParams();
+    if (incluirFinanciamiento) params.set("incluirFinanciamiento", "1");
+    const url = params.size ? `/api/ventas/detalle?${params.toString()}` : "/api/ventas/detalle";
+    fetch(url)
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) {
@@ -273,7 +277,7 @@ export default function VentasPage() {
       .catch((e: Error) => {
         setStatus(e.message);
       });
-  }, []);
+  }, [incluirFinanciamiento]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -317,8 +321,9 @@ export default function VentasPage() {
       modoFecha !== "todo" ||
       filtroFormaPago.trim() !== "" ||
       filtroSucursal.trim() !== "" ||
-      soloSucursalesFijas,
-    [modoFecha, filtroFormaPago, filtroSucursal, soloSucursalesFijas],
+      soloSucursalesFijas ||
+      incluirFinanciamiento,
+    [modoFecha, filtroFormaPago, filtroSucursal, soloSucursalesFijas, incluirFinanciamiento],
   );
 
   /** Suma del monto de todas las filas que cumplen el filtro (todas las páginas de la tabla). */
@@ -350,6 +355,7 @@ export default function VentasPage() {
     filtroFormaPago,
     filtroSucursal,
     soloSucursalesFijas,
+    incluirFinanciamiento,
   ]);
 
   useEffect(() => {
@@ -380,6 +386,7 @@ export default function VentasPage() {
     setFiltroFormaPago("");
     setFiltroSucursal("");
     setSoloSucursalesFijas(false);
+    setIncluirFinanciamiento(false);
   };
 
   const toggleFiltroEventos = () => {
@@ -531,6 +538,15 @@ export default function VentasPage() {
                 onChange={toggleSucursalesFijas}
               />
               <span className="!text-slate-900">Solo sucursales fijas</span>
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm !text-slate-900 hover:bg-white">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-sky-700"
+                checked={incluirFinanciamiento}
+                onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
+              />
+              <span className="!text-slate-900">Incluir financiamiento</span>
             </label>
             <button
               type="button"

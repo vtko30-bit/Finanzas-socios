@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "env:check": "node scripts/check-supabase-env.cjs",
+    "fixture:consolidado": "node scripts/generar-prueba-import-consolidado.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

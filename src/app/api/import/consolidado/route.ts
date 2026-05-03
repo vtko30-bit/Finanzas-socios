@@ -6,7 +6,9 @@ import { getUserOrganization } from "@/lib/organization";
 import { denyIfNotOwner } from "@/lib/org-permissions";
 import { logAudit } from "@/lib/audit";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
-import { chunk, DEDUPE_HASH_IN_CHUNK } from "@/lib/array-chunk";
+import { chunk } from "@/lib/array-chunk";
+import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
+import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 
 function normalizarEtiquetaConcepto(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
@@ -96,74 +98,78 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    const dedupeHashes = parsed.valid.map((item) => item.dedupe_hash);
+    let existing: Set<string>;
+    try {
+      existing = await fetchExistingDedupeHashesForOrg(supabase, orgId, dedupeHashes);
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error: e instanceof Error ? e.message : "Error al consultar deduplicación",
+          hint:
+            "Aplica la migración SQL 0017_existing_dedupe_hashes_rpc.sql en Supabase si aún no existe la función.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const newMovements = parsed.valid.filter((m) => !existing.has(m.dedupe_hash));
+    const seenInFile = new Set<string>();
+    const uniqueToInsert = newMovements.filter((m) => {
+      if (seenInFile.has(m.dedupe_hash)) return false;
+      seenInFile.add(m.dedupe_hash);
+      return true;
+    });
+
+    const lockedResp = await rejectIfImportDatesLocked(
+      supabase,
+      orgId,
+      uniqueToInsert.map((m) => m.date),
+    );
+    if (lockedResp) return lockedResp;
+
     const batchId = randomUUID();
 
-  const { error: batchError } = await supabase.from("import_batches").insert({
-    id: batchId,
-    organization_id: orgId,
-    filename: fileName,
-    status: "validated",
-    summary_json: {
-      totalRows: parsed.totalRows,
-      validRows: parsed.validRows,
-      invalidRows: parsed.invalidRows,
-      fileHash,
-      fileName,
-      fileSize: file.size,
-      importKind: "excel_egresos",
-    },
-    created_by: user.id,
-  });
+    const { error: batchError } = await supabase.from("import_batches").insert({
+      id: batchId,
+      organization_id: orgId,
+      filename: fileName,
+      status: "validated",
+      summary_json: {
+        totalRows: parsed.totalRows,
+        validRows: parsed.validRows,
+        invalidRows: parsed.invalidRows,
+        fileHash,
+        fileName,
+        fileSize: file.size,
+        importKind: "excel_egresos",
+      },
+      created_by: user.id,
+    });
 
-  if (batchError) {
-    return NextResponse.json({ error: supabaseErrorMessage(batchError) }, { status: 500 });
-  }
+    if (batchError) {
+      return NextResponse.json({ error: supabaseErrorMessage(batchError) }, { status: 500 });
+    }
 
-  if (parsed.valid.length) {
-    const rowsToInsert = parsed.valid.map((row) => ({
-      id: randomUUID(),
-      batch_id: batchId,
-      row_number: row.row_number,
-      raw_json: {},
-      normalized_json: row,
-      validation_errors_json: [],
-      dedupe_hash: row.dedupe_hash,
-      status: "valid",
-    }));
-    for (const rowsChunk of chunk(rowsToInsert, 500)) {
-      const { error: rowsError } = await supabase.from("import_rows").insert(rowsChunk);
-      if (rowsError) {
-        return NextResponse.json({ error: supabaseErrorMessage(rowsError) }, { status: 500 });
+    if (parsed.valid.length) {
+      const rowsToInsert = parsed.valid.map((row) => ({
+        id: randomUUID(),
+        batch_id: batchId,
+        row_number: row.row_number,
+        raw_json: {},
+        normalized_json: row,
+        validation_errors_json: [],
+        dedupe_hash: row.dedupe_hash,
+        status: "valid",
+      }));
+      for (const rowsChunk of chunk(rowsToInsert, 500)) {
+        const { error: rowsError } = await supabase.from("import_rows").insert(rowsChunk);
+        if (rowsError) {
+          return NextResponse.json({ error: supabaseErrorMessage(rowsError) }, { status: 500 });
+        }
       }
     }
-  }
-
-  const dedupeHashes = parsed.valid.map((item) => item.dedupe_hash);
-  let existingHashes: Array<{ dedupe_hash: string }> = [];
-  if (dedupeHashes.length > 0) {
-    for (const hashChunk of chunk(dedupeHashes, DEDUPE_HASH_IN_CHUNK)) {
-      const { data: chunkData, error: chunkError } = await supabase
-        .from("transactions")
-        .select("dedupe_hash")
-        .eq("organization_id", orgId)
-        .in("dedupe_hash", hashChunk);
-      if (chunkError) {
-        return NextResponse.json({ error: supabaseErrorMessage(chunkError) }, { status: 500 });
-      }
-      if (chunkData?.length) {
-        existingHashes = existingHashes.concat(chunkData);
-      }
-    }
-  }
-  const existing = new Set((existingHashes ?? []).map((r) => r.dedupe_hash));
-
-  const newMovements = parsed.valid.filter((m) => !existing.has(m.dedupe_hash));
-  const seenInFile = new Set<string>();
-  const uniqueToInsert = newMovements.filter((m) => {
-    if (seenInFile.has(m.dedupe_hash)) return false;
-    seenInFile.add(m.dedupe_hash);
-    return true;
-  });
 
   if (uniqueToInsert.length) {
     const { data: catalogRows, error: catalogErr } = await supabase

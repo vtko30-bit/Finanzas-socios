@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familiaNombreDesdeRawTx, familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import { normalizeFormaPago } from "@/lib/forma-pago";
 import {
@@ -369,6 +370,147 @@ export function gastosRowsFromExpenseRows(
     .sort((a, b) => a.familia.localeCompare(b.familia, "es"));
 }
 
+/** Etiqueta de origen de cuenta como en el desglose por sucursal del resumen. */
+export function origenCuentaBloqueDesdeRawTx(raw: unknown): string {
+  const row = raw as { origen_cuenta?: string | null };
+  return String(row.origen_cuenta ?? "").trim() || "Sin sucursal";
+}
+
+/**
+ * Desglose por categoría (misma etiqueta que Detalle de gastos: concepto de planilla o label de catálogo).
+ */
+export function gastosPorCategoriaFromExpenseRows(
+  rows: unknown[],
+  monthKeys: string[],
+): Array<{ categoria: string; byMonth: Record<string, number>; total: number }> {
+  const map = new Map<string, Map<string, number>>();
+  for (const raw of rows) {
+    const row = raw as { date?: string; amount?: number | string };
+    const catRaw = categoriaMostradaDesdeRawTx(
+      raw as Parameters<typeof categoriaMostradaDesdeRawTx>[0],
+    );
+    const categoria = catRaw.trim() || "Sin categoría";
+    const ym = String(row.date || "").slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    const amt = Number(row.amount) || 0;
+    if (!map.has(categoria)) map.set(categoria, new Map());
+    const inner = map.get(categoria)!;
+    inner.set(ym, (inner.get(ym) ?? 0) + amt);
+  }
+  return Array.from(map.entries())
+    .map(([categoria, byM]) => {
+      let total = 0;
+      const byMonth: Record<string, number> = {};
+      for (const mk of monthKeys) {
+        const v = byM.get(mk) ?? 0;
+        byMonth[mk] = v;
+        total += v;
+      }
+      return { categoria, byMonth, total };
+    })
+    .sort((a, b) => a.categoria.localeCompare(b.categoria, "es"));
+}
+
+export async function loadGastosFamiliaCategoriaDetalle(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+  familia: string;
+  alcance: "negocio" | "socios";
+  sucursal?: string;
+  soloSucursalesFijas?: boolean;
+  origenCuentaBloque?: string | null;
+}): Promise<{
+  data: {
+    familia: string;
+    alcance: "negocio" | "socios";
+    origen_cuenta_bloque: string | null;
+    monthKeys: string[];
+    monthLabels: string[];
+    rows: ReturnType<typeof gastosPorCategoriaFromExpenseRows>;
+  } | null;
+  error: string | null;
+}> {
+  const monthKeys = monthKeysInRange(args.desde, args.hasta);
+  const monthLabels = buildMonthLabels(monthKeys);
+  const familia = args.familia.trim();
+  if (!familia) {
+    return { data: null, error: "familia requerida" };
+  }
+
+  let excludedFamilyIds: Set<string>;
+  try {
+    excludedFamilyIds = await fetchExcludedFamilyIdSet(
+      args.supabase,
+      args.organizationId,
+    );
+  } catch (e) {
+    return {
+      data: null,
+      error: e instanceof Error ? e.message : "Error al cargar familias excluidas",
+    };
+  }
+
+  if (monthKeys.length === 0) {
+    return {
+      data: {
+        familia,
+        alcance: args.alcance,
+        origen_cuenta_bloque: args.origenCuentaBloque?.trim() || null,
+        monthKeys: [],
+        monthLabels: [],
+        rows: [],
+      },
+      error: null,
+    };
+  }
+
+  const sucursal = args.sucursal?.trim() ?? "";
+  const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
+    supabase: args.supabase,
+    organizationId: args.organizationId,
+    desde: args.desde,
+    hasta: args.hasta,
+    sucursal,
+    soloSucursalesFijas: args.soloSucursalesFijas,
+  });
+  if (expenseErr) return { data: null, error: expenseErr };
+
+  const expenseFiltrados = filterExpenseRowsByExcludedFamilies(
+    expenseData ?? [],
+    excludedFamilyIds,
+  );
+
+  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+    expenseFiltrados,
+  );
+  let pool = args.alcance === "negocio" ? expenseNegocio : expenseSocios;
+
+  const bloque = args.origenCuentaBloque?.trim();
+  if (bloque) {
+    pool = pool.filter((raw) => origenCuentaBloqueDesdeRawTx(raw) === bloque);
+  }
+
+  const poolFamilia = pool.filter(
+    (raw) => familiaNombreDesdeRawTx(raw as Parameters<typeof familiaNombreDesdeRawTx>[0]) === familia,
+  );
+
+  const rows = gastosPorCategoriaFromExpenseRows(poolFamilia, monthKeys);
+
+  return {
+    data: {
+      familia,
+      alcance: args.alcance,
+      origen_cuenta_bloque: bloque || null,
+      monthKeys,
+      monthLabels,
+      rows,
+    },
+    error: null,
+  };
+}
+
 type CreditInstallmentPaidRow = {
   paid_at: string | null;
   paid_amount: number | string | null;
@@ -638,6 +780,128 @@ export type ResumenPivotMainPayload = {
   };
 };
 
+type ResumenPivotOperativoAggRow = {
+  section: string;
+  ym: string;
+  dim_key: string | null;
+  amount_sum: number | string | null;
+};
+
+function shapeResumenPivotMainFromAggRows(
+  rows: ResumenPivotOperativoAggRow[],
+  monthKeys: string[],
+): {
+  ventasRows: ReturnType<typeof ventasRowsFromIncome>;
+  ventasEventosRows: ReturnType<typeof ventasEventosRowsFromIncome>;
+  gastosRows: ReturnType<typeof gastosRowsFromExpenseRows>;
+  gastosSociosRows: ReturnType<typeof gastosRowsFromExpenseRows>;
+} {
+  const ventasMap = new Map<string, Map<string, number>>();
+  const eventMap = new Map<string, Map<string, number>>();
+  const gastosNegMap = new Map<string, Map<string, number>>();
+  const gastosSocMap = new Map<string, Map<string, number>>();
+
+  for (const r of rows) {
+    const ym = String(r.ym ?? "");
+    if (!monthKeys.includes(ym)) continue;
+    const amt = Number(r.amount_sum) || 0;
+    const section = String(r.section ?? "");
+    if (section === "income_venta") {
+      const key = normalizeFormaPago(r.dim_key);
+      if (!ventasMap.has(key)) ventasMap.set(key, new Map());
+      ventasMap.get(key)!.set(ym, (ventasMap.get(key)!.get(ym) ?? 0) + amt);
+    } else if (section === "income_evento") {
+      const evento = String(r.dim_key ?? "").trim() || "EVENTO_SinSucursal";
+      if (!eventMap.has(evento)) eventMap.set(evento, new Map());
+      eventMap.get(evento)!.set(ym, (eventMap.get(evento)!.get(ym) ?? 0) + amt);
+    } else if (section === "expense_familia") {
+      const familia = String(r.dim_key ?? "").trim() || "Sin familia";
+      const target = esFamiliaSocio(familia) ? gastosSocMap : gastosNegMap;
+      if (!target.has(familia)) target.set(familia, new Map());
+      const inner = target.get(familia)!;
+      inner.set(ym, (inner.get(ym) ?? 0) + amt);
+    }
+  }
+
+  const ventasRows = Array.from(ventasMap.entries())
+    .map(([formaPago, byM]) => {
+      let total = 0;
+      const byMonth: Record<string, number> = {};
+      for (const mk of monthKeys) {
+        const v = byM.get(mk) ?? 0;
+        byMonth[mk] = v;
+        total += v;
+      }
+      return { formaPago, byMonth, total };
+    })
+    .sort((a, b) => a.formaPago.localeCompare(b.formaPago, "es"));
+
+  const ventasEventosRows = Array.from(eventMap.entries())
+    .map(([evento, byM]) => {
+      let total = 0;
+      const byMonth: Record<string, number> = {};
+      for (const mk of monthKeys) {
+        const v = byM.get(mk) ?? 0;
+        byMonth[mk] = v;
+        total += v;
+      }
+      return { evento, byMonth, total };
+    })
+    .sort((a, b) => a.evento.localeCompare(b.evento, "es"));
+
+  const finalizeGastos = (map: Map<string, Map<string, number>>) =>
+    Array.from(map.entries())
+      .map(([familia, byM]) => {
+        let total = 0;
+        const byMonth: Record<string, number> = {};
+        for (const mk of monthKeys) {
+          const v = byM.get(mk) ?? 0;
+          byMonth[mk] = v;
+          total += v;
+        }
+        return { familia, byMonth, total };
+      })
+      .sort((a, b) => a.familia.localeCompare(b.familia, "es"));
+
+  return {
+    ventasRows,
+    ventasEventosRows,
+    gastosRows: finalizeGastos(gastosNegMap),
+    gastosSociosRows: finalizeGastos(gastosSocMap),
+  };
+}
+
+async function fetchResumenPivotOperativoAggOrNull(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+  sucursal: string;
+  soloSucursalesFijas?: boolean;
+  excludedFamilyIds: Set<string>;
+}): Promise<ResumenPivotOperativoAggRow[] | null> {
+  const sub =
+    args.sucursal.length > 0 && args.sucursal.length <= 200 ? args.sucursal : null;
+  const { data, error } = await args.supabase.rpc("resumen_pivot_operativo_agg", {
+    p_organization_id: args.organizationId,
+    p_desde: args.desde,
+    p_hasta: args.hasta,
+    p_sucursal_substr: sub,
+    p_solo_sucursales_fijas: Boolean(args.soloSucursalesFijas),
+    p_excluded_family_ids: Array.from(args.excludedFamilyIds),
+  });
+  if (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[resumen] resumen_pivot_operativo_agg no disponible o error; se usa carga paginada (más lenta):",
+        error.message,
+      );
+    }
+    return null;
+  }
+  return (data ?? []) as ResumenPivotOperativoAggRow[];
+}
+
 export async function loadResumenPivotMain(args: {
   supabase: SupabaseClient;
   organizationId: string;
@@ -687,45 +951,68 @@ export async function loadResumenPivotMain(args: {
 
   const sucursal = args.sucursal?.trim() ?? "";
 
-  const { data: incomeData, error: incomeErr } = await fetchIncomeRowsPaged({
+  const aggRows = await fetchResumenPivotOperativoAggOrNull({
     supabase: args.supabase,
     organizationId: args.organizationId,
     desde: args.desde,
     hasta: args.hasta,
     sucursal,
     soloSucursalesFijas: args.soloSucursalesFijas,
-  });
-  if (incomeErr) return { data: null, error: incomeErr };
-
-  const incomeFiltrados = filterIncomeRowsByExcludedFamilies(
-    (incomeData ?? []) as IncomeRow[],
     excludedFamilyIds,
-  );
-  const incomeEventos = incomeFiltrados.filter((r) => esEventoSucursal(r.origen_cuenta));
-  const incomeNoEventos = incomeFiltrados.filter((r) => !esEventoSucursal(r.origen_cuenta));
-
-  const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
-    supabase: args.supabase,
-    organizationId: args.organizationId,
-    desde: args.desde,
-    hasta: args.hasta,
-    sucursal,
-    soloSucursalesFijas: args.soloSucursalesFijas,
   });
-  if (expenseErr) return { data: null, error: expenseErr };
 
-  const expenseFiltradosMain = filterExpenseRowsByExcludedFamilies(
-    expenseData ?? [],
-    excludedFamilyIds,
-  );
+  let ventasRows: ReturnType<typeof ventasRowsFromIncome>;
+  let ventasEventosRows: ReturnType<typeof ventasEventosRowsFromIncome>;
+  let gastosRows: ReturnType<typeof gastosRowsFromExpenseRows>;
+  let gastosSociosRows: ReturnType<typeof gastosRowsFromExpenseRows>;
+  if (aggRows) {
+    const shaped = shapeResumenPivotMainFromAggRows(aggRows, monthKeys);
+    ventasRows = shaped.ventasRows;
+    ventasEventosRows = shaped.ventasEventosRows;
+    gastosRows = shaped.gastosRows;
+    gastosSociosRows = shaped.gastosSociosRows;
+  } else {
+    const { data: incomeData, error: incomeErr } = await fetchIncomeRowsPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+      sucursal,
+      soloSucursalesFijas: args.soloSucursalesFijas,
+    });
+    if (incomeErr) return { data: null, error: incomeErr };
 
-  const ventasRows = ventasRowsFromIncome(incomeNoEventos, monthKeys);
-  const ventasEventosRows = ventasEventosRowsFromIncome(incomeEventos, monthKeys);
-  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
-    expenseFiltradosMain,
-  );
-  const gastosRows = gastosRowsFromExpenseRows(expenseNegocio, monthKeys);
-  const gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
+    const incomeFiltrados = filterIncomeRowsByExcludedFamilies(
+      (incomeData ?? []) as IncomeRow[],
+      excludedFamilyIds,
+    );
+    const incomeEventos = incomeFiltrados.filter((r) => esEventoSucursal(r.origen_cuenta));
+    const incomeNoEventos = incomeFiltrados.filter((r) => !esEventoSucursal(r.origen_cuenta));
+
+    const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+      sucursal,
+      soloSucursalesFijas: args.soloSucursalesFijas,
+    });
+    if (expenseErr) return { data: null, error: expenseErr };
+
+    const expenseFiltradosMain = filterExpenseRowsByExcludedFamilies(
+      expenseData ?? [],
+      excludedFamilyIds,
+    );
+
+    ventasRows = ventasRowsFromIncome(incomeNoEventos, monthKeys);
+    ventasEventosRows = ventasEventosRowsFromIncome(incomeEventos, monthKeys);
+    const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+      expenseFiltradosMain,
+    );
+    gastosRows = gastosRowsFromExpenseRows(expenseNegocio, monthKeys);
+    gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
+  }
+
   const { data: creditPaidRows, error: creditErr } = await fetchCreditInstallmentsPaidRows({
     supabase: args.supabase,
     organizationId: args.organizationId,
@@ -805,6 +1092,66 @@ export async function loadResumenPivotMain(args: {
   };
 }
 
+type IncomePorOrigenMensualAggRow = {
+  origen_cuenta: string;
+  ym: string;
+  payment_method: string | null;
+  amount_sum: number | string | null;
+};
+
+function ventasPorSucursalListaDesdeOrigenMensual(
+  rows: IncomePorOrigenMensualAggRow[],
+  monthKeys: string[],
+): Array<{ sucursal: string; rows: ReturnType<typeof ventasRowsFromIncome> }> {
+  const byLoc = new Map<string, IncomeRow[]>();
+  for (const r of rows) {
+    const sucursal = String(r.origen_cuenta ?? "").trim() || "Sin sucursal";
+    const ym = String(r.ym ?? "").slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    const row: IncomeRow = {
+      date: `${ym}-01`,
+      amount: Number(r.amount_sum) || 0,
+      payment_method: r.payment_method,
+      origen_cuenta: sucursal,
+    };
+    if (!byLoc.has(sucursal)) byLoc.set(sucursal, []);
+    byLoc.get(sucursal)!.push(row);
+  }
+  return Array.from(byLoc.entries())
+    .map(([sucursalNombre, incomeRows]) => ({
+      sucursal: sucursalNombre,
+      rows: ventasRowsFromIncome(incomeRows, monthKeys),
+    }))
+    .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
+}
+
+async function fetchResumenIncomePorOrigenMensualAggOrNull(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+  soloSucursalesFijas?: boolean;
+  excludedFamilyIds: Set<string>;
+}): Promise<IncomePorOrigenMensualAggRow[] | null> {
+  const { data, error } = await args.supabase.rpc("resumen_income_por_origen_mensual_agg", {
+    p_organization_id: args.organizationId,
+    p_desde: args.desde,
+    p_hasta: args.hasta,
+    p_solo_sucursales_fijas: Boolean(args.soloSucursalesFijas),
+    p_excluded_family_ids: Array.from(args.excludedFamilyIds),
+  });
+  if (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[resumen] resumen_income_por_origen_mensual_agg no disponible o error; se usa carga paginada:",
+        error.message,
+      );
+    }
+    return null;
+  }
+  return (data ?? []) as IncomePorOrigenMensualAggRow[];
+}
+
 export type ResumenPivotPorSucursalPayload = {
   desde: string;
   hasta: string;
@@ -872,33 +1219,54 @@ export async function loadResumenPivotPorSucursal(args: {
     };
   }
 
-  const { data: incomeData, error: incomeErr } = await fetchIncomeRowsPaged({
+  const origenMensualRows = await fetchResumenIncomePorOrigenMensualAggOrNull({
     supabase: args.supabase,
     organizationId: args.organizationId,
     desde: args.desde,
     hasta: args.hasta,
-    sucursal: undefined,
     soloSucursalesFijas: args.soloSucursalesFijas,
-  });
-  if (incomeErr) return { data: null, error: incomeErr };
-
-  const incomeFiltrados = filterIncomeRowsByExcludedFamilies(
-    incomeData ?? [],
     excludedFamilyIds,
-  );
+  });
 
-  const byLoc = new Map<string, IncomeRow[]>();
-  for (const raw of incomeFiltrados) {
-    const loc = String(raw.origen_cuenta ?? "").trim() || "Sin sucursal";
-    if (!byLoc.has(loc)) byLoc.set(loc, []);
-    byLoc.get(loc)!.push(raw);
+  let ventasPorSucursalLista: Array<{
+    sucursal: string;
+    rows: ReturnType<typeof ventasRowsFromIncome>;
+  }>;
+
+  if (origenMensualRows) {
+    ventasPorSucursalLista = ventasPorSucursalListaDesdeOrigenMensual(
+      origenMensualRows,
+      monthKeys,
+    );
+  } else {
+    const { data: incomeData, error: incomeErr } = await fetchIncomeRowsPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+      sucursal: undefined,
+      soloSucursalesFijas: args.soloSucursalesFijas,
+    });
+    if (incomeErr) return { data: null, error: incomeErr };
+
+    const incomeFiltrados = filterIncomeRowsByExcludedFamilies(
+      incomeData ?? [],
+      excludedFamilyIds,
+    );
+
+    const byLoc = new Map<string, IncomeRow[]>();
+    for (const raw of incomeFiltrados) {
+      const loc = String(raw.origen_cuenta ?? "").trim() || "Sin sucursal";
+      if (!byLoc.has(loc)) byLoc.set(loc, []);
+      byLoc.get(loc)!.push(raw);
+    }
+    ventasPorSucursalLista = Array.from(byLoc.entries())
+      .map(([sucursalNombre, incomeRows]) => ({
+        sucursal: sucursalNombre,
+        rows: ventasRowsFromIncome(incomeRows, monthKeys),
+      }))
+      .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
   }
-  const ventasPorSucursalLista = Array.from(byLoc.entries())
-    .map(([sucursalNombre, incomeRows]) => ({
-      sucursal: sucursalNombre,
-      rows: ventasRowsFromIncome(incomeRows, monthKeys),
-    }))
-    .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
 
   const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
     supabase: args.supabase,

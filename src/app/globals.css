@@ -36,6 +36,12 @@ body {
   }
 }
 
+@layer components {
+  .ui-field {
+    @apply rounded border border-slate-300 bg-white text-slate-900 shadow-sm outline-none focus:border-sky-500 placeholder:text-slate-400;
+  }
+}
+
 input,
 select,
 button {

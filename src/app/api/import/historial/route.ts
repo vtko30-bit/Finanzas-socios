@@ -48,6 +48,7 @@ export async function GET() {
     return (
       k === "excel_ventas" ||
       k === "excel_egresos" ||
+      k === "excel_egresos_bancoestado_servicios" ||
       k === "excel_otros_ingresos"
     );
   });
@@ -82,7 +83,10 @@ export async function GET() {
       totalVentasIngresos += c.income;
     } else if (kind === "excel_otros_ingresos") {
       totalOtrosIngresos += c.income;
-    } else if (kind === "excel_egresos") {
+    } else if (
+      kind === "excel_egresos" ||
+      kind === "excel_egresos_bancoestado_servicios"
+    ) {
       totalGastosEgresos += c.expense;
     }
 

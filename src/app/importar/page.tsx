@@ -11,6 +11,28 @@ type ImportResult = {
   inserted: number;
   duplicates: number;
   invalidSample?: Array<{ row_number: number; reason: string }>;
+  heldForDuplicateReview?: number;
+  skippedByHashDuplicate?: number;
+  skippedDuplicateRowInFile?: number;
+};
+
+type DuplicateReviewItem = {
+  dedupe_hash: string;
+  row_number: number;
+  date: string;
+  amount: number;
+  counterparty: string;
+  description: string;
+  source_id: string;
+  external_ref: string;
+  origen_hint: string;
+  matches_existing: Array<{
+    id: string;
+    date: string;
+    amount: number;
+    source_id: string;
+    created_at: string;
+  }>;
 };
 
 export default function ImportarPage() {
@@ -18,10 +40,12 @@ export default function ImportarPage() {
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
   const [file, setFile] = useState<File | null>(null);
   const [fileVentas, setFileVentas] = useState<File | null>(null);
+  const [filePagoServicios, setFilePagoServicios] = useState<File | null>(null);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [fileOtrosIngresos, setFileOtrosIngresos] = useState<File | null>(null);
   const [loadingConsolidado, setLoadingConsolidado] = useState(false);
+  const [loadingPagoServicios, setLoadingPagoServicios] = useState(false);
   const [loadingOtrosIngresos, setLoadingOtrosIngresos] = useState(false);
   const [loadingVentas, setLoadingVentas] = useState(false);
   const [loadingResetTodo, setLoadingResetTodo] = useState(false);
@@ -31,6 +55,14 @@ export default function ImportarPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [fileInputVersion, setFileInputVersion] = useState(0);
+  const [duplicateReview, setDuplicateReview] = useState<{
+    batchId: string;
+    items: DuplicateReviewItem[];
+  } | null>(null);
+  const [duplicateDecisions, setDuplicateDecisions] = useState<
+    Record<string, "insert" | "skip">
+  >({});
+  const [confirmingDupes, setConfirmingDupes] = useState(false);
 
   const parseApiBody = (text: string): { error?: string; [k: string]: unknown } => {
     if (!text) return {};
@@ -71,7 +103,13 @@ export default function ImportarPage() {
       const data = parseApiBody(text);
 
       if (!res.ok) {
-        if (res.status === 409 && data.duplicateFile) {
+        if (res.status === 423 && data.periodLocked) {
+          setStatus(
+            typeof data.error === "string"
+              ? data.error
+              : "Hay fechas en un período cerrado para importación. Revisa Períodos cerrados o quita esas filas del archivo.",
+          );
+        } else if (res.status === 409 && data.duplicateFile) {
           setStatus(
             "Archivo duplicado: ese mismo Excel ya se importó antes. Si actualizaste datos, guarda una nueva versión del archivo e inténtalo otra vez.",
           );
@@ -88,7 +126,19 @@ export default function ImportarPage() {
 
       const importData = data as ImportResult;
       setResult(importData);
-      setStatus("Importación finalizada.");
+      if (importData.validRows === 0 && importData.invalidRows > 0) {
+        setStatus(
+          "No se importó ninguna fila válida. Verifica que el archivo tenga hoja 'Egresos' y columnas como Fecha y Cheques / Cargos.",
+        );
+        return;
+      }
+      if (importData.inserted === 0 && importData.validRows > 0) {
+        setStatus(
+          "No se agregaron movimientos nuevos: todas las filas válidas ya existen (duplicadas) o repetidas dentro del mismo archivo.",
+        );
+        return;
+      }
+      setStatus("Importación de gastos y egresos finalizada.");
       setSuccessMessage("La importación de gastos y egresos terminó correctamente.");
       setShowSuccessModal(true);
     } catch (error) {
@@ -99,6 +149,100 @@ export default function ImportarPage() {
       );
     } finally {
       setLoadingConsolidado(false);
+    }
+  };
+
+  const submitPagoServicios = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!authenticated || !filePagoServicios) return;
+    setLoadingPagoServicios(true);
+    setStatus("");
+    setResult(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", filePagoServicios);
+      const res = await fetch("/api/import/egresos-bancoestado-servicios", {
+        method: "POST",
+        body: fd,
+      });
+      const text = await res.text();
+      const data = parseApiBody(text);
+
+      if (!res.ok) {
+        if (res.status === 423 && data.periodLocked) {
+          setStatus(
+            typeof data.error === "string"
+              ? data.error
+              : "Hay fechas en un período cerrado para importación. Revisa Períodos cerrados o quita esas filas del archivo.",
+          );
+        } else if (res.status === 409 && data.duplicateFile) {
+          setStatus(
+            "Archivo duplicado: ese mismo Excel de Pago servicios BancoEstado ya está asociado a un lote (importado o pendiente de confirmar). Elimínalo en Importaciones o guarda una versión distinta del archivo.",
+          );
+        } else if (res.status === 400) {
+          setStatus(
+            mensajeApi(data) ||
+              'Archivo inválido. Verifica que exista la hoja "Egresos" y que tenga columnas como Fecha y Cheques / Cargos.',
+          );
+        } else {
+          setStatus(mensajeApi(data) || "Error al importar Pago servicios BancoEstado");
+        }
+        return;
+      }
+
+      const importData = data as ImportResult & {
+        requiresDuplicateConfirmation?: boolean;
+        duplicateReview?: { pending: boolean; items: DuplicateReviewItem[] };
+        batchId?: string;
+        heldForDuplicateReview?: number;
+        skippedByHashDuplicate?: number;
+        skippedDuplicateRowInFile?: number;
+      };
+
+      setResult({
+        totalRows: importData.totalRows,
+        validRows: importData.validRows,
+        invalidRows: importData.invalidRows,
+        inserted: importData.inserted,
+        duplicates: importData.duplicates,
+        invalidSample: importData.invalidSample,
+        heldForDuplicateReview: importData.heldForDuplicateReview,
+        skippedByHashDuplicate: importData.skippedByHashDuplicate,
+        skippedDuplicateRowInFile: importData.skippedDuplicateRowInFile,
+      });
+
+      if (importData.requiresDuplicateConfirmation && importData.duplicateReview?.items?.length) {
+        const batchId = String(importData.batchId ?? "");
+        if (!batchId) {
+          setStatus("Respuesta incompleta: falta batchId para confirmar duplicados.");
+          return;
+        }
+        setDuplicateReview({
+          batchId,
+          items: importData.duplicateReview.items,
+        });
+        setDuplicateDecisions({});
+        const held = importData.heldForDuplicateReview ?? importData.duplicateReview.items.length;
+        const ins = importData.inserted ?? 0;
+        setStatus(
+          ins > 0
+            ? `Se importaron ${ins} fila(s). Hay ${held} fila(s) muy parecidas a movimientos ya cargados: indica en cada una si es duplicado (omitir) o un pago nuevo (importar).`
+            : `Hay ${held} fila(s) muy parecidas a movimientos ya cargados. Indica en cada una si es duplicado (omitir) o un pago nuevo (importar).`,
+        );
+        return;
+      }
+
+      setStatus("Importación de Pago servicios BancoEstado finalizada.");
+      setSuccessMessage("La importación de Pago servicios BancoEstado terminó correctamente.");
+      setShowSuccessModal(true);
+    } catch (error) {
+      setStatus(
+        `Error inesperado al importar Pago servicios BancoEstado: ${
+          error instanceof Error ? error.message : "desconocido"
+        }`,
+      );
+    } finally {
+      setLoadingPagoServicios(false);
     }
   };
 
@@ -119,7 +263,13 @@ export default function ImportarPage() {
       const data = parseApiBody(text);
 
       if (!res.ok) {
-        if (res.status === 409 && data.duplicateFile) {
+        if (res.status === 423 && data.periodLocked) {
+          setStatus(
+            typeof data.error === "string"
+              ? data.error
+              : "Hay fechas en un período cerrado para importación. Revisa Períodos cerrados o quita esas filas del archivo.",
+          );
+        } else if (res.status === 409 && data.duplicateFile) {
           setStatus(
             "Archivo duplicado: ese Excel de ventas ya se importó. Si cambiaste datos, guarda una copia nueva.",
           );
@@ -169,7 +319,13 @@ export default function ImportarPage() {
       const data = parseApiBody(text);
 
       if (!res.ok) {
-        if (res.status === 409 && data.duplicateFile) {
+        if (res.status === 423 && data.periodLocked) {
+          setStatus(
+            typeof data.error === "string"
+              ? data.error
+              : "Hay fechas en un período cerrado para importación. Revisa Períodos cerrados o quita esas filas del archivo.",
+          );
+        } else if (res.status === 409 && data.duplicateFile) {
           setStatus(
             "Archivo duplicado: este Excel de otros ingresos ya se importó. Si actualizaste datos, exporta un archivo nuevo.",
           );
@@ -335,10 +491,70 @@ export default function ImportarPage() {
     setSuccessMessage("");
     setFile(null);
     setFileVentas(null);
+    setFilePagoServicios(null);
     setFileOtrosIngresos(null);
     setResult(null);
     setStatus("");
+    setDuplicateReview(null);
+    setDuplicateDecisions({});
     setFileInputVersion((v) => v + 1);
+  };
+
+  const formatClp = (n: number) =>
+    new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: "CLP",
+      maximumFractionDigits: 0,
+    }).format(n || 0);
+
+  const submitDuplicateDecisions = async () => {
+    if (!duplicateReview) return;
+    for (const it of duplicateReview.items) {
+      const d = duplicateDecisions[it.dedupe_hash];
+      if (d !== "insert" && d !== "skip") {
+        setStatus("Indica en cada fila si es duplicado (omitir) o un pago nuevo (importar).");
+        return;
+      }
+    }
+    setConfirmingDupes(true);
+    setStatus("");
+    try {
+      const res = await fetch("/api/import/egresos-bancoestado-servicios/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId: duplicateReview.batchId,
+          decisions: duplicateDecisions,
+        }),
+      });
+      const text = await res.text();
+      const data = parseApiBody(text);
+      if (!res.ok) {
+        if (res.status === 423 && data.periodLocked) {
+          setStatus(
+            typeof data.error === "string"
+              ? data.error
+              : "Hay fechas en un período cerrado. Reabre el período en Períodos cerrados o elige omitir esas filas.",
+          );
+        } else {
+          setStatus(mensajeApi(data) || "No se pudo confirmar la revisión de duplicados");
+        }
+        return;
+      }
+      setDuplicateReview(null);
+      setDuplicateDecisions({});
+      setStatus(
+        `Revisión aplicada: se importaron ${Number(data.inserted ?? 0)} fila(s) adicionales; se omitieron ${Number(data.skipped ?? 0)}.`,
+      );
+      setSuccessMessage("La importación de Pago servicios BancoEstado quedó completa.");
+      setShowSuccessModal(true);
+    } catch (error) {
+      setStatus(
+        `Error de red al confirmar: ${error instanceof Error ? error.message : "desconocido"}`,
+      );
+    } finally {
+      setConfirmingDupes(false);
+    }
   };
 
   if (authenticated && capsLoading) {
@@ -363,6 +579,22 @@ export default function ImportarPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <section
+        aria-label="Períodos cerrados"
+        className="rounded-xl border border-indigo-200 bg-indigo-50/90 px-4 py-3 text-sm text-slate-800"
+      >
+        <h2 className="font-semibold text-indigo-950">Períodos cerrados para importación</h2>
+        <p className="mt-2 text-slate-700">
+          Puedes cerrar un <strong className="font-medium text-slate-900">mes o año</strong> para que ninguna
+          importación Excel inserte movimientos nuevos con fecha en ese rango. Reabre el período cuando necesites
+          volver a cargar correcciones.{" "}
+          <a href="/periodos-cerrados" className="font-medium text-indigo-800 underline">
+            Gestionar períodos cerrados
+          </a>
+          .
+        </p>
+      </section>
+
+      <section
         aria-label="Ayuda sobre duplicados"
         className="rounded-xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-slate-800"
       >
@@ -374,9 +606,10 @@ export default function ImportarPage() {
           </li>
           <li>
             Si <strong className="font-medium text-slate-900">agregaste filas o cambiaste datos</strong> y guardaste el
-            archivo, el contenido cambia: se puede importar otra vez y solo se agregan{" "}
-            <strong className="font-medium text-slate-900">movimientos nuevos</strong>; las filas que ya estaban se
-            omiten como duplicadas.
+            archivo, el contenido cambia: se puede importar otra vez. Las filas con el mismo Id de origen se omiten; si
+            una fila es <strong className="font-medium text-slate-900">idéntica en datos</strong> a un movimiento ya
+            cargado pero con Id distinto, la app te pedirá confirmar si es duplicado o un pago nuevo (p. ej. transferencias
+            por lote con el mismo monto y proveedor).
           </li>
           <li>
             Puedes volver a subir un archivo con el <strong className="font-medium text-slate-900">mismo nombre</strong>{" "}
@@ -436,6 +669,33 @@ export default function ImportarPage() {
             className="rounded-md bg-sky-600 px-4 py-2 font-medium text-white disabled:opacity-60"
           >
             {loadingConsolidado ? "Procesando..." : "Importar gastos y egresos"}
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+        <h2 className="text-lg font-semibold">Importar Pago servicios BancoEstado</h2>
+        <p className="mt-2 text-xs text-slate-600">
+          Este archivo se carga en una vista separada para no mezclarse con el detalle normal de
+          gastos.
+        </p>
+        <form onSubmit={submitPagoServicios} className="mt-5 flex flex-col gap-3">
+          <input
+            key={`file-pago-servicios-${fileInputVersion}`}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => setFilePagoServicios(e.target.files?.[0] ?? null)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2"
+            required
+            disabled={!authenticated || loadingPagoServicios}
+          />
+          <button
+            disabled={!authenticated || !filePagoServicios || loadingPagoServicios}
+            className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+          >
+            {loadingPagoServicios
+              ? "Procesando..."
+              : "Importar Pago servicios BancoEstado"}
           </button>
         </form>
       </section>
@@ -513,7 +773,13 @@ export default function ImportarPage() {
             <li>Filas válidas: {result.validRows}</li>
             <li>Filas inválidas: {result.invalidRows}</li>
             <li>Nuevas insertadas: {result.inserted}</li>
-            <li>Duplicadas omitidas: {result.duplicates}</li>
+            <li>Duplicadas omitidas (mismo Id en base): {result.duplicates}</li>
+            {result.heldForDuplicateReview != null && result.heldForDuplicateReview > 0 ? (
+              <li>Pendientes de tu confirmación (posible duplicado): {result.heldForDuplicateReview}</li>
+            ) : null}
+            {result.skippedDuplicateRowInFile != null && result.skippedDuplicateRowInFile > 0 ? (
+              <li>Filas repetidas dentro del mismo archivo: {result.skippedDuplicateRowInFile}</li>
+            ) : null}
           </ul>
           {result.invalidRows > 0 && result.invalidSample?.length ? (
             <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
@@ -530,6 +796,104 @@ export default function ImportarPage() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {duplicateReview ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dup-review-title"
+        >
+          <div className="my-4 w-full max-w-2xl rounded-xl border border-amber-400 bg-amber-50 p-6 shadow-xl">
+            <h3 id="dup-review-title" className="text-lg font-semibold text-amber-950">
+              Confirmar posibles duplicados (Pago servicios BancoEstado)
+            </h3>
+            <p className="mt-2 text-sm text-amber-900/95">
+              Cada fila del archivo coincide en fecha, monto, destino, descripción, origen y cuenta con un movimiento ya
+              importado, pero trae un <strong className="text-amber-950">Id de origen distinto</strong>. Indica si es el
+              mismo pago (omitir) o un pago distinto (importar).
+            </p>
+            <ul className="mt-4 max-h-[55vh] space-y-4 overflow-y-auto">
+              {duplicateReview.items.map((it) => (
+                <li
+                  key={it.dedupe_hash}
+                  className="rounded-lg border border-amber-300/80 bg-white/90 p-3 text-sm text-slate-800"
+                >
+                  <div className="font-medium text-slate-900">
+                    Fila Excel {it.row_number} · {it.date} · {formatClp(it.amount)}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    Destino: {it.counterparty || "—"} · Origen: {it.origen_hint || "—"}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600">Id archivo: {it.source_id || "—"}</div>
+                  <div className="mt-1 text-xs text-slate-700">Descripción: {it.description || "—"}</div>
+                  <div className="mt-2 text-xs font-medium text-slate-700">Coincide con movimiento(es) en la app:</div>
+                  <ul className="mt-1 list-inside list-disc text-xs text-slate-600">
+                    {it.matches_existing.map((m) => (
+                      <li key={m.id}>
+                        Id app {m.id.slice(0, 8)}… · fecha {m.date} · Id origen {m.source_id || "—"} · importado{" "}
+                        {m.created_at ? new Date(m.created_at).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={`rounded border px-3 py-1.5 text-xs font-medium ${
+                        duplicateDecisions[it.dedupe_hash] === "skip"
+                          ? "border-amber-800 bg-amber-200 text-amber-950"
+                          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      }`}
+                      onClick={() =>
+                        setDuplicateDecisions((d) => ({ ...d, [it.dedupe_hash]: "skip" }))
+                      }
+                    >
+                      Es duplicado (omitir)
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded border px-3 py-1.5 text-xs font-medium ${
+                        duplicateDecisions[it.dedupe_hash] === "insert"
+                          ? "border-emerald-800 bg-emerald-200 text-emerald-950"
+                          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      }`}
+                      onClick={() =>
+                        setDuplicateDecisions((d) => ({ ...d, [it.dedupe_hash]: "insert" }))
+                      }
+                    >
+                      Es pago nuevo (importar)
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-amber-200/80 pt-4">
+              <button
+                type="button"
+                className="rounded border border-slate-400 bg-white px-4 py-2 text-sm text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                disabled={confirmingDupes}
+                onClick={() => {
+                  setDuplicateReview(null);
+                  setDuplicateDecisions({});
+                  setStatus(
+                    "Revisión cancelada en pantalla. El lote sigue en Importaciones: puedes eliminarlo ahí si no quieres confirmar.",
+                  );
+                }}
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="rounded border border-amber-800 bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                disabled={confirmingDupes}
+                onClick={() => void submitDuplicateDecisions()}
+              >
+                {confirmingDupes ? "Aplicando…" : "Aplicar decisiones"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {showSuccessModal ? (

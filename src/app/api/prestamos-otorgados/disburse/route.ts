@@ -5,6 +5,18 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { denyIfNotOwner } from "@/lib/org-permissions";
 
+const EXPENSE_TYPES = new Set(["expense", "gasto", "egreso"]);
+
+type ReconcileTxRow = {
+  id: string;
+  type: string | null;
+  flow_kind: string | null;
+  amount: number | null;
+  source: string | null;
+  loan_given_id: string | null;
+  credit_id: string | null;
+};
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -36,6 +48,7 @@ export async function POST(request: Request) {
     disbursement_date?: unknown;
     origen_cuenta?: unknown;
     payment_method?: unknown;
+    reconcile_transaction_ids?: unknown;
   };
   try {
     body = await request.json();
@@ -57,6 +70,15 @@ export async function POST(request: Request) {
     typeof body.origen_cuenta === "string" ? body.origen_cuenta.trim() : "";
   const paymentMethod =
     typeof body.payment_method === "string" ? body.payment_method.trim() : "";
+  const reconcileIdsRaw = Array.isArray(body.reconcile_transaction_ids)
+    ? body.reconcile_transaction_ids
+    : [];
+  const reconcileIds = [...new Set(
+    reconcileIdsRaw
+      .filter((v): v is string => typeof v === "string")
+      .map((v) => v.trim())
+      .filter(Boolean),
+  )];
 
   if (!borrower) {
     return NextResponse.json({ error: "Nombre del prestatario requerido" }, { status: 400 });
@@ -69,6 +91,56 @@ export async function POST(request: Request) {
   }
   if (!Number.isFinite(principal) || principal <= 0) {
     return NextResponse.json({ error: "principal debe ser > 0" }, { status: 400 });
+  }
+
+  let reconcileTxRows: ReconcileTxRow[] = [];
+  let conciliatedDisbursementAmount = 0;
+  if (reconcileIds.length > 0) {
+    const { data: txRows, error: txErr } = await supabase
+      .from("transactions")
+      .select("id, type, flow_kind, amount, source, loan_given_id, credit_id")
+      .eq("organization_id", orgId)
+      .in("id", reconcileIds);
+    if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 });
+    reconcileTxRows = (txRows ?? []) as ReconcileTxRow[];
+    if (reconcileTxRows.length !== reconcileIds.length) {
+      return NextResponse.json(
+        { error: "Uno o más movimientos de conciliación no existen." },
+        { status: 404 },
+      );
+    }
+    for (const tx of reconcileTxRows) {
+      const typeOk = EXPENSE_TYPES.has(String(tx.type ?? "").toLowerCase());
+      if (!typeOk) {
+        return NextResponse.json(
+          { error: "Solo se pueden conciliar egresos en el desembolso." },
+          { status: 422 },
+        );
+      }
+      if (String(tx.flow_kind ?? "").toLowerCase() !== "operativo") {
+        return NextResponse.json(
+          { error: "Solo se pueden conciliar egresos operativos." },
+          { status: 422 },
+        );
+      }
+      if (tx.loan_given_id != null || tx.credit_id != null) {
+        return NextResponse.json(
+          { error: "Uno o más movimientos ya están vinculados a préstamo/crédito." },
+          { status: 409 },
+        );
+      }
+    }
+    conciliatedDisbursementAmount = round2(
+      reconcileTxRows.reduce((acc, tx) => acc + Math.abs(Number(tx.amount) || 0), 0),
+    );
+    if (conciliatedDisbursementAmount > round2(principal) + 0.02) {
+      return NextResponse.json(
+        {
+          error: `La suma de egresos seleccionados (${conciliatedDisbursementAmount}) supera el principal (${round2(principal)}).`,
+        },
+        { status: 422 },
+      );
+    }
   }
 
   const { data: loanRow, error: lErr } = await supabase
@@ -93,45 +165,76 @@ export async function POST(request: Request) {
 
   const loanId = loanRow.id as string;
 
-  const dedupe = dedupeHashManual([
-    "loan_given_disburse",
-    orgId,
-    loanId,
-    disbursementDate,
-    String(round2(principal)),
-  ]);
+  const disbursementDescription = `Préstamo otorgado — ${borrower}${description ? ` — ${description}` : ""}`;
+  const selectedIds = reconcileIds;
+  if (selectedIds.length > 0) {
+    const { error: upErr } = await supabase
+      .from("transactions")
+      .update({
+        source: "prestamos_otorgados",
+        source_id: loanId,
+        flow_kind: "financiamiento",
+        loan_given_id: loanId,
+        credit_component: "prestamo_otorgado_conciliado",
+        concepto: "Préstamo otorgado (salida de caja)",
+        counterparty: borrower,
+        description: disbursementDescription,
+        currency,
+      })
+      .eq("organization_id", orgId)
+      .in("id", selectedIds);
+    if (upErr) {
+      await supabase.from("loans_given").delete().eq("id", loanId).eq("organization_id", orgId);
+      return NextResponse.json({ error: upErr.message }, { status: 500 });
+    }
+  }
 
-  const { data: txRow, error: txErr } = await supabase
-    .from("transactions")
-    .insert({
-      organization_id: orgId,
-      date: disbursementDate,
-      type: "expense",
-      amount: round2(principal),
-      currency,
-      description: `Préstamo otorgado — ${borrower}${description ? ` — ${description}` : ""}`,
-      counterparty: borrower,
-      payment_method: paymentMethod,
-      external_ref: "",
-      origen_cuenta: origenCuenta,
-      concepto: "Préstamo otorgado (salida de caja)",
-      source: "prestamos_otorgados",
-      source_id: loanId,
-      dedupe_hash: dedupe,
-      flow_kind: "financiamiento",
-      credit_id: null,
-      loan_given_id: loanId,
-      credit_component: "prestamo_otorgado",
-    })
-    .select("id")
-    .single();
-
-  if (txErr || !txRow) {
-    await supabase.from("loans_given").delete().eq("id", loanId);
-    return NextResponse.json(
-      { error: txErr?.message ?? "Error al registrar salida de caja" },
-      { status: 500 },
-    );
+  const residualAmount = round2(round2(principal) - conciliatedDisbursementAmount);
+  let txRow: { id: string } | null = null;
+  if (residualAmount > 0.02) {
+    const dedupe = dedupeHashManual([
+      "loan_given_disburse",
+      orgId,
+      loanId,
+      disbursementDate,
+      String(residualAmount),
+    ]);
+    const { data: autoTx, error: txErr } = await supabase
+      .from("transactions")
+      .insert({
+        organization_id: orgId,
+        date: disbursementDate,
+        type: "expense",
+        amount: residualAmount,
+        currency,
+        description: disbursementDescription,
+        counterparty: borrower,
+        payment_method: paymentMethod,
+        external_ref: "",
+        origen_cuenta: origenCuenta,
+        concepto: "Préstamo otorgado (salida de caja)",
+        source: "prestamos_otorgados",
+        source_id: loanId,
+        dedupe_hash: dedupe,
+        flow_kind: "financiamiento",
+        credit_id: null,
+        loan_given_id: loanId,
+        credit_component: "prestamo_otorgado",
+      })
+      .select("id")
+      .single();
+    if (txErr || !autoTx) {
+      await supabase
+        .from("loans_given")
+        .delete()
+        .eq("id", loanId)
+        .eq("organization_id", orgId);
+      return NextResponse.json(
+        { error: txErr?.message ?? "Error al registrar salida de caja residual" },
+        { status: 500 },
+      );
+    }
+    txRow = autoTx as { id: string };
   }
 
   await logAudit(supabase, {
@@ -141,13 +244,19 @@ export async function POST(request: Request) {
     entity_type: "loan_given",
     entity_id: loanId,
     changes_json: {
-      transaction_id: txRow.id,
+      transaction_id: txRow?.id ?? null,
       principal: round2(principal),
+      conciliated_disbursement_amount: conciliatedDisbursementAmount,
+      residual_disbursement_amount: residualAmount > 0.02 ? residualAmount : 0,
+      conciliated_transaction_ids: selectedIds,
     },
   });
 
   return NextResponse.json({
     loan_given_id: loanId,
-    disbursement_transaction_id: txRow.id,
+    disbursement_transaction_id: txRow?.id ?? null,
+    conciliated_disbursement_amount: conciliatedDisbursementAmount,
+    residual_disbursement_amount: residualAmount > 0.02 ? residualAmount : 0,
+    conciliated_transaction_ids: selectedIds,
   });
 }

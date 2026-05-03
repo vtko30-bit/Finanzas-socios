@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -9,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 
@@ -36,6 +38,10 @@ type GastoRow = {
   source: string;
   /** UUID del movimiento en la app (API / edición). */
   id: string;
+  /** ISO: cuándo se insertó el registro (importación). */
+  importadoEn?: string | null;
+  /** UUID del lote de importación, si existe. */
+  importBatchId?: string | null;
   /** ID de la fila en el archivo de egresos (columna Id), si existe. */
   idOrigen: string;
   nroOperacion: string;
@@ -434,7 +440,8 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
   );
 }
 
-export default function GastosPage() {
+function GastosPageContent() {
+  const searchParams = useSearchParams();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
   const [rows, setRows] = useState<GastoRow[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogFamily[]>([]);
@@ -482,11 +489,15 @@ export default function GastosPage() {
   const [filtroFamilia, setFiltroFamilia] = useState("");
   const [filtroOrigen, setFiltroOrigen] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaGastos, setPaginaGastos] = useState(1);
   const [mounted, setMounted] = useState(false);
+  const sourceView = (searchParams.get("source") ?? "").trim().toLowerCase();
+  const esVistaPagoServiciosBancoEstado =
+    sourceView === "excel_egresos_banco_estado_servicios";
 
   const mostrarAviso = useCallback((mensaje: string) => {
     setToast(mensaje);
@@ -506,7 +517,11 @@ export default function GastosPage() {
 
   const cargar = useCallback(() => {
     setStatus("Cargando...");
-    fetch("/api/gastos/detalle")
+    const params = new URLSearchParams();
+    if (incluirFinanciamiento) params.set("incluirFinanciamiento", "1");
+    if (sourceView) params.set("source", sourceView);
+    const url = params.size ? `/api/gastos/detalle?${params.toString()}` : "/api/gastos/detalle";
+    fetch(url)
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) {
@@ -517,6 +532,8 @@ export default function GastosPage() {
           raw.map((r) => ({
             ...r,
             source: r.source ?? "",
+            importadoEn: r.importadoEn ?? null,
+            importBatchId: r.importBatchId ?? null,
           })),
         );
         setStatus("");
@@ -524,7 +541,7 @@ export default function GastosPage() {
       .catch((e: Error) => {
         setStatus(e.message);
       });
-  }, []);
+  }, [incluirFinanciamiento, sourceView]);
 
   useEffect(() => {
     setMounted(true);
@@ -703,6 +720,11 @@ export default function GastosPage() {
     [filasFiltradas, sortKey, sortDir],
   );
 
+  const totalGastosFiltrados = useMemo(
+    () => displayRows.reduce((acc, row) => acc + (Number(row.monto) || 0), 0),
+    [displayRows],
+  );
+
   const totalPaginasGastos = useMemo(() => {
     if (displayRows.length === 0) return 0;
     return Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
@@ -727,6 +749,7 @@ export default function GastosPage() {
     filtroFamilia,
     filtroOrigen,
     filtroCategoria,
+    incluirFinanciamiento,
   ]);
 
   useEffect(() => {
@@ -758,6 +781,7 @@ export default function GastosPage() {
     setFiltroFamilia("");
     setFiltroOrigen("");
     setFiltroCategoria("");
+    setIncluirFinanciamiento(false);
     setSelectedGastoIds(new Set());
   };
 
@@ -1158,7 +1182,11 @@ export default function GastosPage() {
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-        <h1 className="text-xl font-semibold">Detalle de gastos</h1>
+        <h1 className="text-xl font-semibold">
+          {esVistaPagoServiciosBancoEstado
+            ? "Detalle de gastos — Pago servicios BancoEstado"
+            : "Detalle de gastos"}
+        </h1>
         <Link
           href="/movimientos-excluidos"
           className="text-sm font-medium text-sky-700 underline hover:text-sky-900"
@@ -1321,6 +1349,15 @@ export default function GastosPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-sky-700"
+                  checked={incluirFinanciamiento}
+                  onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
+                />
+                <span className="text-slate-900">Incluir financiamiento</span>
+              </label>
               <button
                 type="button"
                 className="rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white"
@@ -1328,8 +1365,11 @@ export default function GastosPage() {
               >
                 Limpiar filtros
               </button>
-              <span className="text-xs text-white">
+              <span className="rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900">
                 Mostrando {displayRows.length} de {rows.length} gastos
+              </span>
+              <span className="rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-900">
+                Total filtrado: {formatClp(totalGastosFiltrados)}
               </span>
             </div>
             <button
@@ -1742,6 +1782,25 @@ export default function GastosPage() {
                 <dd className="font-medium text-slate-900">{detailRow.fecha}</dd>
               </div>
               <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
+                <dt className="text-slate-500">Importado</dt>
+                <dd className="break-words font-mono text-xs text-slate-700">
+                  {detailRow.importadoEn
+                    ? new Date(detailRow.importadoEn).toLocaleString("es-CL", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })
+                    : "—"}
+                </dd>
+              </div>
+              {(detailRow.importBatchId || "").trim() ? (
+                <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
+                  <dt className="text-slate-500">Lote import.</dt>
+                  <dd className="break-all font-mono text-xs text-slate-700">
+                    {detailRow.importBatchId}
+                  </dd>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 py-2.5 text-sm">
                 <dt className="text-slate-500">ID</dt>
                 <dd className="break-all font-mono text-xs text-slate-700">
                   {detailRow.id}
@@ -1794,32 +1853,11 @@ export default function GastosPage() {
                 </dd>
               </div>
             </dl>
-            <div className="mt-6 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
-                onClick={() => setDetailRow(null)}
-              >
-                Cerrar
-              </button>
-              <button
-                type="button"
-                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm text-sky-800 hover:bg-sky-100"
-                onClick={() => {
-                  setEditModal({
-                    gastoIds: [detailRow.id],
-                    categoria: categoriaDisplayLabel(detailRow, catalogo),
-                    familia: (detailRow.familia ?? "").trim(),
-                  });
-                  setDetailRow(null);
-                }}
-              >
-                Editar categoría
-              </button>
+            <div className="mt-6 flex items-center gap-2">
               {canWrite && isReconcilableImportSource(detailRow.source) ? (
                 <button
                   type="button"
-                  className="rounded border border-emerald-700 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  className="rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                   disabled={uiBloqueadoGuardado}
                   title="Vincular este egreso importado con el pago de una cuota (reemplaza el movimiento por el desglose contable)"
                   onClick={() => {
@@ -1836,7 +1874,7 @@ export default function GastosPage() {
               {canWrite && isReconcilableImportSource(detailRow.source) ? (
                 <button
                   type="button"
-                  className="rounded border border-indigo-700 bg-indigo-50 px-4 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                  className="rounded border border-indigo-700 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
                   disabled={uiBloqueadoGuardado}
                   title="Marcar este egreso importado como correspondiente a una cuota ya pagada (no modifica montos, solo vincula)"
                   onClick={() => {
@@ -1851,6 +1889,13 @@ export default function GastosPage() {
                   Vincular como cuota ya pagada
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="ml-auto rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
+                onClick={() => setDetailRow(null)}
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
@@ -2078,5 +2123,13 @@ export default function GastosPage() {
           )
         : null}
     </main>
+  );
+}
+
+export default function GastosPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto flex w-full max-w-7xl flex-1 px-6 py-4">Cargando…</main>}>
+      <GastosPageContent />
+    </Suspense>
   );
 }

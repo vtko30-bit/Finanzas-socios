@@ -59,6 +59,9 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const soloExcluidos = searchParams.get("soloExcluidos") === "1";
+  const incluirFinanciamiento =
+    searchParams.get("incluirFinanciamiento") === "1" ||
+    searchParams.get("incluirFinanciamiento") === "true";
 
   let excludedFamilyIds: Set<string>;
   try {
@@ -77,6 +80,10 @@ export async function GET(request: Request) {
   let from = 0;
   while (true) {
     const to = from + PAGE_SIZE - 1;
+    const flowKindFilter = incluirFinanciamiento
+      ? "flow_kind.eq.operativo,flow_kind.eq.financiamiento,flow_kind.is.null"
+      : "flow_kind.eq.operativo,flow_kind.is.null";
+
     const { data: page, error } = await supabase
       .from("transactions")
       .select(
@@ -100,7 +107,7 @@ export async function GET(request: Request) {
       )
       .eq("organization_id", member.organization_id)
       // Compatibilidad con filas históricas previas a flow_kind (null).
-      .or("flow_kind.eq.operativo,flow_kind.is.null")
+      .or(flowKindFilter)
       .in("type", [...INCOME_TYPES])
       .order("date", { ascending: false })
       .order("id", { ascending: false })

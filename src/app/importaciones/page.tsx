@@ -40,6 +40,9 @@ function labelTipo(kind: string): string {
   if (kind === "excel_ventas") return "Ventas / ingresos";
   if (kind === "excel_otros_ingresos") return "Otros ingresos (hoja Ingresos)";
   if (kind === "excel_egresos") return "Gastos / egresos";
+  if (kind === "excel_egresos_bancoestado_servicios") {
+    return "Pago servicios BancoEstado";
+  }
   return kind;
 }
 
