@@ -149,11 +149,35 @@ export default function LoginPage() {
         </button>
         <button
           type="button"
-          className="mt-3 w-full rounded-md border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 disabled:opacity-60"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 disabled:opacity-60"
           onClick={onGoogleLogin}
           disabled={loading || oauthLoading}
         >
-          {oauthLoading ? "Redirigiendo a Google..." : "Continuar con Google"}
+          {oauthLoading ? (
+            "Redirigiendo a Google..."
+          ) : (
+            <>
+              <svg aria-hidden viewBox="0 0 18 18" className="h-4 w-4">
+                <path
+                  fill="#EA4335"
+                  d="M9 7.36364V10.8H13.7727C13.5632 11.9045 12.9368 12.8409 12 13.4682L14.8636 15.6818C16.5318 14.1455 17.5 11.8818 17.5 9.18182C17.5 8.55455 17.4455 7.95455 17.3455 7.36364H9Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M9 18C11.43 18 13.4636 17.1955 14.8636 15.6818L12 13.4682C11.1955 14.0045 10.1773 14.3182 9 14.3182C6.66136 14.3182 4.68182 12.7364 3.97273 10.6091L1.04091 12.8727C2.43182 15.6364 5.29091 18 9 18Z"
+                />
+                <path
+                  fill="#4A90E2"
+                  d="M3.97273 10.6091C3.79091 10.0727 3.68182 9.5 3.68182 8.90909C3.68182 8.31818 3.79091 7.74545 3.97273 7.20909L1.04091 4.94545C0.463636 6.09091 0.136364 7.46818 0.136364 8.90909C0.136364 10.35 0.463636 11.7273 1.04091 12.8727L3.97273 10.6091Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M9 3.5C10.2864 3.5 11.4227 3.94091 12.3273 4.79091L14.9273 2.19091C13.4591 0.813636 11.4255 0 9 0C5.29091 0 2.43182 2.36364 1.04091 5.12727L3.97273 7.39091C4.68182 5.26364 6.66136 3.5 9 3.5Z"
+                />
+              </svg>
+              <span>Continuar con Google</span>
+            </>
+          )}
         </button>
         {cooldownRemaining > 0 ? (
           <p className="mt-2 text-center text-xs text-slate-500">

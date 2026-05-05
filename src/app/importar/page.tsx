@@ -10,6 +10,8 @@ type ImportResult = {
   invalidRows: number;
   inserted: number;
   duplicates: number;
+  detectedGroupedByDay?: boolean;
+  groupedDailyRows?: number;
   invalidSample?: Array<{ row_number: number; reason: string }>;
   heldForDuplicateReview?: number;
   skippedByHashDuplicate?: number;
@@ -290,7 +292,10 @@ export default function ImportarPage() {
           "Todas las filas válidas ya estaban importadas (duplicadas). Puedes borrar ingresos en Ventas y volver a subir, o usar un archivo distinto.",
         );
       } else {
-        setStatus("Importación de ventas finalizada. Revisa la vista Ventas.");
+        const formatoMsg = importData.detectedGroupedByDay
+          ? ` Se detectó formato resumido por día (${importData.groupedDailyRows ?? 0} fila(s) agrupadas).`
+          : "";
+        setStatus(`Importación de ventas finalizada. Revisa la vista Ventas.${formatoMsg}`);
       }
       setSuccessMessage("La importación de ventas terminó correctamente.");
       setShowSuccessModal(true);
@@ -774,6 +779,11 @@ export default function ImportarPage() {
             <li>Filas inválidas: {result.invalidRows}</li>
             <li>Nuevas insertadas: {result.inserted}</li>
             <li>Duplicadas omitidas (mismo Id en base): {result.duplicates}</li>
+            {result.detectedGroupedByDay ? (
+              <li>
+                Formato detectado: ventas agrupadas por día ({result.groupedDailyRows ?? 0} fila(s)).
+              </li>
+            ) : null}
             {result.heldForDuplicateReview != null && result.heldForDuplicateReview > 0 ? (
               <li>Pendientes de tu confirmación (posible duplicado): {result.heldForDuplicateReview}</li>
             ) : null}

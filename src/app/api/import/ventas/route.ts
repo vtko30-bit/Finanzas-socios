@@ -67,6 +67,10 @@ export async function POST(request: Request) {
     defaultMovementType: "income",
     ventasLayout: true,
   });
+  const groupedDailyRows = parsed.valid.filter((row) =>
+    String(row.external_ref ?? "").startsWith("resumen|"),
+  ).length;
+  const detectedGroupedByDay = groupedDailyRows > 0;
 
   const dedupeHashes = parsed.valid.map((item) => item.dedupe_hash);
   let existing: Set<string>;
@@ -114,6 +118,8 @@ export async function POST(request: Request) {
       fileName: file.name,
       fileSize: file.size,
       importKind: "excel_ventas",
+      detectedGroupedByDay,
+      groupedDailyRows,
     },
     created_by: user.id,
   });
@@ -206,6 +212,8 @@ export async function POST(request: Request) {
       invalidRows: parsed.invalidRows,
       inserted: uniqueToInsert.length,
       duplicates: parsed.validRows - uniqueToInsert.length,
+      detectedGroupedByDay,
+      groupedDailyRows,
     },
   });
 
@@ -217,5 +225,7 @@ export async function POST(request: Request) {
     invalidSample: parsed.invalidSample,
     inserted: uniqueToInsert.length,
     duplicates: parsed.validRows - uniqueToInsert.length,
+    detectedGroupedByDay,
+    groupedDailyRows,
   });
 }

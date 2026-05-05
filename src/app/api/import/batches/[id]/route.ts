@@ -10,6 +10,7 @@ const EXCEL_KINDS = new Set([
   "excel_egresos_bancoestado_servicios",
   "excel_otros_ingresos",
 ]);
+const DELETE_CHUNK_SIZE = 500;
 
 /**
  * Elimina un lote de importación Excel y todos los movimientos asociados a ese lote.
@@ -62,14 +63,32 @@ export async function DELETE(
     );
   }
 
-  const { error: txErr, count: txDeleted } = await supabase
-    .from("transactions")
-    .delete({ count: "exact" })
-    .eq("organization_id", orgId)
-    .eq("import_batch_id", id);
+  let deletedTransactions = 0;
+  while (true) {
+    const { data: txIds, error: idsErr } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("import_batch_id", id)
+      .limit(DELETE_CHUNK_SIZE);
 
-  if (txErr) {
-    return NextResponse.json({ error: txErr.message }, { status: 500 });
+    if (idsErr) {
+      return NextResponse.json({ error: idsErr.message }, { status: 500 });
+    }
+
+    const ids = (txIds ?? []).map((row) => row.id);
+    if (ids.length === 0) break;
+
+    const { error: delErr } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("organization_id", orgId)
+      .in("id", ids);
+
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+    deletedTransactions += ids.length;
   }
 
   const { error: delBatchErr } = await supabase
@@ -91,13 +110,13 @@ export async function DELETE(
     changes_json: {
       filename: batch.filename,
       importKind: kind,
-      deletedTransactions: txDeleted ?? 0,
+      deletedTransactions,
     },
   });
 
   return NextResponse.json({
     ok: true,
-    deletedTransactions: txDeleted ?? 0,
+    deletedTransactions,
     filename: batch.filename,
   });
 }

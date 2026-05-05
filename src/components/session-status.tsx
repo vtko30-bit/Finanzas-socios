@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/browser";
 
 type SessionState = {
   email: string | null;
+  organizationId: string | null;
+  role: string | null;
   ready: boolean;
 };
 
@@ -16,19 +18,70 @@ type SessionStatusProps = {
 
 export function SessionStatus({ variant = "default" }: SessionStatusProps) {
   const onBrand = variant === "on-brand";
-  const [state, setState] = useState<SessionState>({ email: null, ready: false });
+  const [state, setState] = useState<SessionState>({
+    email: null,
+    organizationId: null,
+    role: null,
+    ready: false,
+  });
 
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data }) => {
-      setState({ email: data.user?.email ?? null, ready: true });
-    });
+    const loadSessionState = async () => {
+      const { data } = await supabase.auth.getUser();
+      const email = data.user?.email ?? null;
+      if (!data.user) {
+        setState({
+          email: null,
+          organizationId: null,
+          role: null,
+          ready: true,
+        });
+        return;
+      }
+      const { data: member } = await supabase
+        .from("organization_members")
+        .select("organization_id, role")
+        .eq("user_id", data.user.id)
+        .eq("status", "active")
+        .limit(1)
+        .maybeSingle();
+      setState({
+        email,
+        organizationId: member?.organization_id ?? null,
+        role: member?.role ?? null,
+        ready: true,
+      });
+    };
+
+    void loadSessionState();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState({ email: session?.user?.email ?? null, ready: true });
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session?.user) {
+        setState({
+          email: null,
+          organizationId: null,
+          role: null,
+          ready: true,
+        });
+        return;
+      }
+      const { data: member } = await supabase
+        .from("organization_members")
+        .select("organization_id, role")
+        .eq("user_id", session.user.id)
+        .eq("status", "active")
+        .limit(1)
+        .maybeSingle();
+      setState({
+        email: session.user.email ?? null,
+        organizationId: member?.organization_id ?? null,
+        role: member?.role ?? null,
+        ready: true,
+      });
     });
 
     return () => {
@@ -39,7 +92,12 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
   const logout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    setState({ email: null, ready: true });
+    setState({
+      email: null,
+      organizationId: null,
+      role: null,
+      ready: true,
+    });
     window.location.href = "/login";
   };
 
@@ -105,6 +163,18 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
           <>Sesión activa: {state.email}</>
         )}
       </span>
+      {state.organizationId ? (
+        <span
+          className={
+            onBrand
+              ? "hidden rounded-md border border-sky-800/45 bg-sky-950/10 px-2 py-1 text-[11px] text-sky-950 md:inline-block"
+              : "rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-[11px] text-slate-700"
+          }
+          title={state.organizationId}
+        >
+          Org {state.organizationId.slice(0, 8)}{state.role ? ` · ${state.role}` : ""}
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={logout}
