@@ -440,6 +440,15 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
   );
 }
 
+function parseApiBody(text: string): { error?: string; [k: string]: unknown } {
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as { error?: string; [k: string]: unknown };
+  } catch {
+    return { error: "La API devolvió una respuesta no JSON (posible sesión vencida)." };
+  }
+}
+
 function GastosPageContent() {
   const searchParams = useSearchParams();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
@@ -507,7 +516,8 @@ function GastosPageContent() {
   const cargarCatalogo = useCallback(async () => {
     try {
       const res = await fetch("/api/familias");
-      const data = await res.json();
+      const text = await res.text();
+      const data = parseApiBody(text);
       if (!res.ok) throw new Error(data.error || "Catálogo");
       setCatalogo(data.families ?? []);
     } catch {
@@ -523,7 +533,8 @@ function GastosPageContent() {
     const url = params.size ? `/api/gastos/detalle?${params.toString()}` : "/api/gastos/detalle";
     fetch(url)
       .then(async (res) => {
-        const data = await res.json();
+        const text = await res.text();
+        const data = parseApiBody(text);
         if (!res.ok) {
           throw new Error(data.error || "No se pudo cargar detalle");
         }

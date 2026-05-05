@@ -19,6 +19,29 @@ function etiquetaExcluidaParaAutoVinculo(raw: string): boolean {
   return !n || n === "sin categoria" || n === "otros";
 }
 
+function clavePreferirOrigen(m: {
+  date: string;
+  type: string;
+  amount: number;
+  counterparty?: string;
+  description?: string;
+  external_ref?: string;
+}) {
+  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, " ");
+  return [
+    m.date,
+    m.type,
+    Number(m.amount).toFixed(2),
+    norm(String(m.counterparty ?? "")),
+    norm(String(m.description ?? "")),
+    norm(String(m.external_ref ?? "")),
+  ].join("|");
+}
+
+function esSinOrigen(origen: string): boolean {
+  return normalizarEtiquetaConcepto(origen) === "sin origen";
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -116,11 +139,29 @@ export async function POST(request: Request) {
 
     const newMovements = parsed.valid.filter((m) => !existing.has(m.dedupe_hash));
     const seenInFile = new Set<string>();
-    const uniqueToInsert = newMovements.filter((m) => {
+    const uniqueByHash = newMovements.filter((m) => {
       if (seenInFile.has(m.dedupe_hash)) return false;
       seenInFile.add(m.dedupe_hash);
       return true;
     });
+
+    // Dentro del mismo archivo, si existe par equivalente y uno trae "Sin origen",
+    // se conserva el que tenga origen real para evitar duplicados operativos.
+    const preferByOrigin = new Map<string, (typeof uniqueByHash)[number]>();
+    for (const m of uniqueByHash) {
+      const key = clavePreferirOrigen(m);
+      const current = preferByOrigin.get(key);
+      if (!current) {
+        preferByOrigin.set(key, m);
+        continue;
+      }
+      const currentSinOrigen = esSinOrigen(String(current.account_name ?? ""));
+      const nextSinOrigen = esSinOrigen(String(m.account_name ?? ""));
+      if (currentSinOrigen && !nextSinOrigen) {
+        preferByOrigin.set(key, m);
+      }
+    }
+    const uniqueToInsert = Array.from(preferByOrigin.values());
 
     const lockedResp = await rejectIfImportDatesLocked(
       supabase,
