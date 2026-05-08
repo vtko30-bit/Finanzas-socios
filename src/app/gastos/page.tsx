@@ -519,7 +519,10 @@ function GastosPageContent() {
       const text = await res.text();
       const data = parseApiBody(text);
       if (!res.ok) throw new Error(data.error || "Catálogo");
-      setCatalogo(data.families ?? []);
+      const families = Array.isArray(data.families)
+        ? (data.families as CatalogFamily[])
+        : [];
+      setCatalogo(families);
     } catch {
       setCatalogo([]);
     }
