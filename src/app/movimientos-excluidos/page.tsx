@@ -6,6 +6,9 @@ import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
 
 type Tab = "gastos" | "ventas";
+type SortDir = "asc" | "desc";
+type GastoSortKey = "fecha" | "familia" | "categoria" | "origen" | "detalle" | "monto";
+type VentaSortKey = "fecha" | "familia" | "categoria" | "sucursal" | "medioPago" | "idVenta" | "monto";
 
 type GastoExclRow = {
   id: string;
@@ -64,6 +67,15 @@ const formatClp = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n || 0);
 
+function cmpText(a: string, b: string): number {
+  return a.localeCompare(b, "es", { sensitivity: "base" });
+}
+
+function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="ml-1 opacity-60">↕</span>;
+  return <span className="ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
+}
+
 export default function MovimientosExcluidosPage() {
   const { ready, authenticated } = useAuthState();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
@@ -85,6 +97,11 @@ export default function MovimientosExcluidosPage() {
   const [catalogoFamilias, setCatalogoFamilias] = useState<CatalogFamily[]>([]);
   const [editLineFilter, setEditLineFilter] = useState("");
   const [savingConceptId, setSavingConceptId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [gastoSortKey, setGastoSortKey] = useState<GastoSortKey>("fecha");
+  const [gastoSortDir, setGastoSortDir] = useState<SortDir>("desc");
+  const [ventaSortKey, setVentaSortKey] = useState<VentaSortKey>("fecha");
+  const [ventaSortDir, setVentaSortDir] = useState<SortDir>("desc");
 
   const cargar = useCallback(async (t: Tab) => {
     setLoading(true);
@@ -363,6 +380,119 @@ export default function MovimientosExcluidosPage() {
     }
   };
 
+  const gastosDisplay = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = !q
+      ? gastos
+      : gastos.filter((r) =>
+          [
+            r.fecha,
+            r.familia ?? "",
+            r.categoriaMostrada ?? "",
+            r.origen ?? "",
+            r.nombreDestino ?? "",
+            r.descripcion ?? "",
+            String(r.monto ?? ""),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        );
+    const mul = gastoSortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      let c = 0;
+      switch (gastoSortKey) {
+        case "fecha":
+          c = cmpText(a.fecha ?? "", b.fecha ?? "");
+          break;
+        case "familia":
+          c = cmpText(a.familia ?? "", b.familia ?? "");
+          break;
+        case "categoria":
+          c = cmpText(a.categoriaMostrada ?? "", b.categoriaMostrada ?? "");
+          break;
+        case "origen":
+          c = cmpText(a.origen ?? "", b.origen ?? "");
+          break;
+        case "detalle":
+          c = cmpText(a.nombreDestino || a.descripcion || "", b.nombreDestino || b.descripcion || "");
+          break;
+        case "monto":
+          c = (a.monto - b.monto);
+          break;
+      }
+      if (c === 0) c = cmpText(a.id, b.id);
+      return c * mul;
+    });
+  }, [gastos, search, gastoSortKey, gastoSortDir]);
+
+  const ventasDisplay = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = !q
+      ? ventas
+      : ventas.filter((r) =>
+          [
+            r.fecha,
+            r.familia ?? "",
+            r.categoriaMostrada ?? "",
+            r.sucursal ?? "",
+            r.medioPago ?? "",
+            r.idVenta ?? "",
+            String(r.monto ?? ""),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        );
+    const mul = ventaSortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      let c = 0;
+      switch (ventaSortKey) {
+        case "fecha":
+          c = cmpText(a.fecha ?? "", b.fecha ?? "");
+          break;
+        case "familia":
+          c = cmpText(a.familia ?? "", b.familia ?? "");
+          break;
+        case "categoria":
+          c = cmpText(a.categoriaMostrada ?? "", b.categoriaMostrada ?? "");
+          break;
+        case "sucursal":
+          c = cmpText(a.sucursal ?? "", b.sucursal ?? "");
+          break;
+        case "medioPago":
+          c = cmpText(a.medioPago ?? "", b.medioPago ?? "");
+          break;
+        case "idVenta":
+          c = cmpText(a.idVenta ?? "", b.idVenta ?? "");
+          break;
+        case "monto":
+          c = (a.monto - b.monto);
+          break;
+      }
+      if (c === 0) c = cmpText(a.id, b.id);
+      return c * mul;
+    });
+  }, [ventas, search, ventaSortKey, ventaSortDir]);
+
+  const toggleGastoSort = (key: GastoSortKey) => {
+    if (gastoSortKey === key) {
+      setGastoSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setGastoSortKey(key);
+    setGastoSortDir(key === "monto" ? "desc" : "asc");
+  };
+
+  const toggleVentaSort = (key: VentaSortKey) => {
+    if (ventaSortKey === key) {
+      setVentaSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setVentaSortKey(key);
+    setVentaSortDir(key === "monto" ? "desc" : "asc");
+  };
+
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-6 pb-10 pt-4">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -507,9 +637,16 @@ export default function MovimientosExcluidosPage() {
             </button>
             <span className="text-sm text-slate-600">
               {tab === "gastos"
-                ? `${gastos.length} movimiento(s)`
-                : `${ventas.length} movimiento(s)`}
+                ? `${gastosDisplay.length} movimiento(s)`
+                : `${ventasDisplay.length} movimiento(s)`}
             </span>
+            <input
+              type="search"
+              className="ui-field rounded-md px-3 py-1.5 text-sm"
+              placeholder="Buscar en la lista…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
 
           {selectedLine ? (
@@ -541,16 +678,40 @@ export default function MovimientosExcluidosPage() {
               <table className="w-full min-w-[720px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF] text-left text-xs font-medium text-white">
-                    <th className="px-3 py-2">Fecha</th>
-                    <th className="px-3 py-2">Familia</th>
-                    <th className="px-3 py-2">Categoría</th>
-                    <th className="px-3 py-2">Origen</th>
-                    <th className="px-3 py-2">Destino / descr.</th>
-                    <th className="px-3 py-2 text-right">Monto</th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleGastoSort("fecha")}>
+                        Fecha<SortArrow active={gastoSortKey === "fecha"} dir={gastoSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleGastoSort("familia")}>
+                        Familia<SortArrow active={gastoSortKey === "familia"} dir={gastoSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleGastoSort("categoria")}>
+                        Categoría<SortArrow active={gastoSortKey === "categoria"} dir={gastoSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleGastoSort("origen")}>
+                        Origen<SortArrow active={gastoSortKey === "origen"} dir={gastoSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleGastoSort("detalle")}>
+                        Destino / descr.<SortArrow active={gastoSortKey === "detalle"} dir={gastoSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      <button type="button" onClick={() => toggleGastoSort("monto")}>
+                        Monto<SortArrow active={gastoSortKey === "monto"} dir={gastoSortDir} />
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {gastos.length === 0 && !loading ? (
+                  {gastosDisplay.length === 0 && !loading ? (
                     <tr>
                       <td
                         colSpan={6}
@@ -561,7 +722,7 @@ export default function MovimientosExcluidosPage() {
                       </td>
                     </tr>
                   ) : (
-                    gastos.map((r) => (
+                    gastosDisplay.map((r) => (
                       <tr
                         key={r.id}
                         className={`border-t border-slate-200 cursor-pointer ${
@@ -605,17 +766,45 @@ export default function MovimientosExcluidosPage() {
               <table className="w-full min-w-[640px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF] text-left text-xs font-medium text-white">
-                    <th className="px-3 py-2">Fecha</th>
-                    <th className="px-3 py-2">Familia</th>
-                    <th className="px-3 py-2">Categoría</th>
-                    <th className="px-3 py-2">Sucursal</th>
-                    <th className="px-3 py-2">Medio de pago</th>
-                    <th className="px-3 py-2">Id</th>
-                    <th className="px-3 py-2 text-right">Monto</th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleVentaSort("fecha")}>
+                        Fecha<SortArrow active={ventaSortKey === "fecha"} dir={ventaSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleVentaSort("familia")}>
+                        Familia<SortArrow active={ventaSortKey === "familia"} dir={ventaSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleVentaSort("categoria")}>
+                        Categoría<SortArrow active={ventaSortKey === "categoria"} dir={ventaSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleVentaSort("sucursal")}>
+                        Sucursal<SortArrow active={ventaSortKey === "sucursal"} dir={ventaSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleVentaSort("medioPago")}>
+                        Medio de pago<SortArrow active={ventaSortKey === "medioPago"} dir={ventaSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2">
+                      <button type="button" onClick={() => toggleVentaSort("idVenta")}>
+                        Id<SortArrow active={ventaSortKey === "idVenta"} dir={ventaSortDir} />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      <button type="button" onClick={() => toggleVentaSort("monto")}>
+                        Monto<SortArrow active={ventaSortKey === "monto"} dir={ventaSortDir} />
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ventas.length === 0 && !loading ? (
+                  {ventasDisplay.length === 0 && !loading ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -625,7 +814,7 @@ export default function MovimientosExcluidosPage() {
                       </td>
                     </tr>
                   ) : (
-                    ventas.map((r) => (
+                    ventasDisplay.map((r) => (
                       <tr
                         key={r.id}
                         className={`border-t border-slate-200 cursor-pointer ${
