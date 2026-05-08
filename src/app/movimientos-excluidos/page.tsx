@@ -97,6 +97,7 @@ export default function MovimientosExcluidosPage() {
   const [catalogoFamilias, setCatalogoFamilias] = useState<CatalogFamily[]>([]);
   const [editLineFilter, setEditLineFilter] = useState("");
   const [savingConceptId, setSavingConceptId] = useState<string | null>(null);
+  const [exclListOpen, setExclListOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [gastoSortKey, setGastoSortKey] = useState<GastoSortKey>("fecha");
   const [gastoSortDir, setGastoSortDir] = useState<SortDir>("desc");
@@ -536,9 +537,15 @@ export default function MovimientosExcluidosPage() {
             className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm"
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">
-                Familias excluidas del resumen
-              </h2>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 text-left text-sm font-semibold text-slate-900"
+                aria-expanded={exclListOpen}
+                onClick={() => setExclListOpen((v) => !v)}
+              >
+                <span>Familias excluidas del resumen</span>
+                <span className="text-slate-600">{exclListOpen ? "▲" : "▼"}</span>
+              </button>
               {!capsLoading && canWrite ? (
                 <button
                   type="button"
@@ -553,34 +560,40 @@ export default function MovimientosExcluidosPage() {
                 </p>
               ) : null}
             </div>
-            {exclItems.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-600">
-                Ninguna familia excluida. Usa «Excluir familia» para elegir una de la lista en{" "}
-                <Link href="/familias" className="text-sky-700 underline">
-                  Familias
-                </Link>
-                .
-              </p>
+            {exclListOpen ? (
+              exclItems.length === 0 ? (
+                <p className="mt-2 text-xs text-slate-600">
+                  Ninguna familia excluida. Usa «Excluir familia» para elegir una de la lista en{" "}
+                  <Link href="/familias" className="text-sky-700 underline">
+                    Familias
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <ul className="mt-2 flex flex-col gap-1 text-sm">
+                  {exclItems.map((it) => (
+                    <li
+                      key={it.familyId}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-800"
+                    >
+                      <span>{it.familyName}</span>
+                      {!capsLoading && canWrite ? (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-rose-700 hover:underline"
+                          onClick={() => void quitarExclusion(it.familyId)}
+                        >
+                          Quitar exclusión
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )
             ) : (
-              <ul className="mt-2 flex flex-col gap-1 text-sm">
-                {exclItems.map((it) => (
-                  <li
-                    key={it.familyId}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-800"
-                  >
-                    <span>{it.familyName}</span>
-                    {!capsLoading && canWrite ? (
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-rose-700 hover:underline"
-                        onClick={() => void quitarExclusion(it.familyId)}
-                      >
-                        Quitar exclusión
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <p className="mt-2 text-xs text-slate-500">
+                {exclItems.length} familia(s) excluida(s). Pulsa el título para ver detalle.
+              </p>
             )}
             {mgmtMsg && !exclModalOpen ? (
               <p className="mt-2 text-xs text-amber-800">{mgmtMsg}</p>
