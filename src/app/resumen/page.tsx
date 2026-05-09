@@ -78,7 +78,9 @@ function normalizarTextoEvento(v: string): string {
 }
 
 function esTextoFiltroEvento(v: string): boolean {
-  const t = normalizarTextoEvento(v || "");
+  const trimmed = (v || "").trim();
+  if (trimmed.toLowerCase() === "eventos") return true;
+  const t = normalizarTextoEvento(trimmed);
   if (!t) return false;
   return (
     EVENTO_PREFIX_RE.test(t) ||

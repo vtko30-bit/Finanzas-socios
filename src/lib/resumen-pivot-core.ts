@@ -6,59 +6,18 @@ import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
 } from "@/lib/org-excluded-families-db";
+import {
+  compareSucursalOrder,
+  effectiveSoloSucursalesFijas,
+  esEventoSucursal,
+  esSucursalFija,
+  esSucursalResumenCanonica,
+  sucursalResumenCanonica,
+} from "@/lib/sucursal-resumen";
 
 export const EXPENSE_TYPES = ["expense", "gasto", "egreso"] as const;
 const INCOME_TYPES = ["income", "ingreso"] as const;
 const PAGE_SIZE = 1000;
-const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
-const EVENTO_PREFIX_RE = /^\s*evento(?:[_\-\s]|$)/i;
-
-function normalizarTextoEvento(v: string): string {
-  return v
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/^[^a-z0-9]+/, "")
-    .trim();
-}
-
-function esEventoSucursal(origenCuenta: string | null | undefined): boolean {
-  const t = normalizarTextoEvento(String(origenCuenta ?? ""));
-  if (!t) return false;
-  return (
-    EVENTO_PREFIX_RE.test(t) ||
-    EVENTO_PREFIXES.some((p) => t.startsWith(p)) ||
-    t.includes("evento_") ||
-    t.includes("evento-") ||
-    t.includes("evento ") ||
-    t.includes("evento")
-  );
-}
-
-function esSucursalFija(origenCuenta: string | null | undefined): boolean {
-  const t = String(origenCuenta ?? "").trim().toLowerCase();
-  if (!t) return false;
-  return !esEventoSucursal(t);
-}
-
-function sucursalOrderGroup(name: string): number {
-  const t = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-  if (t === "rg" || t.startsWith("rg ") || t.startsWith("rg-")) return 0;
-  if (t.includes("happy")) return 1;
-  if (t.includes("evento")) return 2;
-  return 3;
-}
-
-function compareSucursalOrder(a: string, b: string): number {
-  const ga = sucursalOrderGroup(a);
-  const gb = sucursalOrderGroup(b);
-  if (ga !== gb) return ga - gb;
-  return a.localeCompare(b, "es", { sensitivity: "base" });
-}
 
 const MESES_CORTO = [
   "Enero",
@@ -131,6 +90,10 @@ export async function fetchIncomeRowsPaged(args: {
   soloSucursalesFijas?: boolean;
 }): Promise<{ data: IncomeRow[]; error: string | null }> {
   const out: IncomeRow[] = [];
+  const sucursalTrim = args.sucursal?.trim() ?? "";
+  const soloFijas = effectiveSoloSucursalesFijas(sucursalTrim, args.soloSucursalesFijas);
+  const filtroCanonico =
+    sucursalTrim.length > 0 && sucursalTrim.length <= 200 && esSucursalResumenCanonica(sucursalTrim);
   let from = 0;
   while (true) {
     const to = from + PAGE_SIZE - 1;
@@ -159,14 +122,24 @@ export async function fetchIncomeRowsPaged(args: {
       .order("date", { ascending: false })
       .order("id", { ascending: false })
       .range(from, to);
-    if (args.sucursal && args.sucursal.length > 0 && args.sucursal.length <= 200) {
-      q = q.ilike("origen_cuenta", `%${args.sucursal}%`);
+    if (
+      sucursalTrim.length > 0 &&
+      sucursalTrim.length <= 200 &&
+      !filtroCanonico
+    ) {
+      q = q.ilike("origen_cuenta", `%${sucursalTrim}%`);
     }
     const { data, error } = await q;
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as IncomeRow[];
     out.push(
-      ...page.filter((r) => (args.soloSucursalesFijas ? esSucursalFija(r.origen_cuenta) : true)),
+      ...page.filter((r) => {
+        if (soloFijas && !esSucursalFija(r.origen_cuenta)) return false;
+        if (filtroCanonico && sucursalResumenCanonica(r.origen_cuenta) !== sucursalTrim) {
+          return false;
+        }
+        return true;
+      }),
     );
     if (page.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
@@ -183,6 +156,10 @@ export async function fetchExpenseRowsPaged(args: {
   soloSucursalesFijas?: boolean;
 }): Promise<{ data: unknown[]; error: string | null }> {
   const out: unknown[] = [];
+  const sucursalTrim = args.sucursal?.trim() ?? "";
+  const soloFijas = effectiveSoloSucursalesFijas(sucursalTrim, args.soloSucursalesFijas);
+  const filtroCanonico =
+    sucursalTrim.length > 0 && sucursalTrim.length <= 200 && esSucursalResumenCanonica(sucursalTrim);
   let from = 0;
   while (true) {
     const to = from + PAGE_SIZE - 1;
@@ -210,17 +187,24 @@ export async function fetchExpenseRowsPaged(args: {
       .order("date", { ascending: false })
       .order("id", { ascending: false })
       .range(from, to);
-    if (args.sucursal && args.sucursal.length > 0 && args.sucursal.length <= 200) {
-      q = q.ilike("origen_cuenta", `%${args.sucursal}%`);
+    if (
+      sucursalTrim.length > 0 &&
+      sucursalTrim.length <= 200 &&
+      !filtroCanonico
+    ) {
+      q = q.ilike("origen_cuenta", `%${sucursalTrim}%`);
     }
     const { data, error } = await q;
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as unknown[];
     out.push(
       ...page.filter((raw) => {
-        if (!args.soloSucursalesFijas) return true;
         const row = raw as { origen_cuenta?: string | null };
-        return esSucursalFija(row.origen_cuenta);
+        if (soloFijas && !esSucursalFija(row.origen_cuenta)) return false;
+        if (filtroCanonico && sucursalResumenCanonica(row.origen_cuenta) !== sucursalTrim) {
+          return false;
+        }
+        return true;
       }),
     );
     if (page.length < PAGE_SIZE) break;
@@ -489,7 +473,14 @@ export async function loadGastosFamiliaCategoriaDetalle(args: {
 
   const bloque = args.origenCuentaBloque?.trim();
   if (bloque) {
-    pool = pool.filter((raw) => origenCuentaBloqueDesdeRawTx(raw) === bloque);
+    if (esSucursalResumenCanonica(bloque)) {
+      pool = pool.filter(
+        (raw) =>
+          sucursalResumenCanonica(origenCuentaBloqueDesdeRawTx(raw)) === bloque,
+      );
+    } else {
+      pool = pool.filter((raw) => origenCuentaBloqueDesdeRawTx(raw) === bloque);
+    }
   }
 
   const poolFamilia = pool.filter(
@@ -955,17 +946,22 @@ export async function loadResumenPivotMain(args: {
   }
 
   const sucursal = args.sucursal?.trim() ?? "";
+  const soloFijasEfectivo = effectiveSoloSucursalesFijas(sucursal, args.soloSucursalesFijas);
+  const omitirAggPorFiltroCanonico =
+    sucursal.length > 0 && sucursal.length <= 200 && esSucursalResumenCanonica(sucursal);
 
   const [aggRows, creditRes, financingRes, creditDisburseRes] = await Promise.all([
-    fetchResumenPivotOperativoAggOrNull({
-      supabase: args.supabase,
-      organizationId: args.organizationId,
-      desde: args.desde,
-      hasta: args.hasta,
-      sucursal,
-      soloSucursalesFijas: args.soloSucursalesFijas,
-      excludedFamilyIds,
-    }),
+    omitirAggPorFiltroCanonico
+      ? Promise.resolve(null)
+      : fetchResumenPivotOperativoAggOrNull({
+          supabase: args.supabase,
+          organizationId: args.organizationId,
+          desde: args.desde,
+          hasta: args.hasta,
+          sucursal,
+          soloSucursalesFijas: soloFijasEfectivo,
+          excludedFamilyIds,
+        }),
     fetchCreditInstallmentsPaidRows({
       supabase: args.supabase,
       organizationId: args.organizationId,
@@ -1113,20 +1109,37 @@ function ventasPorSucursalListaDesdeOrigenMensual(
   rows: IncomePorOrigenMensualAggRow[],
   monthKeys: string[],
 ): Array<{ sucursal: string; rows: ReturnType<typeof ventasRowsFromIncome> }> {
-  const byLoc = new Map<string, IncomeRow[]>();
+  /** canon → ym → payment_method → suma */
+  const nested = new Map<string, Map<string, Map<string, number>>>();
   for (const r of rows) {
-    const sucursal = String(r.origen_cuenta ?? "").trim() || "Sin sucursal";
+    const canon = sucursalResumenCanonica(r.origen_cuenta);
     const ym = String(r.ym ?? "").slice(0, 7);
     if (!monthKeys.includes(ym)) continue;
-    const row: IncomeRow = {
-      date: `${ym}-01`,
-      amount: Number(r.amount_sum) || 0,
-      payment_method: r.payment_method,
-      origen_cuenta: sucursal,
-    };
-    if (!byLoc.has(sucursal)) byLoc.set(sucursal, []);
-    byLoc.get(sucursal)!.push(row);
+    const pmRaw = r.payment_method == null ? "" : String(r.payment_method).trim();
+    const amt = Number(r.amount_sum) || 0;
+    if (!nested.has(canon)) nested.set(canon, new Map());
+    const byYm = nested.get(canon)!;
+    if (!byYm.has(ym)) byYm.set(ym, new Map());
+    const byPm = byYm.get(ym)!;
+    byPm.set(pmRaw, (byPm.get(pmRaw) ?? 0) + amt);
   }
+
+  const byLoc = new Map<string, IncomeRow[]>();
+  for (const [canon, byYm] of nested) {
+    const incomeRows: IncomeRow[] = [];
+    for (const [ym, byPm] of byYm) {
+      for (const [pmRaw, sumAmt] of byPm) {
+        incomeRows.push({
+          date: `${ym}-01`,
+          amount: sumAmt,
+          payment_method: pmRaw.length ? pmRaw : null,
+          origen_cuenta: canon,
+        });
+      }
+    }
+    byLoc.set(canon, incomeRows);
+  }
+
   return Array.from(byLoc.entries())
     .map(([sucursalNombre, incomeRows]) => ({
       sucursal: sucursalNombre,
@@ -1341,7 +1354,7 @@ export async function loadResumenPivotPorSucursal(args: {
 
     const byLoc = new Map<string, IncomeRow[]>();
     for (const raw of incomeFiltrados) {
-      const loc = String(raw.origen_cuenta ?? "").trim() || "Sin sucursal";
+      const loc = sucursalResumenCanonica(raw.origen_cuenta);
       if (!byLoc.has(loc)) byLoc.set(loc, []);
       byLoc.get(loc)!.push(raw);
     }
@@ -1365,7 +1378,7 @@ export async function loadResumenPivotPorSucursal(args: {
   const gastosByLoc = new Map<string, unknown[]>();
   for (const raw of expenseNegocio) {
     const row = raw as { origen_cuenta?: string | null };
-    const loc = String(row.origen_cuenta ?? "").trim() || "Sin sucursal";
+    const loc = sucursalResumenCanonica(row.origen_cuenta);
     if (!gastosByLoc.has(loc)) gastosByLoc.set(loc, []);
     gastosByLoc.get(loc)!.push(raw);
   }
