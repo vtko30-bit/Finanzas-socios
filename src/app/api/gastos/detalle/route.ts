@@ -10,7 +10,6 @@ import { getUserOrganization } from "@/lib/organization";
 
 const EXPENSE_TYPES = ["expense", "gasto", "egreso"];
 const PAGE_SIZE = 1000;
-const SOURCE_PAGO_SERVICIOS_BANCOESTADO = "excel_egresos_banco_estado_servicios";
 
 function necesitaConcepto(raw: string) {
   const t = (raw || "").trim().toLowerCase();
@@ -86,10 +85,6 @@ export async function GET(request: Request) {
     }
     if (sourceExact) {
       query = query.eq("source", sourceExact);
-    } else {
-      query = query.or(
-        `source.is.null,source.neq.${SOURCE_PAGO_SERVICIOS_BANCOESTADO}`,
-      );
     }
 
     const { data: page, error } = await query;
