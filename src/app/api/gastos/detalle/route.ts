@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
+import { omitServiciosExpenseWhenMirroredInExcelEgresos } from "@/lib/gastos-dedupe-servicios";
 import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
@@ -106,7 +107,13 @@ export async function GET(request: Request) {
     if (!uniqueById.has(tx.id)) uniqueById.set(tx.id, raw);
   }
 
-  const rows = Array.from(uniqueById.values()).map((row) => {
+  const merged = Array.from(uniqueById.values());
+  const deduped =
+    sourceExact.length > 0
+      ? merged
+      : omitServiciosExpenseWhenMirroredInExcelEgresos(merged);
+
+  const rows = deduped.map((row) => {
     const origenCuenta =
       (row as { origen_cuenta?: string }).origen_cuenta ?? "";
     const conceptoCol = (row as { concepto?: string }).concepto ?? "";
