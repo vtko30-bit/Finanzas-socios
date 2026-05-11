@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthState } from "@/hooks/use-auth-state";
 
 type PivotRowVenta = {
@@ -55,6 +55,15 @@ type GastosFamiliaDetalleResponse = {
   monthKeys: string[];
   monthLabels: string[];
   rows: Array<{ categoria: string; byMonth: Record<string, number>; total: number }>;
+};
+
+type GastoMovimientoCategoriaRow = {
+  id: string;
+  fecha: string;
+  monto: number;
+  descripcion: string;
+  destino: string;
+  origenCuenta: string;
 };
 
 /** Selección del filtro de sucursal / origen (ventas y gastos). */
@@ -189,6 +198,20 @@ export default function ResumenPage() {
     useState<GastosFamiliaDetalleResponse | null>(null);
   const [familiaDetalleLoading, setFamiliaDetalleLoading] = useState(false);
   const [familiaDetalleError, setFamiliaDetalleError] = useState("");
+  const [categoriaMovAbierta, setCategoriaMovAbierta] = useState<string | null>(null);
+  const [categoriaMovCache, setCategoriaMovCache] = useState<
+    Record<string, GastoMovimientoCategoriaRow[]>
+  >({});
+  const [categoriaMovLoading, setCategoriaMovLoading] = useState<string | null>(null);
+  const [categoriaMovError, setCategoriaMovError] = useState("");
+  const categoriaMovAbiertaRef = useRef<string | null>(null);
+  const categoriaMovCacheRef = useRef<Record<string, GastoMovimientoCategoriaRow[]>>({});
+  useEffect(() => {
+    categoriaMovAbiertaRef.current = categoriaMovAbierta;
+  }, [categoriaMovAbierta]);
+  useEffect(() => {
+    categoriaMovCacheRef.current = categoriaMovCache;
+  }, [categoriaMovCache]);
 
   const textoSucursalCampo = textoMostradoSucursal(sucursalSel);
   const filtroEventoActivo =
@@ -268,6 +291,10 @@ export default function ResumenPage() {
     setFamiliaDetalleData(null);
     setFamiliaDetalleError("");
     setFamiliaDetalleLoading(false);
+    setCategoriaMovAbierta(null);
+    setCategoriaMovCache({});
+    setCategoriaMovLoading(null);
+    setCategoriaMovError("");
   }, []);
 
   const abrirFamiliaDetalle = useCallback(
@@ -308,6 +335,69 @@ export default function ResumenPage() {
       }
     },
     [rangoEfectivo, sucursalSel, soloSucursalesFijas],
+  );
+
+  useEffect(() => {
+    setCategoriaMovAbierta(null);
+    setCategoriaMovCache({});
+    setCategoriaMovLoading(null);
+    setCategoriaMovError("");
+  }, [
+    familiaDetalleCtx?.familia,
+    familiaDetalleCtx?.alcance,
+    familiaDetalleCtx?.origenBloque,
+  ]);
+
+  const toggleMovimientosCategoria = useCallback(
+    async (categoria: string) => {
+      if (!familiaDetalleCtx) return;
+      if (categoriaMovAbiertaRef.current === categoria) {
+        setCategoriaMovAbierta(null);
+        return;
+      }
+      setCategoriaMovAbierta(categoria);
+      setCategoriaMovError("");
+      if (categoriaMovCacheRef.current[categoria]) return;
+
+      const { desde, hasta } = rangoEfectivo;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return;
+
+      setCategoriaMovLoading(categoria);
+      try {
+        const q = new URLSearchParams({
+          desde,
+          hasta,
+          familia: familiaDetalleCtx.familia,
+          alcance: familiaDetalleCtx.alcance,
+          categoria,
+        });
+        if (sucursalSel.k === "una" && sucursalSel.v.trim()) {
+          q.set("sucursal", sucursalSel.v.trim());
+        }
+        if (soloSucursalesFijas) q.set("soloSucursalesFijas", "1");
+        if (familiaDetalleCtx.origenBloque) {
+          q.set("origen_cuenta_bloque", familiaDetalleCtx.origenBloque);
+        }
+        const res = await fetch(
+          `/api/resumen/gastos-familia-categoria-movimientos?${q.toString()}`,
+        );
+        const json = (await res.json()) as {
+          movimientos?: GastoMovimientoCategoriaRow[];
+          error?: string;
+        };
+        if (!res.ok) {
+          setCategoriaMovError(json.error ?? "No se pudieron cargar los movimientos");
+          return;
+        }
+        const list = Array.isArray(json.movimientos) ? json.movimientos : [];
+        setCategoriaMovCache((prev) => ({ ...prev, [categoria]: list }));
+      } catch {
+        setCategoriaMovError("Error de red al cargar movimientos");
+      } finally {
+        setCategoriaMovLoading(null);
+      }
+    },
+    [familiaDetalleCtx, rangoEfectivo, sucursalSel, soloSucursalesFijas],
   );
 
   useEffect(() => {
@@ -1437,17 +1527,95 @@ export default function ResumenPage() {
                           ) : (
                             <>
                               {familiaDetalleData.rows.map((r) => (
-                                <tr key={r.categoria}>
-                                  <td className={tdStickyFirst}>{r.categoria}</td>
-                                  {familiaDetalleData.monthKeys.map((mk) => (
-                                    <td key={mk} className={tdNum}>
-                                      {formatClp(r.byMonth[mk] ?? 0)}
+                                <Fragment key={r.categoria}>
+                                  <tr>
+                                    <td className={tdStickyFirst}>
+                                      <button
+                                        type="button"
+                                        className="flex w-full max-w-[min(100%,18rem)] items-start gap-2 rounded px-0.5 py-0.5 text-left text-slate-900 hover:bg-slate-100 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500"
+                                        aria-expanded={categoriaMovAbierta === r.categoria}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          void toggleMovimientosCategoria(r.categoria);
+                                        }}
+                                      >
+                                        <span
+                                          className="mt-0.5 shrink-0 text-slate-500"
+                                          aria-hidden
+                                        >
+                                          {categoriaMovAbierta === r.categoria ? "▼" : "▶"}
+                                        </span>
+                                        <span className="min-w-0 break-words font-medium">
+                                          {r.categoria}
+                                        </span>
+                                      </button>
                                     </td>
-                                  ))}
-                                  <td className={`${tdNum} font-medium text-slate-50`}>
-                                    {formatClp(r.total)}
-                                  </td>
-                                </tr>
+                                    {familiaDetalleData.monthKeys.map((mk) => (
+                                      <td key={mk} className={tdNum}>
+                                        {formatClp(r.byMonth[mk] ?? 0)}
+                                      </td>
+                                    ))}
+                                    <td className={`${tdNum} font-medium text-slate-50`}>
+                                      {formatClp(r.total)}
+                                    </td>
+                                  </tr>
+                                  {categoriaMovAbierta === r.categoria ? (
+                                    <tr className="bg-slate-50">
+                                      <td
+                                        colSpan={familiaDetalleData.monthKeys.length + 2}
+                                        className="border-t border-slate-200 px-3 py-2 align-top"
+                                      >
+                                        {categoriaMovLoading === r.categoria ? (
+                                          <p className="text-xs text-slate-600">Cargando movimientos…</p>
+                                        ) : categoriaMovError ? (
+                                          <p className="text-xs text-red-700">{categoriaMovError}</p>
+                                        ) : (
+                                          <div className="max-h-52 overflow-y-auto">
+                                            {(categoriaMovCache[r.categoria] ?? []).length ===
+                                            0 ? (
+                                              <p className="text-xs text-slate-600">
+                                                No hay movimientos individuales para esta categoría.
+                                              </p>
+                                            ) : (
+                                              <ul className="divide-y divide-slate-200 text-xs">
+                                                {(categoriaMovCache[r.categoria] ?? []).map(
+                                                  (m) => (
+                                                    <li
+                                                      key={m.id}
+                                                      className="flex flex-wrap gap-x-3 gap-y-1 py-2 text-slate-800"
+                                                    >
+                                                      <span className="shrink-0 font-mono text-slate-600">
+                                                        {m.fecha}
+                                                      </span>
+                                                      <span className="min-w-0 flex-1 break-words">
+                                                        {m.destino || m.descripcion || "—"}
+                                                        {m.descripcion &&
+                                                        m.destino &&
+                                                        m.descripcion !== m.destino ? (
+                                                          <span className="block text-slate-500">
+                                                            {m.descripcion}
+                                                          </span>
+                                                        ) : null}
+                                                      </span>
+                                                      {m.origenCuenta ? (
+                                                        <span className="shrink-0 text-slate-500">
+                                                          {m.origenCuenta}
+                                                        </span>
+                                                      ) : null}
+                                                      <span className="ml-auto shrink-0 font-medium tabular-nums text-slate-900">
+                                                        {formatClp(m.monto)}
+                                                      </span>
+                                                    </li>
+                                                  ),
+                                                )}
+                                              </ul>
+                                            )}
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
                               ))}
                               <tr className={trTotal}>
                                 <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>

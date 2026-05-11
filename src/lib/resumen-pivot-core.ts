@@ -168,9 +168,12 @@ export async function fetchExpenseRowsPaged(args: {
       .from("transactions")
       .select(
         `
+      id,
       date,
       amount,
       source,
+      description,
+      counterparty,
       origen_cuenta,
       concepto,
       concept_catalog (
@@ -368,6 +371,95 @@ export function origenCuentaBloqueDesdeRawTx(raw: unknown): string {
 /**
  * Desglose por categoría (misma etiqueta que Detalle de gastos: concepto de planilla o label de catálogo).
  */
+type GastosFamiliaDetalleArgs = {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+  familia: string;
+  alcance: "negocio" | "socios";
+  sucursal?: string;
+  soloSucursalesFijas?: boolean;
+  origenCuentaBloque?: string | null;
+};
+
+/** Pool de transacciones de egreso ya filtrado por familia y mismos criterios que el modal de Resumen. */
+async function loadGastosFamiliaDetallePool(args: GastosFamiliaDetalleArgs): Promise<{
+  poolFamilia: unknown[];
+  monthKeys: string[];
+  monthLabels: string[];
+  error: string | null;
+}> {
+  const monthKeys = monthKeysInRange(args.desde, args.hasta);
+  const monthLabels = buildMonthLabels(monthKeys);
+  const familia = args.familia.trim();
+  if (!familia) {
+    return { poolFamilia: [], monthKeys, monthLabels, error: "familia requerida" };
+  }
+
+  let excludedFamilyIds: Set<string>;
+  try {
+    excludedFamilyIds = await fetchExcludedFamilyIdSet(
+      args.supabase,
+      args.organizationId,
+    );
+  } catch (e) {
+    return {
+      poolFamilia: [],
+      monthKeys,
+      monthLabels,
+      error: e instanceof Error ? e.message : "Error al cargar familias excluidas",
+    };
+  }
+
+  if (monthKeys.length === 0) {
+    return { poolFamilia: [], monthKeys, monthLabels, error: null };
+  }
+
+  const sucursal = args.sucursal?.trim() ?? "";
+  const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
+    supabase: args.supabase,
+    organizationId: args.organizationId,
+    desde: args.desde,
+    hasta: args.hasta,
+    sucursal,
+    soloSucursalesFijas: args.soloSucursalesFijas,
+  });
+  if (expenseErr) {
+    return { poolFamilia: [], monthKeys, monthLabels, error: expenseErr };
+  }
+
+  const expenseFiltrados = filterExpenseRowsByExcludedFamilies(
+    expenseData ?? [],
+    excludedFamilyIds,
+  );
+
+  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
+    expenseFiltrados,
+  );
+  let pool = args.alcance === "negocio" ? expenseNegocio : expenseSocios;
+
+  const bloque = args.origenCuentaBloque?.trim();
+  if (bloque) {
+    if (esSucursalResumenCanonica(bloque)) {
+      pool = pool.filter(
+        (raw) =>
+          sucursalResumenCanonica(origenCuentaBloqueDesdeRawTx(raw)) === bloque,
+      );
+    } else {
+      pool = pool.filter((raw) => origenCuentaBloqueDesdeRawTx(raw) === bloque);
+    }
+  }
+
+  const poolFamilia = pool.filter(
+    (raw) =>
+      familiaNombreDesdeRawTx(raw as Parameters<typeof familiaNombreDesdeRawTx>[0]) ===
+      familia,
+  );
+
+  return { poolFamilia, monthKeys, monthLabels, error: null };
+}
+
 export function gastosPorCategoriaFromExpenseRows(
   rows: unknown[],
   monthKeys: string[],
@@ -400,17 +492,7 @@ export function gastosPorCategoriaFromExpenseRows(
     .sort((a, b) => a.categoria.localeCompare(b.categoria, "es"));
 }
 
-export async function loadGastosFamiliaCategoriaDetalle(args: {
-  supabase: SupabaseClient;
-  organizationId: string;
-  desde: string;
-  hasta: string;
-  familia: string;
-  alcance: "negocio" | "socios";
-  sucursal?: string;
-  soloSucursalesFijas?: boolean;
-  origenCuentaBloque?: string | null;
-}): Promise<{
+export async function loadGastosFamiliaCategoriaDetalle(args: GastosFamiliaDetalleArgs): Promise<{
   data: {
     familia: string;
     alcance: "negocio" | "socios";
@@ -421,32 +503,23 @@ export async function loadGastosFamiliaCategoriaDetalle(args: {
   } | null;
   error: string | null;
 }> {
-  const monthKeys = monthKeysInRange(args.desde, args.hasta);
-  const monthLabels = buildMonthLabels(monthKeys);
   const familia = args.familia.trim();
   if (!familia) {
     return { data: null, error: "familia requerida" };
   }
 
-  let excludedFamilyIds: Set<string>;
-  try {
-    excludedFamilyIds = await fetchExcludedFamilyIdSet(
-      args.supabase,
-      args.organizationId,
-    );
-  } catch (e) {
-    return {
-      data: null,
-      error: e instanceof Error ? e.message : "Error al cargar familias excluidas",
-    };
-  }
+  const { poolFamilia, monthKeys, monthLabels, error } = await loadGastosFamiliaDetallePool(
+    args,
+  );
+  if (error) return { data: null, error };
+  const bloque = args.origenCuentaBloque?.trim() || null;
 
   if (monthKeys.length === 0) {
     return {
       data: {
         familia,
         alcance: args.alcance,
-        origen_cuenta_bloque: args.origenCuentaBloque?.trim() || null,
+        origen_cuenta_bloque: bloque,
         monthKeys: [],
         monthLabels: [],
         rows: [],
@@ -455,56 +528,76 @@ export async function loadGastosFamiliaCategoriaDetalle(args: {
     };
   }
 
-  const sucursal = args.sucursal?.trim() ?? "";
-  const { data: expenseData, error: expenseErr } = await fetchExpenseRowsPaged({
-    supabase: args.supabase,
-    organizationId: args.organizationId,
-    desde: args.desde,
-    hasta: args.hasta,
-    sucursal,
-    soloSucursalesFijas: args.soloSucursalesFijas,
-  });
-  if (expenseErr) return { data: null, error: expenseErr };
-
-  const expenseFiltrados = filterExpenseRowsByExcludedFamilies(
-    expenseData ?? [],
-    excludedFamilyIds,
-  );
-
-  const { negocio: expenseNegocio, socios: expenseSocios } = partitionExpenseRowsSocios(
-    expenseFiltrados,
-  );
-  let pool = args.alcance === "negocio" ? expenseNegocio : expenseSocios;
-
-  const bloque = args.origenCuentaBloque?.trim();
-  if (bloque) {
-    if (esSucursalResumenCanonica(bloque)) {
-      pool = pool.filter(
-        (raw) =>
-          sucursalResumenCanonica(origenCuentaBloqueDesdeRawTx(raw)) === bloque,
-      );
-    } else {
-      pool = pool.filter((raw) => origenCuentaBloqueDesdeRawTx(raw) === bloque);
-    }
-  }
-
-  const poolFamilia = pool.filter(
-    (raw) => familiaNombreDesdeRawTx(raw as Parameters<typeof familiaNombreDesdeRawTx>[0]) === familia,
-  );
-
   const rows = gastosPorCategoriaFromExpenseRows(poolFamilia, monthKeys);
 
   return {
     data: {
       familia,
       alcance: args.alcance,
-      origen_cuenta_bloque: bloque || null,
+      origen_cuenta_bloque: bloque,
       monthKeys,
       monthLabels,
       rows,
     },
     error: null,
   };
+}
+
+export type GastoMovimientoResumenRow = {
+  id: string;
+  fecha: string;
+  monto: number;
+  descripcion: string;
+  destino: string;
+  origenCuenta: string;
+};
+
+export async function loadGastosFamiliaCategoriaMovimientos(args: GastosFamiliaDetalleArgs & {
+  categoria: string;
+}): Promise<{ data: { movimientos: GastoMovimientoResumenRow[] } | null; error: string | null }> {
+  const familia = args.familia.trim();
+  const categoriaFiltro = args.categoria.trim();
+  if (!familia) return { data: null, error: "familia requerida" };
+  if (!categoriaFiltro) return { data: null, error: "categoría requerida" };
+
+  const { poolFamilia, error } = await loadGastosFamiliaDetallePool(args);
+  if (error) return { data: null, error };
+
+  const filtrados = poolFamilia.filter((raw) => {
+    const catRaw = categoriaMostradaDesdeRawTx(
+      raw as Parameters<typeof categoriaMostradaDesdeRawTx>[0],
+    );
+    const c = catRaw.trim() || "Sin categoría";
+    return c === categoriaFiltro;
+  });
+
+  const movimientos: GastoMovimientoResumenRow[] = filtrados
+    .map((raw) => {
+      const r = raw as {
+        id?: string;
+        date?: string;
+        amount?: number | string;
+        description?: string | null;
+        counterparty?: string | null;
+        origen_cuenta?: string | null;
+      };
+      return {
+        id: String(r.id ?? ""),
+        fecha: String(r.date ?? "").slice(0, 10),
+        monto: Number(r.amount) || 0,
+        descripcion: String(r.description ?? "").trim(),
+        destino: String(r.counterparty ?? "").trim(),
+        origenCuenta: String(r.origen_cuenta ?? "").trim(),
+      };
+    })
+    .filter((m) => m.id.length > 0)
+    .sort((a, b) => {
+      const c = b.fecha.localeCompare(a.fecha);
+      if (c !== 0) return c;
+      return b.id.localeCompare(a.id);
+    });
+
+  return { data: { movimientos }, error: null };
 }
 
 type CreditInstallmentPaidRow = {
