@@ -1458,10 +1458,10 @@ export default function ResumenPage() {
               onClick={cerrarFamiliaDetalle}
             >
               <div
-                className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+                className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <h2
                       id="familia-detalle-titulo"
@@ -1489,7 +1489,7 @@ export default function ResumenPage() {
                     Cerrar
                   </button>
                 </div>
-                <div className="overflow-y-auto px-4 pb-4 pt-2">
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2">
                   {familiaDetalleLoading ? (
                     <p className="py-8 text-center text-sm text-slate-600">Cargando…</p>
                   ) : familiaDetalleError ? (
@@ -1570,7 +1570,7 @@ export default function ResumenPage() {
                                         ) : categoriaMovError ? (
                                           <p className="text-xs text-red-700">{categoriaMovError}</p>
                                         ) : (
-                                          <div className="max-h-52 overflow-y-auto">
+                                          <div className="max-h-[min(40vh,14rem)] overflow-y-auto overscroll-contain rounded border border-slate-200 bg-white pr-1">
                                             {(categoriaMovCache[r.categoria] ?? []).length ===
                                             0 ? (
                                               <p className="text-xs text-slate-600">
