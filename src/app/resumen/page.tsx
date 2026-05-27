@@ -66,6 +66,40 @@ type GastoMovimientoCategoriaRow = {
   origenCuenta: string;
 };
 
+type GastoPorNombreAgrupado = {
+  nombre: string;
+  byMonth: Record<string, number>;
+  total: number;
+};
+
+/** Agrupa movimientos de categoría por nombre destino; suma montos por mes. */
+function agruparMovimientosPorNombre(
+  movs: GastoMovimientoCategoriaRow[],
+  monthKeys: string[],
+): GastoPorNombreAgrupado[] {
+  const map = new Map<string, Map<string, number>>();
+  for (const m of movs) {
+    const nombre = m.destino.trim() || "—";
+    const ym = m.fecha.slice(0, 7);
+    if (!monthKeys.includes(ym)) continue;
+    if (!map.has(nombre)) map.set(nombre, new Map());
+    const inner = map.get(nombre)!;
+    inner.set(ym, (inner.get(ym) ?? 0) + m.monto);
+  }
+  return Array.from(map.entries())
+    .map(([nombre, byM]) => {
+      let total = 0;
+      const byMonth: Record<string, number> = {};
+      for (const mk of monthKeys) {
+        const v = byM.get(mk) ?? 0;
+        byMonth[mk] = v;
+        total += v;
+      }
+      return { nombre, byMonth, total };
+    })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
+
 /** Selección del filtro de sucursal / origen (ventas y gastos). */
 type SucursalVentasSel =
   | { k: "todas" }
@@ -1560,60 +1594,67 @@ export default function ResumenPage() {
                                     </td>
                                   </tr>
                                   {categoriaMovAbierta === r.categoria ? (
-                                    <tr className="bg-slate-50">
-                                      <td
-                                        colSpan={familiaDetalleData.monthKeys.length + 2}
-                                        className="border-t border-slate-200 px-3 py-2 align-top"
-                                      >
-                                        {categoriaMovLoading === r.categoria ? (
-                                          <p className="text-xs text-slate-600">Cargando movimientos…</p>
-                                        ) : categoriaMovError ? (
-                                          <p className="text-xs text-red-700">{categoriaMovError}</p>
-                                        ) : (
-                                          <div className="max-h-[min(40vh,14rem)] overflow-y-auto overscroll-contain rounded border border-slate-200 bg-white pr-1">
-                                            {(categoriaMovCache[r.categoria] ?? []).length ===
-                                            0 ? (
-                                              <p className="text-xs text-slate-600">
-                                                No hay movimientos individuales para esta categoría.
-                                              </p>
-                                            ) : (
-                                              <ul className="divide-y divide-slate-200 text-xs">
-                                                {(categoriaMovCache[r.categoria] ?? []).map(
-                                                  (m) => (
-                                                    <li
-                                                      key={m.id}
-                                                      className="flex flex-wrap gap-x-3 gap-y-1 py-2 text-slate-800"
-                                                    >
-                                                      <span className="shrink-0 font-mono text-slate-600">
-                                                        {m.fecha}
-                                                      </span>
-                                                      <span className="min-w-0 flex-1 break-words">
-                                                        {m.destino || m.descripcion || "—"}
-                                                        {m.descripcion &&
-                                                        m.destino &&
-                                                        m.descripcion !== m.destino ? (
-                                                          <span className="block text-slate-500">
-                                                            {m.descripcion}
-                                                          </span>
-                                                        ) : null}
-                                                      </span>
-                                                      {m.origenCuenta ? (
-                                                        <span className="shrink-0 text-slate-500">
-                                                          {m.origenCuenta}
-                                                        </span>
-                                                      ) : null}
-                                                      <span className="ml-auto shrink-0 font-medium tabular-nums text-slate-900">
-                                                        {formatClp(m.monto)}
-                                                      </span>
-                                                    </li>
-                                                  ),
-                                                )}
-                                              </ul>
-                                            )}
-                                          </div>
-                                        )}
-                                      </td>
-                                    </tr>
+                                    categoriaMovLoading === r.categoria ? (
+                                      <tr className="bg-slate-50">
+                                        <td
+                                          colSpan={familiaDetalleData.monthKeys.length + 2}
+                                          className="border-t border-slate-200 px-3 py-2 text-xs text-slate-600"
+                                        >
+                                          Cargando movimientos…
+                                        </td>
+                                      </tr>
+                                    ) : categoriaMovError ? (
+                                      <tr className="bg-slate-50">
+                                        <td
+                                          colSpan={familiaDetalleData.monthKeys.length + 2}
+                                          className="border-t border-slate-200 px-3 py-2 text-xs text-red-700"
+                                        >
+                                          {categoriaMovError}
+                                        </td>
+                                      </tr>
+                                    ) : (categoriaMovCache[r.categoria] ?? []).length === 0 ? (
+                                      <tr className="bg-slate-50">
+                                        <td
+                                          colSpan={familiaDetalleData.monthKeys.length + 2}
+                                          className="border-t border-slate-200 px-3 py-2 text-xs text-slate-600"
+                                        >
+                                          No hay movimientos individuales para esta categoría.
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      agruparMovimientosPorNombre(
+                                        categoriaMovCache[r.categoria] ?? [],
+                                        familiaDetalleData.monthKeys,
+                                      ).map((g) => (
+                                        <tr
+                                          key={g.nombre}
+                                          className="border-t border-slate-100 bg-slate-50/90 text-xs"
+                                        >
+                                          <td
+                                            className={`${tdStickyFirst} border-r border-slate-200 pl-8 align-top`}
+                                          >
+                                            <span className="block break-words font-normal text-slate-800">
+                                              {g.nombre}
+                                            </span>
+                                          </td>
+                                          {familiaDetalleData.monthKeys.map((mk) => (
+                                            <td
+                                              key={mk}
+                                              className={`${tdNum} align-top text-slate-700`}
+                                            >
+                                              {(g.byMonth[mk] ?? 0) !== 0
+                                                ? formatClp(g.byMonth[mk] ?? 0)
+                                                : ""}
+                                            </td>
+                                          ))}
+                                          <td
+                                            className={`${tdNum} align-top font-medium text-slate-800`}
+                                          >
+                                            {formatClp(g.total)}
+                                          </td>
+                                        </tr>
+                                      ))
+                                    )
                                   ) : null}
                                 </Fragment>
                               ))}
