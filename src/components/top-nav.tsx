@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { SessionStatus } from "@/components/session-status";
-import { useAuthState } from "@/hooks/use-auth-state";
-import { createClient } from "@/lib/supabase/browser";
+import { useAuthContext } from "@/components/auth-provider";
 
 const NAV_BASE: { href: string; label: string }[] = [
   { href: "/gastos", label: "Gastos" },
@@ -35,15 +34,9 @@ const NAV_LOGIN: { href: string; label: string }[] = [
 
 export function TopNav() {
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
-  const { ready: authReady, authenticated } = useAuthState();
+  const { ready: authReady, authenticated, signOut } = useAuthContext();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  const signOut = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }, []);
 
   const navItems = [
     ...NAV_BASE,

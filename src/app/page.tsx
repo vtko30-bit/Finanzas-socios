@@ -1,22 +1,15 @@
 import Link from "next/link";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { SetupBootstrapButton } from "@/components/setup-bootstrap-button";
-import { HomeHealthStatus } from "@/components/home-health-status";
 
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-10">
       <header className="rounded-xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/40 to-indigo-50/30 p-6 shadow-sm shadow-sky-100/40">
-        <h1 className="bg-gradient-to-r from-sky-800 via-indigo-800 to-violet-800 bg-clip-text text-2xl font-semibold text-transparent">
-          Finanzas Rg
-        </h1>
-        <p className="mt-2 text-sm text-slate-700">
-          Plataforma multiusuario para ingresos, gastos, importación Excel y reportes.
-        </p>
-        <div className="mt-4">
-          <HomeHealthStatus />
-        </div>
-        <div className="mt-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="bg-gradient-to-r from-sky-800 via-indigo-800 to-violet-800 bg-clip-text text-2xl font-semibold text-transparent">
+            Finanzas Rg
+          </h1>
           <SetupBootstrapButton />
         </div>
       </header>
