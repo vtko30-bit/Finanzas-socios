@@ -6,7 +6,7 @@ import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
 } from "@/lib/org-excluded-families-db";
-import { omitServiciosExpenseWhenMirroredInExcelEgresos } from "@/lib/gastos-dedupe-servicios";
+import { omitMirroredExpenseDuplicates } from "@/lib/gastos-dedupe-servicios";
 import {
   compareSucursalOrder,
   effectiveSoloSucursalesFijas,
@@ -216,7 +216,7 @@ export async function fetchExpenseRowsPaged(args: {
     from += PAGE_SIZE;
   }
   return {
-    data: omitServiciosExpenseWhenMirroredInExcelEgresos(out as { source?: unknown }[]),
+    data: omitMirroredExpenseDuplicates(out as { source?: unknown }[]),
     error: null,
   };
 }

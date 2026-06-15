@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
-import { omitServiciosExpenseWhenMirroredInExcelEgresos } from "@/lib/gastos-dedupe-servicios";
+import { omitMirroredExpenseDuplicates } from "@/lib/gastos-dedupe-servicios";
 import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
   const deduped =
     sourceExact.length > 0
       ? merged
-      : omitServiciosExpenseWhenMirroredInExcelEgresos(merged);
+      : omitMirroredExpenseDuplicates(merged);
 
   const rows = deduped.map((row) => {
     const origenCuenta =
