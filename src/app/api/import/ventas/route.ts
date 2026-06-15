@@ -71,6 +71,10 @@ export async function POST(request: Request) {
     String(row.external_ref ?? "").startsWith("resumen|"),
   ).length;
   const detectedGroupedByDay = groupedDailyRows > 0;
+  const ventasCoalesce = parsed.ventasCoalesce;
+  const skippedVentasDuplicateRows =
+    (ventasCoalesce?.skippedResumenMirrorRows ?? 0) +
+    (ventasCoalesce?.skippedDuplicateDayAmountRows ?? 0);
 
   const dedupeHashes = parsed.valid.map((item) => item.dedupe_hash);
   let existing: Set<string>;
@@ -120,6 +124,8 @@ export async function POST(request: Request) {
       importKind: "excel_ventas",
       detectedGroupedByDay,
       groupedDailyRows,
+      ventasCoalesce,
+      skippedVentasDuplicateRows,
     },
     created_by: user.id,
   });
@@ -214,6 +220,8 @@ export async function POST(request: Request) {
       duplicates: parsed.validRows - uniqueToInsert.length,
       detectedGroupedByDay,
       groupedDailyRows,
+      ventasCoalesce,
+      skippedVentasDuplicateRows,
     },
   });
 
@@ -227,5 +235,7 @@ export async function POST(request: Request) {
     duplicates: parsed.validRows - uniqueToInsert.length,
     detectedGroupedByDay,
     groupedDailyRows,
+    ventasCoalesce,
+    skippedVentasDuplicateRows,
   });
 }

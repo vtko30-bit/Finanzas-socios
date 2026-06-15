@@ -230,6 +230,99 @@ export type ParseConsolidatedExcelOptions = {
   ventasLayout?: boolean;
 };
 
+export type VentasCoalesceStats = {
+  skippedResumenMirrorRows: number;
+  skippedDuplicateDayAmountRows: number;
+  skippedSummarySheets: string[];
+};
+
+/** Omite hojas de totales/resumen cuando el libro trae también datos operativos. */
+function selectVentasSheetNames(sheetNames: string[]): {
+  names: string[];
+  skippedSummarySheets: string[];
+} {
+  if (sheetNames.length <= 1) {
+    return { names: sheetNames, skippedSummarySheets: [] };
+  }
+  const isSummarySheet = (name: string) => {
+    const n = normalizeKey(name);
+    return (
+      n.includes("resumen") ||
+      n.includes("total") ||
+      n.includes("summary") ||
+      n.includes("totales")
+    );
+  };
+  const dataSheets = sheetNames.filter((n) => !isSummarySheet(n));
+  if (dataSheets.length > 0) {
+    return {
+      names: dataSheets,
+      skippedSummarySheets: sheetNames.filter((n) => !dataSheets.includes(n)),
+    };
+  }
+  return { names: sheetNames, skippedSummarySheets: [] };
+}
+
+/**
+ * Evita doble conteo típico en exports Fudo:
+ * - filas resumen (`resumen|…`) cuando el mismo archivo trae detalle con Id;
+ * - la misma venta diaria repetida en varias hojas (misma fecha + sucursal + monto).
+ */
+export function coalesceVentasImportRows(rows: NormalizedMovement[]): {
+  rows: NormalizedMovement[];
+  skippedResumenMirrorRows: number;
+  skippedDuplicateDayAmountRows: number;
+} {
+  const detailDayKeys = new Set<string>();
+  for (const row of rows) {
+    const ref = String(row.external_ref ?? "").trim();
+    if (ref && !ref.startsWith("resumen|")) {
+      detailDayKeys.add(`${row.date}|${row.account_name}`);
+    }
+  }
+
+  let skippedResumenMirrorRows = 0;
+  let skippedDuplicateDayAmountRows = 0;
+
+  const afterResumenFilter = rows.filter((row) => {
+    const ref = String(row.external_ref ?? "").trim();
+    if (!ref.startsWith("resumen|")) return true;
+    const dayKey = `${row.date}|${row.account_name}`;
+    if (detailDayKeys.size > 0 && detailDayKeys.has(dayKey)) {
+      skippedResumenMirrorRows++;
+      return false;
+    }
+    return true;
+  });
+
+  const detailRows: NormalizedMovement[] = [];
+  const resumenByDayAmount = new Map<string, NormalizedMovement>();
+
+  for (const row of afterResumenFilter) {
+    const ref = String(row.external_ref ?? "").trim();
+    if (!ref.startsWith("resumen|")) {
+      detailRows.push(row);
+      continue;
+    }
+    const key = `${row.date}|${row.account_name}|${row.amount}`;
+    const prev = resumenByDayAmount.get(key);
+    if (!prev) {
+      resumenByDayAmount.set(key, row);
+      continue;
+    }
+    skippedDuplicateDayAmountRows++;
+    if (!prev.payment_method.trim() && row.payment_method.trim()) {
+      resumenByDayAmount.set(key, row);
+    }
+  }
+
+  return {
+    rows: [...detailRows, ...resumenByDayAmount.values()],
+    skippedResumenMirrorRows,
+    skippedDuplicateDayAmountRows,
+  };
+}
+
 function inferMovementType(
   rawAmount: number,
   sourceType: string,
@@ -275,8 +368,11 @@ export const parseConsolidatedExcel = (
   const defaultMovementType = options?.defaultMovementType ?? "expense";
   const ventasLayout = options?.ventasLayout === true;
   const wb = XLSX.read(file, { type: "buffer", cellDates: true });
+  const ventasSheetPick = ventasLayout
+    ? selectVentasSheetNames(wb.SheetNames)
+    : { names: wb.SheetNames, skippedSummarySheets: [] as string[] };
   const rawRows: RawRow[] = [];
-  wb.SheetNames.forEach((sheetName) => {
+  ventasSheetPick.names.forEach((sheetName) => {
     const ws = wb.Sheets[sheetName];
     const rows = ventasLayout
       ? sheetToRowsVentaLayout(ws)
@@ -474,14 +570,27 @@ export const parseConsolidatedExcel = (
     });
   });
 
+  let ventasCoalesce: VentasCoalesceStats | undefined;
+  let finalValid = valid;
+  if (ventasLayout && valid.length > 0) {
+    const coalesced = coalesceVentasImportRows(valid);
+    finalValid = coalesced.rows;
+    ventasCoalesce = {
+      skippedResumenMirrorRows: coalesced.skippedResumenMirrorRows,
+      skippedDuplicateDayAmountRows: coalesced.skippedDuplicateDayAmountRows,
+      skippedSummarySheets: ventasSheetPick.skippedSummarySheets,
+    };
+  }
+
   return {
     totalRows: rawRows.length,
-    validRows: valid.length,
+    validRows: finalValid.length,
     invalidRows: invalid.length,
-    valid,
+    valid: finalValid,
     invalid,
     /** Primeras filas con error para mostrar en UI (no incluye todas por tamaño). */
     invalidSample: invalid.slice(0, 40),
+    ventasCoalesce,
   };
 };
 

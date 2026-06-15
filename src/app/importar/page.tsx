@@ -12,6 +12,12 @@ type ImportResult = {
   duplicates: number;
   detectedGroupedByDay?: boolean;
   groupedDailyRows?: number;
+  skippedVentasDuplicateRows?: number;
+  ventasCoalesce?: {
+    skippedResumenMirrorRows: number;
+    skippedDuplicateDayAmountRows: number;
+    skippedSummarySheets: string[];
+  };
   invalidSample?: Array<{ row_number: number; reason: string }>;
   heldForDuplicateReview?: number;
   skippedByHashDuplicate?: number;
@@ -295,7 +301,11 @@ export default function ImportarPage() {
         const formatoMsg = importData.detectedGroupedByDay
           ? ` Se detectó formato resumido por día (${importData.groupedDailyRows ?? 0} fila(s) agrupadas).`
           : "";
-        setStatus(`Importación de ventas finalizada. Revisa la vista Ventas.${formatoMsg}`);
+        const dedupeMsg =
+          (importData.skippedVentasDuplicateRows ?? 0) > 0
+            ? ` Se omitieron ${importData.skippedVentasDuplicateRows} fila(s) duplicadas del Excel (resumen repetido o misma hoja en varias pestañas).`
+            : "";
+        setStatus(`Importación de ventas finalizada. Revisa la vista Ventas.${formatoMsg}${dedupeMsg}`);
       }
       setSuccessMessage("La importación de ventas terminó correctamente.");
       setShowSuccessModal(true);
@@ -782,6 +792,12 @@ export default function ImportarPage() {
             {result.detectedGroupedByDay ? (
               <li>
                 Formato detectado: ventas agrupadas por día ({result.groupedDailyRows ?? 0} fila(s)).
+              </li>
+            ) : null}
+            {(result.skippedVentasDuplicateRows ?? 0) > 0 ? (
+              <li>
+                Filas duplicadas omitidas del Excel (resumen repetido o varias pestañas):{" "}
+                {result.skippedVentasDuplicateRows}
               </li>
             ) : null}
             {result.heldForDuplicateReview != null && result.heldForDuplicateReview > 0 ? (
