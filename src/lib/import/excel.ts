@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { buildOrigenCuentaImport } from "@/lib/origen-maestro";
 import * as XLSX from "xlsx";
 import { z } from "zod";
 
@@ -600,18 +601,6 @@ export const parseConsolidatedExcel = (
  * - Usa columna "Cheques / Cargos" como monto del gasto
  */
 export const parseExpensesEgresosExcel = (file: Buffer) => {
-  const normalizeOrigen = (origen: string): string => {
-    const n = normalizeKey(origen);
-    // Regla de sucursal interna de la empresa para gastos:
-    // - Origen = RG o contiene Banco Estado => Rg
-    // - Origen contiene Happy, Bci o Mercado Libre => Happy
-    if (n === "rg" || n.startsWith("rg") || n.includes("bancoestado")) return "Rg";
-    if (n.includes("happy") || n.includes("bci") || n.includes("mercadolibre")) {
-      return "Happy";
-    }
-    return "";
-  };
-
   const wb = XLSX.read(file, { type: "buffer", cellDates: true });
   const egresosSheets = wb.SheetNames.filter((name) => {
     const normalized = normalizeKey(name);
@@ -697,12 +686,11 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
 
     const sucursal = String(getField(row, ["sucursal"]) || "").trim();
     const origen = String(getField(row, ["origen"]) || "").trim();
-    const origenNormalizado = normalizeOrigen(origen);
-    const accountName =
-      origenNormalizado ||
-      (origen && sucursal && normalizeKey(origen) !== normalizeKey(sucursal)
-        ? `${origen} - ${sucursal}`
-        : origen || sucursal || "Sin origen");
+    const accountName = buildOrigenCuentaImport({
+      origenRaw: origen,
+      sucursal,
+      kind: "egreso",
+    });
 
     const sourceId = String(getField(row, ["id"]) || "").trim();
     if (!sourceId) {
@@ -772,15 +760,6 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
  * - Monto desde columna "Depósitos / Abonos"
  */
 export const parseOtrosIngresosExcel = (file: Buffer) => {
-  const normalizeOrigen = (origen: string): string => {
-    const n = normalizeKey(origen);
-    if (n.includes("bancoestado")) return "Banco Estado";
-    if (n.includes("bci")) return "Bci";
-    if (n.includes("fudo")) return "Fudo";
-    if (n.includes("mercadolibre")) return "Mercado Libre";
-    return "";
-  };
-
   const wb = XLSX.read(file, { type: "buffer", cellDates: true });
   const ingresosSheets = wb.SheetNames.filter((name) =>
     normalizeKey(name).includes("ingres"),
@@ -865,12 +844,11 @@ export const parseOtrosIngresosExcel = (file: Buffer) => {
 
     const sucursal = String(getField(row, ["sucursal"]) || "").trim();
     const origen = String(getField(row, ["origen"]) || "").trim();
-    const origenNormalizado = normalizeOrigen(origen);
-    const accountName =
-      origenNormalizado ||
-      (origen && sucursal && normalizeKey(origen) !== normalizeKey(sucursal)
-        ? `${origen} - ${sucursal}`
-        : origen || sucursal || "Sin origen");
+    const accountName = buildOrigenCuentaImport({
+      origenRaw: origen,
+      sucursal,
+      kind: "ingreso",
+    });
 
     const sourceId = String(getField(row, ["id"]) || "").trim();
     const nroOperacion = String(

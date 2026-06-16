@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
-import { omitTefExpenseWhenMirroredInTransferencias } from "@/lib/gastos-dedupe-servicios";
+import { omitMovimientoExpenseWhenMirroredInTransferencias } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 
 function normalizarEtiquetaConcepto(raw: string): string {
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
         preferByOrigin.set(key, m);
       }
     }
-    const uniqueToInsert = omitTefExpenseWhenMirroredInTransferencias(
+    const uniqueToInsert = omitMovimientoExpenseWhenMirroredInTransferencias(
       Array.from(preferByOrigin.values()).map((m) => ({
         ...m,
         origen_cuenta: m.account_name,

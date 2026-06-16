@@ -37,9 +37,21 @@ function fingerprintOperacion(r: {
   return `${String(r.date ?? "").slice(0, 10)}|${op}`;
 }
 
-export function esOrigenTransferenciasBancoEstado(origen: string): boolean {
+/** Hoja / origen tipo Transferencias (BE, BCI, Banco de Chile, etc.). */
+export function esOrigenTransferencias(origen: string): boolean {
   const n = normOrigenKey(origen);
-  return n.includes("transferencias") && (n.includes("banco") || n.includes("bestado"));
+  if (!n.includes("transferencias")) return false;
+  return (
+    n.includes("banco") ||
+    n.includes("bestado") ||
+    n.includes("bci") ||
+    n.includes("chile")
+  );
+}
+
+/** @deprecated Usar `esOrigenTransferencias`. */
+export function esOrigenTransferenciasBancoEstado(origen: string): boolean {
+  return esOrigenTransferencias(origen);
 }
 
 export function esDescripcionTef(description: string): boolean {
@@ -47,6 +59,18 @@ export function esDescripcionTef(description: string): boolean {
     .trim()
     .toUpperCase()
     .startsWith("TEF");
+}
+
+/** Descripción típica de transferencia en cartola Movimientos (TEF, TRANSFERENCIA…). */
+export function esDescripcionTransferencia(description: string): boolean {
+  const d = String(description ?? "")
+    .trim()
+    .toUpperCase();
+  return (
+    d.startsWith("TEF") ||
+    d.startsWith("TRANSFERENCIA") ||
+    d.startsWith("TRANSF ")
+  );
 }
 
 /**
@@ -82,10 +106,11 @@ export function omitServiciosExpenseWhenMirroredInExcelEgresos<
 }
 
 /**
- * Omite movimientos en Movimientos BE cuya descripción comienza con TEF cuando el mismo
- * pago ya está en Transferencias Banco Estado (mismo N° Operación o misma fecha + monto).
+ * Omite filas de Movimientos (cartola) cuando el mismo pago ya está en una hoja
+ * Transferencias (BE, BCI, Banco de Chile): por N° Operación o, si la descripción
+ * es de transferencia, por fecha + monto.
  */
-export function omitTefExpenseWhenMirroredInTransferencias<
+export function omitMovimientoExpenseWhenMirroredInTransferencias<
   T extends {
     date?: unknown;
     amount?: unknown;
@@ -106,7 +131,7 @@ export function omitTefExpenseWhenMirroredInTransferencias<
 
   for (const r of rows) {
     if (!isEgresosPrincipal(r)) continue;
-    if (!esOrigenTransferenciasBancoEstado(origenDeFila(r))) continue;
+    if (!esOrigenTransferencias(origenDeFila(r))) continue;
     const k = fingerprintDateAmount(r);
     dateAmountCounts.set(k, (dateAmountCounts.get(k) ?? 0) + 1);
     const op = fingerprintOperacion(r);
@@ -115,30 +140,46 @@ export function omitTefExpenseWhenMirroredInTransferencias<
 
   const out: T[] = [];
   for (const r of rows) {
-    if (!isEgresosPrincipal(r) || !esDescripcionTef(String(r.description ?? ""))) {
+    if (!isEgresosPrincipal(r)) {
       out.push(r);
       continue;
     }
+    if (esOrigenTransferencias(origenDeFila(r))) {
+      out.push(r);
+      continue;
+    }
+
+    let matched = false;
     const op = fingerprintOperacion(r);
     if (op) {
       const nOp = operacionCounts.get(op) ?? 0;
       if (nOp > 0) {
         operacionCounts.set(op, nOp - 1);
-        continue;
+        matched = true;
       }
     }
-    const k = fingerprintDateAmount(r);
-    const n = dateAmountCounts.get(k) ?? 0;
-    if (n > 0) {
-      dateAmountCounts.set(k, n - 1);
-      continue;
+    if (
+      !matched &&
+      esDescripcionTransferencia(String(r.description ?? ""))
+    ) {
+      const k = fingerprintDateAmount(r);
+      const n = dateAmountCounts.get(k) ?? 0;
+      if (n > 0) {
+        dateAmountCounts.set(k, n - 1);
+        matched = true;
+      }
     }
+    if (matched) continue;
     out.push(r);
   }
   return out;
 }
 
-/** Servicios vs egresos y TEF vs transferencias BE (orden estable). */
+/** @deprecated Usar `omitMovimientoExpenseWhenMirroredInTransferencias`. */
+export const omitTefExpenseWhenMirroredInTransferencias =
+  omitMovimientoExpenseWhenMirroredInTransferencias;
+
+/** Servicios vs egresos y cartola vs transferencias (orden estable). */
 export function omitMirroredExpenseDuplicates<
   T extends {
     date?: unknown;
@@ -150,7 +191,7 @@ export function omitMirroredExpenseDuplicates<
     source?: unknown;
   },
 >(rows: T[]): T[] {
-  return omitTefExpenseWhenMirroredInTransferencias(
+  return omitMovimientoExpenseWhenMirroredInTransferencias(
     omitServiciosExpenseWhenMirroredInExcelEgresos(rows),
   );
 }
