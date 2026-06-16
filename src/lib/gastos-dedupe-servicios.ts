@@ -40,7 +40,8 @@ function fingerprintOperacion(r: {
 /** Hoja / origen tipo Transferencias (BE, BCI, Banco de Chile, etc.). */
 export function esOrigenTransferencias(origen: string): boolean {
   const n = normOrigenKey(origen);
-  if (!n.includes("transferencias")) return false;
+  if (n.includes("transbe") || n.includes("transcl")) return true;
+  if (!n.includes("transferencias") && !n.includes("transferencia")) return false;
   return (
     n.includes("banco") ||
     n.includes("bestado") ||
@@ -173,6 +174,25 @@ export function omitMovimientoExpenseWhenMirroredInTransferencias<
     out.push(r);
   }
   return out;
+}
+
+/**
+ * Entre dos filas duplicadas (misma fecha/monto/destino/descripción/operación),
+ * conserva la de hoja Transferencias frente a cartola Movimientos (Rg/Happy).
+ */
+export function preferirEgresoDuplicadoEnImport<
+  T extends { account_name?: string },
+>(current: T, next: T): T {
+  const curOrig = String(current.account_name ?? "");
+  const nextOrig = String(next.account_name ?? "");
+  const curTrans = esOrigenTransferencias(curOrig);
+  const nextTrans = esOrigenTransferencias(nextOrig);
+  if (!curTrans && nextTrans) return next;
+  if (curTrans && !nextTrans) return current;
+  const curSin = normOrigenKey(curOrig) === "sinorigen";
+  const nextSin = normOrigenKey(nextOrig) === "sinorigen";
+  if (curSin && !nextSin) return next;
+  return current;
 }
 
 /** @deprecated Usar `omitMovimientoExpenseWhenMirroredInTransferencias`. */

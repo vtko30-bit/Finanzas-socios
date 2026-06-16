@@ -8,7 +8,10 @@ import { logAudit } from "@/lib/audit";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
-import { omitMovimientoExpenseWhenMirroredInTransferencias } from "@/lib/gastos-dedupe-servicios";
+import {
+  omitMovimientoExpenseWhenMirroredInTransferencias,
+  preferirEgresoDuplicadoEnImport,
+} from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 
 function normalizarEtiquetaConcepto(raw: string): string {
@@ -37,10 +40,6 @@ function clavePreferirOrigen(m: {
     norm(String(m.description ?? "")),
     norm(String(m.external_ref ?? "")),
   ].join("|");
-}
-
-function esSinOrigen(origen: string): boolean {
-  return normalizarEtiquetaConcepto(origen) === "sin origen";
 }
 
 export async function POST(request: Request) {
@@ -156,11 +155,7 @@ export async function POST(request: Request) {
         preferByOrigin.set(key, m);
         continue;
       }
-      const currentSinOrigen = esSinOrigen(String(current.account_name ?? ""));
-      const nextSinOrigen = esSinOrigen(String(m.account_name ?? ""));
-      if (currentSinOrigen && !nextSinOrigen) {
-        preferByOrigin.set(key, m);
-      }
+      preferByOrigin.set(key, preferirEgresoDuplicadoEnImport(current, m));
     }
     const uniqueToInsert = omitMovimientoExpenseWhenMirroredInTransferencias(
       Array.from(preferByOrigin.values()).map((m) => ({
