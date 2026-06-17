@@ -10,6 +10,7 @@ import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
 import {
   claveEmparejarCartolaTransferenciasMismoBanco,
+  claveEmparejarTefEspejoOpAmount,
   claveEmparejarTefTransferenciasBe,
   claveEmparejarTransferenciasDuplicadas,
   esOrigenTransferencias,
@@ -17,6 +18,7 @@ import {
   fingerprintTransferenciasFechaMonto,
   omitMirroredExpenseDuplicates,
   preferirEgresoDuplicadoEnImport,
+  preferirTefEspejoBeEnImport,
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 import {
@@ -158,6 +160,7 @@ export async function POST(request: Request) {
     // Dentro del mismo archivo: preferir Transferencias sobre cartola TEF aunque la descripción difiera.
     const preferByOrigin = new Map<string, (typeof uniqueByHash)[number]>();
     const preferTefBe = new Map<string, (typeof uniqueByHash)[number]>();
+    const preferTefEspejoOp = new Map<string, (typeof uniqueByHash)[number]>();
     const preferTransMismoBanco = new Map<string, (typeof uniqueByHash)[number]>();
     const preferTransDuplicadas = new Map<string, (typeof uniqueByHash)[number]>();
     for (const m of uniqueByHash) {
@@ -174,6 +177,15 @@ export async function POST(request: Request) {
         preferTefBe.set(
           tefKey,
           curTef ? preferirEgresoDuplicadoEnImport(curTef, m) : m,
+        );
+      }
+
+      const tefEspejoKey = claveEmparejarTefEspejoOpAmount(m);
+      if (tefEspejoKey) {
+        const curEspejo = preferTefEspejoOp.get(tefEspejoKey);
+        preferTefEspejoOp.set(
+          tefEspejoKey,
+          curEspejo ? preferirTefEspejoBeEnImport(curEspejo, m) : m,
         );
       }
 
@@ -201,6 +213,8 @@ export async function POST(request: Request) {
       if (preferByOrigin.get(fullKey) !== m) return false;
       const tefKey = claveEmparejarTefTransferenciasBe(m);
       if (tefKey && preferTefBe.get(tefKey) !== m) return false;
+      const tefEspejoKey = claveEmparejarTefEspejoOpAmount(m);
+      if (tefEspejoKey && preferTefEspejoOp.get(tefEspejoKey) !== m) return false;
       const transKey = claveEmparejarCartolaTransferenciasMismoBanco(m);
       if (transKey && preferTransMismoBanco.get(transKey) !== m) return false;
       const dupKey = claveEmparejarTransferenciasDuplicadas(m);

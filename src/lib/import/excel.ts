@@ -600,8 +600,34 @@ export const parseConsolidatedExcel = (
  * - Usa columna "Cheques / Cargos" como monto del gasto
  */
 export const parseExpensesEgresosExcel = (file: Buffer) => {
-  const normalizeOrigen = (origen: string): string => {
+  const normalizeOrigen = (origen: string, sheetName: string): string => {
     const n = normalizeKey(origen);
+    const sheetN = normalizeKey(sheetName);
+
+    if (n.includes("transferencias") || n.includes("transferencia")) {
+      if (n.includes("chile") || n.includes("bancodechile")) {
+        return origen.trim() || "Transferencias Banco de Chile";
+      }
+      if (n.includes("bci")) return origen.trim() || "Transferencias BCI";
+      if (
+        n.includes("banco") ||
+        n.includes("bestado") ||
+        n.includes("estado") ||
+        n.endsWith("rg")
+      ) {
+        return origen.trim() || "Transferencias Banco Estado";
+      }
+      return origen.trim();
+    }
+
+    if (sheetN.includes("transferencias") || sheetN.includes("transferencia")) {
+      if (sheetN.includes("chile") || sheetN.includes("bancodechile")) {
+        return "Transferencias Banco de Chile";
+      }
+      if (sheetN.includes("bci")) return "Transferencias BCI";
+      return "Transferencias Banco Estado";
+    }
+
     // Regla de sucursal interna de la empresa para gastos:
     // - Origen = RG o contiene Banco Estado => Rg
     // - Origen contiene Happy, Bci o Mercado Libre => Happy
@@ -696,8 +722,9 @@ export const parseExpensesEgresosExcel = (file: Buffer) => {
     }
 
     const sucursal = String(getField(row, ["sucursal"]) || "").trim();
+    const sheetName = String((row as RawRow).__sheet ?? "");
     const origen = String(getField(row, ["origen"]) || "").trim();
-    const origenNormalizado = normalizeOrigen(origen);
+    const origenNormalizado = normalizeOrigen(origen, sheetName);
     const accountName =
       origenNormalizado ||
       (origen && sucursal && normalizeKey(origen) !== normalizeKey(sucursal)

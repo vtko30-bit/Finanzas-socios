@@ -69,6 +69,31 @@ function fingerprintTefVsBeDateOperacion(r: {
   return `be-op|${d}|${op}`;
 }
 
+/** Mismo N° operación + monto (cartola TEF suele tener fecha distinta a Transferencias). */
+function fingerprintTefVsBeOpAmount(r: {
+  external_ref?: unknown;
+  amount?: unknown;
+}): string {
+  const op = String(r.external_ref ?? "").trim().toLowerCase();
+  if (!op) return "";
+  return `be-op-amt|${op}|${amountCanon(r.amount)}`;
+}
+
+function esEspejoTefBeCartolaRow(r: {
+  description?: unknown;
+  origen_cuenta?: unknown;
+  account_name?: unknown;
+  external_ref?: unknown;
+  source?: unknown;
+}): boolean {
+  if (!isEgresosPrincipalRow(r.source)) return false;
+  const origen = origenDeFila(r);
+  if (esFilaTransferenciasBe(origen)) return false;
+  if (esDescripcionTef(String(r.description ?? ""))) return false;
+  if (origenFamiliaBanco(origen) !== "be") return false;
+  return String(r.external_ref ?? "").trim().length > 0;
+}
+
 function fingerprintOperacion(r: {
   date?: unknown;
   external_ref?: unknown;
@@ -154,7 +179,33 @@ function addTransferenciasToFingerprints<
           (fingerprints.operacion.get(dateOp) ?? 0) + 1,
         );
       }
+      const opAmt = fingerprintTefVsBeOpAmount(r);
+      if (opAmt) {
+        fingerprints.operacion.set(
+          opAmt,
+          (fingerprints.operacion.get(opAmt) ?? 0) + 1,
+        );
+      }
     }
+  }
+}
+
+function addTefBeEspejoOpAmountMirrors<
+  T extends {
+    date?: unknown;
+    amount?: unknown;
+    description?: unknown;
+    external_ref?: unknown;
+    origen_cuenta?: unknown;
+    account_name?: unknown;
+    source?: unknown;
+  },
+>(rows: T[], operacionCounts: Map<string, number>): void {
+  for (const r of rows) {
+    if (!esEspejoTefBeCartolaRow(r)) continue;
+    const k = fingerprintTefVsBeOpAmount(r);
+    if (!k) continue;
+    operacionCounts.set(k, (operacionCounts.get(k) ?? 0) + 1);
   }
 }
 
@@ -228,6 +279,7 @@ export function omitTefExpenseWhenMirroredInTransferenciasBancoEstado<
   const dateAmountCounts = new Map(existing?.dateAmount);
   const operacionCounts = new Map(existing?.operacion);
   addTransferenciasToFingerprints(rows, { dateAmount: dateAmountCounts, operacion: operacionCounts }, "be");
+  addTefBeEspejoOpAmountMirrors(rows, operacionCounts);
 
   const out: T[] = [];
   for (const r of rows) {
@@ -250,6 +302,16 @@ export function omitTefExpenseWhenMirroredInTransferenciasBancoEstado<
     if (nDate > 0) {
       dateAmountCounts.set(kDate, nDate - 1);
       matched = true;
+    }
+    if (!matched) {
+      const kOpAmt = fingerprintTefVsBeOpAmount(r);
+      if (kOpAmt) {
+        const nOpAmt = operacionCounts.get(kOpAmt) ?? 0;
+        if (nOpAmt > 0) {
+          operacionCounts.set(kOpAmt, nOpAmt - 1);
+          matched = true;
+        }
+      }
     }
     if (!matched) {
       const kOp = fingerprintTefVsBeDateOperacion(r);
@@ -485,6 +547,49 @@ export function omitServiciosExpenseWhenMirroredInExcelEgresos<
 /** @deprecated Usar `omitCartolaWhenMirroredInTransferenciasMismoBanco`. */
 export const omitMovimientoExpenseWhenMirroredInTransferencias =
   omitCartolaWhenMirroredInTransferenciasMismoBanco;
+
+/** Clave TEF ↔ espejo BE por N° operación + monto (fechas pueden diferir). */
+export function claveEmparejarTefEspejoOpAmount(m: {
+  date?: string;
+  amount: number;
+  description?: string;
+  account_name?: string;
+  external_ref?: string;
+  source?: string;
+}): string | null {
+  const orig = String(m.account_name ?? "");
+  const op = String(m.external_ref ?? "").trim();
+  if (!op) return null;
+  const desc = String(m.description ?? "");
+  const esTefCartola =
+    esDescripcionTef(desc) && !esFilaTransferenciasBe(orig);
+  const esEspejoCartola = esEspejoTefBeCartolaRow({
+    description: m.description,
+    account_name: m.account_name,
+    external_ref: m.external_ref,
+    source: m.source ?? "excel_egresos",
+  });
+  const esTransBe = esFilaTransferenciasBe(orig);
+  if (!esTefCartola && !esEspejoCartola && !esTransBe) return null;
+  return fingerprintTefVsBeOpAmount({ external_ref: op, amount: m.amount });
+}
+
+/** Entre TEF cartola y fila categorizada/espejo, conserva la no-TEF. */
+export function preferirTefEspejoBeEnImport<
+  T extends { account_name?: string; description?: string },
+>(current: T, next: T): T {
+  const curOrig = String(current.account_name ?? "");
+  const nextOrig = String(next.account_name ?? "");
+  const curTef =
+    esDescripcionTef(String(current.description ?? "")) &&
+    !esFilaTransferenciasBe(curOrig);
+  const nextTef =
+    esDescripcionTef(String(next.description ?? "")) &&
+    !esFilaTransferenciasBe(nextOrig);
+  if (curTef && !nextTef) return next;
+  if (!curTef && nextTef) return current;
+  return preferirEgresoDuplicadoEnImport(current, next);
+}
 
 /** Clave para emparejar cartola TEF con Transferencias BE aunque la descripción difiera. */
 export function claveEmparejarTefTransferenciasBe(m: {
