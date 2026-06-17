@@ -9,10 +9,12 @@ import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
 import {
-  omitMovimientoExpenseWhenMirroredInTransferencias,
+  claveEmparejarTefTransferenciasBe,
+  omitMirroredExpenseDuplicates,
   preferirEgresoDuplicadoEnImport,
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
+import { fetchTransferenciasBeFingerprintsForOrg } from "@/lib/transferencias-be-fingerprints-db";
 
 function normalizarEtiquetaConcepto(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
@@ -145,24 +147,60 @@ export async function POST(request: Request) {
       return true;
     });
 
-    // Dentro del mismo archivo, si existe par equivalente y uno trae "Sin origen",
-    // se conserva el que tenga origen real para evitar duplicados operativos.
+    // Dentro del mismo archivo: preferir Transferencias sobre cartola TEF aunque la descripción difiera.
     const preferByOrigin = new Map<string, (typeof uniqueByHash)[number]>();
+    const preferTefBe = new Map<string, (typeof uniqueByHash)[number]>();
     for (const m of uniqueByHash) {
       const key = clavePreferirOrigen(m);
       const current = preferByOrigin.get(key);
-      if (!current) {
-        preferByOrigin.set(key, m);
-        continue;
+      preferByOrigin.set(
+        key,
+        current ? preferirEgresoDuplicadoEnImport(current, m) : m,
+      );
+
+      const tefKey = claveEmparejarTefTransferenciasBe(m);
+      if (tefKey) {
+        const curTef = preferTefBe.get(tefKey);
+        preferTefBe.set(
+          tefKey,
+          curTef ? preferirEgresoDuplicadoEnImport(curTef, m) : m,
+        );
       }
-      preferByOrigin.set(key, preferirEgresoDuplicadoEnImport(current, m));
     }
-    const uniqueToInsert = omitMovimientoExpenseWhenMirroredInTransferencias(
-      Array.from(preferByOrigin.values()).map((m) => ({
+
+    const afterPrefer = uniqueByHash.filter((m) => {
+      const fullKey = clavePreferirOrigen(m);
+      if (preferByOrigin.get(fullKey) !== m) return false;
+      const tefKey = claveEmparejarTefTransferenciasBe(m);
+      if (tefKey && preferTefBe.get(tefKey) !== m) return false;
+      return true;
+    });
+
+    let transferenciasBeInDb;
+    try {
+      transferenciasBeInDb = await fetchTransferenciasBeFingerprintsForOrg(
+        supabase,
+        orgId,
+      );
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error:
+            e instanceof Error
+              ? e.message
+              : "Error al consultar transferencias existentes",
+        },
+        { status: 500 },
+      );
+    }
+
+    const uniqueToInsert = omitMirroredExpenseDuplicates(
+      afterPrefer.map((m) => ({
         ...m,
         origen_cuenta: m.account_name,
         source: "excel_egresos",
       })),
+      transferenciasBeInDb,
     );
 
     const lockedResp = await rejectIfImportDatesLocked(
