@@ -11,11 +11,17 @@ import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
 import {
   claveEmparejarCartolaTransferenciasMismoBanco,
   claveEmparejarTefTransferenciasBe,
+  claveEmparejarTransferenciasDuplicadas,
+  esOrigenTransferencias,
+  fingerprintTransferenciasDuplicado,
   omitMirroredExpenseDuplicates,
   preferirEgresoDuplicadoEnImport,
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
-import { fetchTransferenciasFingerprintsForOrg } from "@/lib/transferencias-be-fingerprints-db";
+import {
+  fetchTransferenciasDuplicateKeysForOrg,
+  fetchTransferenciasFingerprintsForOrg,
+} from "@/lib/transferencias-be-fingerprints-db";
 
 function normalizarEtiquetaConcepto(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
@@ -152,6 +158,7 @@ export async function POST(request: Request) {
     const preferByOrigin = new Map<string, (typeof uniqueByHash)[number]>();
     const preferTefBe = new Map<string, (typeof uniqueByHash)[number]>();
     const preferTransMismoBanco = new Map<string, (typeof uniqueByHash)[number]>();
+    const preferTransDuplicadas = new Map<string, (typeof uniqueByHash)[number]>();
     for (const m of uniqueByHash) {
       const key = clavePreferirOrigen(m);
       const current = preferByOrigin.get(key);
@@ -177,6 +184,15 @@ export async function POST(request: Request) {
           curTrans ? preferirEgresoDuplicadoEnImport(curTrans, m) : m,
         );
       }
+
+      const dupKey = claveEmparejarTransferenciasDuplicadas(m);
+      if (dupKey) {
+        const curDup = preferTransDuplicadas.get(dupKey);
+        preferTransDuplicadas.set(
+          dupKey,
+          curDup ? preferirEgresoDuplicadoEnImport(curDup, m) : m,
+        );
+      }
     }
 
     const afterPrefer = uniqueByHash.filter((m) => {
@@ -186,15 +202,18 @@ export async function POST(request: Request) {
       if (tefKey && preferTefBe.get(tefKey) !== m) return false;
       const transKey = claveEmparejarCartolaTransferenciasMismoBanco(m);
       if (transKey && preferTransMismoBanco.get(transKey) !== m) return false;
+      const dupKey = claveEmparejarTransferenciasDuplicadas(m);
+      if (dupKey && preferTransDuplicadas.get(dupKey) !== m) return false;
       return true;
     });
 
     let transferenciasInDb;
+    let transferenciasDupKeysInDb: Set<string>;
     try {
-      transferenciasInDb = await fetchTransferenciasFingerprintsForOrg(
-        supabase,
-        orgId,
-      );
+      [transferenciasInDb, transferenciasDupKeysInDb] = await Promise.all([
+        fetchTransferenciasFingerprintsForOrg(supabase, orgId),
+        fetchTransferenciasDuplicateKeysForOrg(supabase, orgId),
+      ]);
     } catch (e) {
       return NextResponse.json(
         {
@@ -214,7 +233,24 @@ export async function POST(request: Request) {
         source: "excel_egresos",
       })),
       transferenciasInDb,
-    );
+    ).filter((m) => {
+      const dupKey = fingerprintTransferenciasDuplicado({
+        date: m.date,
+        amount: m.amount,
+        external_ref: m.external_ref,
+        counterparty: m.counterparty,
+        origen_cuenta: m.account_name,
+        source: "excel_egresos",
+      });
+      if (
+        dupKey &&
+        esOrigenTransferencias(String(m.account_name ?? "")) &&
+        transferenciasDupKeysInDb.has(dupKey)
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     const lockedResp = await rejectIfImportDatesLocked(
       supabase,

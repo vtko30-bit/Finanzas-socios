@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildTransferenciasFingerprints,
+  fingerprintTransferenciasDuplicado,
   type TransferenciasExistingByFamilia,
 } from "@/lib/gastos-dedupe-servicios";
 import {
@@ -29,7 +30,7 @@ export async function fetchTransferenciasFingerprintsForOrg(
     const to = from + PAGE_SIZE - 1;
     const { data, error } = await supabase
       .from("transactions")
-      .select("date, amount, external_ref, origen_cuenta, source")
+      .select("date, amount, external_ref, counterparty, origen_cuenta, source")
       .eq("organization_id", organizationId)
       .eq("source", "excel_egresos")
       .ilike("origen_cuenta", "%transferencias%")
@@ -72,4 +73,49 @@ export async function fetchTransferenciasBeFingerprintsForOrg(
 ) {
   const all = await fetchTransferenciasFingerprintsForOrg(supabase, organizationId);
   return all.be ?? buildTransferenciasFingerprints([], "be");
+}
+
+/** Huellas de Transferencias ya en BD (evita reimportar el mismo pago con otro Id). */
+export async function fetchTransferenciasDuplicateKeysForOrg(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<Set<string>> {
+  const rows: {
+    date?: string;
+    amount?: number;
+    external_ref?: string | null;
+    counterparty?: string | null;
+    origen_cuenta?: string | null;
+    source?: string | null;
+  }[] = [];
+
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("date, amount, external_ref, counterparty, origen_cuenta, source")
+      .eq("organization_id", organizationId)
+      .eq("source", "excel_egresos")
+      .ilike("origen_cuenta", "%transferencias%")
+      .in("type", ["expense", "gasto", "egreso"])
+      .range(from, to);
+
+    if (error) throw new Error(error.message);
+
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  const keys = new Set<string>();
+  for (const r of rows) {
+    const key = fingerprintTransferenciasDuplicado({
+      ...r,
+      source: "excel_egresos",
+    });
+    if (key) keys.add(key);
+  }
+  return keys;
 }

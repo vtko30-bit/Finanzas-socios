@@ -297,46 +297,86 @@ export function omitCartolaWhenMirroredInTransferenciasMismoBanco<
   return out;
 }
 
-/** Omite filas Transferencias duplicadas (mismo banco + mismo N° operación). */
-export function omitTransferenciasDuplicadasPorOperacion<
+function normDupText(v: unknown): string {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/** Huella para dos filas Transferencias del mismo banco que representan el mismo pago. */
+export function fingerprintTransferenciasDuplicado(r: {
+  date?: unknown;
+  amount?: unknown;
+  external_ref?: unknown;
+  counterparty?: unknown;
+  origen_cuenta?: unknown;
+  account_name?: unknown;
+  source?: unknown;
+}): string | null {
+  if (!isEgresosPrincipalRow(r.source)) return null;
+  const origen = origenDeFila(r);
+  if (!esOrigenTransferencias(origen)) return null;
+  const familia = origenFamiliaBanco(origen);
+  if (!familia) return null;
+  const d = String(r.date ?? "").slice(0, 10);
+  const a = Number(r.amount).toFixed(2);
+  const op = normDupText(r.external_ref);
+  const dest = normDupText(r.counterparty);
+  return `${familia}|${d}|${a}|${op}|${dest}`;
+}
+
+/** Omite filas Transferencias duplicadas (mismo banco, fecha, monto, N° op. y destino). */
+export function omitTransferenciasDuplicadas<
   T extends {
     date?: unknown;
     amount?: unknown;
     external_ref?: unknown;
+    counterparty?: unknown;
     origen_cuenta?: unknown;
     account_name?: unknown;
     source?: unknown;
   },
 >(rows: T[]): T[] {
-  const opCounts = new Map<string, number>();
+  const counts = new Map<string, number>();
   for (const r of rows) {
-    if (!isEgresosPrincipalRow(r.source)) continue;
-    const familia = origenFamiliaBanco(origenDeFila(r));
-    const op = fingerprintOperacion(r);
-    if (!familia || !op || !esOrigenTransferencias(origenDeFila(r))) continue;
-    const key = scopedKey(familia, op);
-    opCounts.set(key, (opCounts.get(key) ?? 0) + 1);
+    const key = fingerprintTransferenciasDuplicado(r);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
   const out: T[] = [];
   for (const r of rows) {
-    if (!isEgresosPrincipalRow(r.source) || !esOrigenTransferencias(origenDeFila(r))) {
+    const key = fingerprintTransferenciasDuplicado(r);
+    if (!key) {
       out.push(r);
       continue;
     }
-    const familia = origenFamiliaBanco(origenDeFila(r));
-    const op = fingerprintOperacion(r);
-    if (familia && op) {
-      const key = scopedKey(familia, op);
-      const n = opCounts.get(key) ?? 0;
-      if (n > 1) {
-        opCounts.set(key, n - 1);
-        continue;
-      }
+    const n = counts.get(key) ?? 0;
+    if (n > 1) {
+      counts.set(key, n - 1);
+      continue;
     }
     out.push(r);
   }
   return out;
+}
+
+/** @deprecated Usar `omitTransferenciasDuplicadas`. */
+export const omitTransferenciasDuplicadasPorOperacion = omitTransferenciasDuplicadas;
+
+export function claveEmparejarTransferenciasDuplicadas(m: {
+  date: string;
+  amount: number;
+  account_name?: string;
+  external_ref?: string;
+  counterparty?: string;
+}): string | null {
+  return fingerprintTransferenciasDuplicado({
+    ...m,
+    origen_cuenta: m.account_name,
+    source: "excel_egresos",
+  });
 }
 
 /**
@@ -444,13 +484,14 @@ export function omitMirroredExpenseDuplicates<
     origen_cuenta?: unknown;
     account_name?: unknown;
     external_ref?: unknown;
+    counterparty?: unknown;
     source?: unknown;
   },
 >(
   rows: T[],
   transferenciasExisting?: TransferenciasExistingByFamilia,
 ): T[] {
-  return omitTransferenciasDuplicadasPorOperacion(
+  return omitTransferenciasDuplicadas(
     omitCartolaWhenMirroredInTransferenciasMismoBanco(
       omitTefExpenseWhenMirroredInTransferenciasBancoEstado(
         omitServiciosExpenseWhenMirroredInExcelEgresos(rows),
