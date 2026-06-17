@@ -9,12 +9,13 @@ import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
 import {
+  claveEmparejarCartolaTransferenciasMismoBanco,
   claveEmparejarTefTransferenciasBe,
   omitMirroredExpenseDuplicates,
   preferirEgresoDuplicadoEnImport,
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
-import { fetchTransferenciasBeFingerprintsForOrg } from "@/lib/transferencias-be-fingerprints-db";
+import { fetchTransferenciasFingerprintsForOrg } from "@/lib/transferencias-be-fingerprints-db";
 
 function normalizarEtiquetaConcepto(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
@@ -150,6 +151,7 @@ export async function POST(request: Request) {
     // Dentro del mismo archivo: preferir Transferencias sobre cartola TEF aunque la descripción difiera.
     const preferByOrigin = new Map<string, (typeof uniqueByHash)[number]>();
     const preferTefBe = new Map<string, (typeof uniqueByHash)[number]>();
+    const preferTransMismoBanco = new Map<string, (typeof uniqueByHash)[number]>();
     for (const m of uniqueByHash) {
       const key = clavePreferirOrigen(m);
       const current = preferByOrigin.get(key);
@@ -166,6 +168,15 @@ export async function POST(request: Request) {
           curTef ? preferirEgresoDuplicadoEnImport(curTef, m) : m,
         );
       }
+
+      const transKey = claveEmparejarCartolaTransferenciasMismoBanco(m);
+      if (transKey) {
+        const curTrans = preferTransMismoBanco.get(transKey);
+        preferTransMismoBanco.set(
+          transKey,
+          curTrans ? preferirEgresoDuplicadoEnImport(curTrans, m) : m,
+        );
+      }
     }
 
     const afterPrefer = uniqueByHash.filter((m) => {
@@ -173,12 +184,14 @@ export async function POST(request: Request) {
       if (preferByOrigin.get(fullKey) !== m) return false;
       const tefKey = claveEmparejarTefTransferenciasBe(m);
       if (tefKey && preferTefBe.get(tefKey) !== m) return false;
+      const transKey = claveEmparejarCartolaTransferenciasMismoBanco(m);
+      if (transKey && preferTransMismoBanco.get(transKey) !== m) return false;
       return true;
     });
 
-    let transferenciasBeInDb;
+    let transferenciasInDb;
     try {
-      transferenciasBeInDb = await fetchTransferenciasBeFingerprintsForOrg(
+      transferenciasInDb = await fetchTransferenciasFingerprintsForOrg(
         supabase,
         orgId,
       );
@@ -200,7 +213,7 @@ export async function POST(request: Request) {
         origen_cuenta: m.account_name,
         source: "excel_egresos",
       })),
-      transferenciasBeInDb,
+      transferenciasInDb,
     );
 
     const lockedResp = await rejectIfImportDatesLocked(

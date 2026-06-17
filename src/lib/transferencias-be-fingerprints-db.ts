@@ -1,16 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  buildTransferenciasBeFingerprints,
-  type TransferenciasBeFingerprints,
+  buildTransferenciasFingerprints,
+  type TransferenciasExistingByFamilia,
 } from "@/lib/gastos-dedupe-servicios";
+import {
+  esOrigenTransferencias,
+  origenFamiliaBanco,
+  type OrigenFamiliaBanco,
+} from "@/lib/origen-familia-banco";
 
 const PAGE_SIZE = 1000;
 
-/** Huellas de Transferencias Banco Estado ya guardadas (para omitir TEF al importar). */
-export async function fetchTransferenciasBeFingerprintsForOrg(
+/** Huellas de Transferencias ya guardadas por banco (para omitir cartola duplicada al importar). */
+export async function fetchTransferenciasFingerprintsForOrg(
   supabase: SupabaseClient,
   organizationId: string,
-): Promise<TransferenciasBeFingerprints> {
+): Promise<TransferenciasExistingByFamilia> {
   const rows: {
     date?: string;
     amount?: number;
@@ -39,16 +44,32 @@ export async function fetchTransferenciasBeFingerprintsForOrg(
     from += PAGE_SIZE;
   }
 
-  const filtered = rows.filter((r) => {
-    const o = String(r.origen_cuenta ?? "").toLowerCase();
-    if (o.includes("bci") || o.includes("chile")) return false;
-    return o.includes("banco") || o.includes("bestado") || o.includes("estado");
-  });
+  const byFamilia: Record<OrigenFamiliaBanco, typeof rows> = {
+    be: [],
+    bci: [],
+    bdch: [],
+  };
 
-  return buildTransferenciasBeFingerprints(
-    filtered.map((r) => ({
-      ...r,
-      source: "excel_egresos",
-    })),
-  );
+  for (const r of rows) {
+    const origen = String(r.origen_cuenta ?? "");
+    if (!esOrigenTransferencias(origen)) continue;
+    const familia = origenFamiliaBanco(origen);
+    if (!familia) continue;
+    byFamilia[familia].push({ ...r, source: "excel_egresos" });
+  }
+
+  return {
+    be: buildTransferenciasFingerprints(byFamilia.be, "be"),
+    bci: buildTransferenciasFingerprints(byFamilia.bci, "bci"),
+    bdch: buildTransferenciasFingerprints(byFamilia.bdch, "bdch"),
+  };
+}
+
+/** @deprecated Usar `fetchTransferenciasFingerprintsForOrg`. */
+export async function fetchTransferenciasBeFingerprintsForOrg(
+  supabase: SupabaseClient,
+  organizationId: string,
+) {
+  const all = await fetchTransferenciasFingerprintsForOrg(supabase, organizationId);
+  return all.be ?? buildTransferenciasFingerprints([], "be");
 }
