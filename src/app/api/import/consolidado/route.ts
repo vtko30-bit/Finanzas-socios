@@ -14,6 +14,7 @@ import {
   claveEmparejarTransferenciasDuplicadas,
   esOrigenTransferencias,
   fingerprintTransferenciasDuplicado,
+  fingerprintTransferenciasFechaMonto,
   omitMirroredExpenseDuplicates,
   preferirEgresoDuplicadoEnImport,
 } from "@/lib/gastos-dedupe-servicios";
@@ -234,21 +235,19 @@ export async function POST(request: Request) {
       })),
       transferenciasInDb,
     ).filter((m) => {
-      const dupKey = fingerprintTransferenciasDuplicado({
+      if (!esOrigenTransferencias(String(m.account_name ?? ""))) return true;
+      const row = {
         date: m.date,
         amount: m.amount,
         external_ref: m.external_ref,
         counterparty: m.counterparty,
         origen_cuenta: m.account_name,
-        source: "excel_egresos",
-      });
-      if (
-        dupKey &&
-        esOrigenTransferencias(String(m.account_name ?? "")) &&
-        transferenciasDupKeysInDb.has(dupKey)
-      ) {
-        return false;
-      }
+        source: "excel_egresos" as const,
+      };
+      const loose = fingerprintTransferenciasFechaMonto(row);
+      const strict = fingerprintTransferenciasDuplicado(row);
+      if (loose && transferenciasDupKeysInDb.has(loose)) return false;
+      if (strict && transferenciasDupKeysInDb.has(strict)) return false;
       return true;
     });
 

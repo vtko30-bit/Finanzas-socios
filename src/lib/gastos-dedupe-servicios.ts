@@ -304,12 +304,30 @@ function normDupText(v: unknown): string {
     .replace(/\s+/g, " ");
 }
 
-/** Huella para dos filas Transferencias del mismo banco que representan el mismo pago. */
+/** Huella estricta (incluye N° operación y destino). */
 export function fingerprintTransferenciasDuplicado(r: {
   date?: unknown;
   amount?: unknown;
   external_ref?: unknown;
   counterparty?: unknown;
+  origen_cuenta?: unknown;
+  account_name?: unknown;
+  source?: unknown;
+}): string | null {
+  const loose = fingerprintTransferenciasFechaMonto(r);
+  if (!loose) return null;
+  const op = normDupText(r.external_ref);
+  const dest = normDupText(r.counterparty);
+  return `${loose}|${op}|${dest}`;
+}
+
+/**
+ * Huella laxa: mismo banco + fecha + monto (cubre lote completo vs archivos mensuales
+ * aunque cambien destino u operación entre exports).
+ */
+export function fingerprintTransferenciasFechaMonto(r: {
+  date?: unknown;
+  amount?: unknown;
   origen_cuenta?: unknown;
   account_name?: unknown;
   source?: unknown;
@@ -321,12 +339,10 @@ export function fingerprintTransferenciasDuplicado(r: {
   if (!familia) return null;
   const d = String(r.date ?? "").slice(0, 10);
   const a = Number(r.amount).toFixed(2);
-  const op = normDupText(r.external_ref);
-  const dest = normDupText(r.counterparty);
-  return `${familia}|${d}|${a}|${op}|${dest}`;
+  return `${familia}|${d}|${a}`;
 }
 
-/** Omite filas Transferencias duplicadas (mismo banco, fecha, monto, N° op. y destino). */
+/** Omite filas Transferencias duplicadas (mismo banco, fecha y monto). */
 export function omitTransferenciasDuplicadas<
   T extends {
     date?: unknown;
@@ -340,14 +356,14 @@ export function omitTransferenciasDuplicadas<
 >(rows: T[]): T[] {
   const counts = new Map<string, number>();
   for (const r of rows) {
-    const key = fingerprintTransferenciasDuplicado(r);
+    const key = fingerprintTransferenciasFechaMonto(r);
     if (!key) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
   const out: T[] = [];
   for (const r of rows) {
-    const key = fingerprintTransferenciasDuplicado(r);
+    const key = fingerprintTransferenciasFechaMonto(r);
     if (!key) {
       out.push(r);
       continue;
@@ -372,7 +388,7 @@ export function claveEmparejarTransferenciasDuplicadas(m: {
   external_ref?: string;
   counterparty?: string;
 }): string | null {
-  return fingerprintTransferenciasDuplicado({
+  return fingerprintTransferenciasFechaMonto({
     ...m,
     origen_cuenta: m.account_name,
     source: "excel_egresos",

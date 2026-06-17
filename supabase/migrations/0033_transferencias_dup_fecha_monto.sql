@@ -1,4 +1,4 @@
--- Omite filas Transferencias duplicadas en Resumen (mismo banco, fecha, monto, N° op. y destino).
+-- Transferencias duplicadas: mismo banco + fecha + monto (lote completo vs mensual).
 
 create or replace function public.resumen_pivot_operativo_agg(
   p_organization_id uuid,

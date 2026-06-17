@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildTransferenciasFingerprints,
   fingerprintTransferenciasDuplicado,
+  fingerprintTransferenciasFechaMonto,
   type TransferenciasExistingByFamilia,
 } from "@/lib/gastos-dedupe-servicios";
 import {
@@ -111,11 +112,11 @@ export async function fetchTransferenciasDuplicateKeysForOrg(
 
   const keys = new Set<string>();
   for (const r of rows) {
-    const key = fingerprintTransferenciasDuplicado({
-      ...r,
-      source: "excel_egresos",
-    });
-    if (key) keys.add(key);
+    const row = { ...r, source: "excel_egresos" as const };
+    const loose = fingerprintTransferenciasFechaMonto(row);
+    const strict = fingerprintTransferenciasDuplicado(row);
+    if (loose) keys.add(loose);
+    if (strict) keys.add(strict);
   }
   return keys;
 }
