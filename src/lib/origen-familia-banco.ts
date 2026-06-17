@@ -18,13 +18,26 @@ export function origenFamiliaBanco(origenRaw: string): OrigenFamiliaBanco | null
   if (esTransferencias) {
     if (n.includes("bci")) return "bci";
     if (n.includes("chile") || n.includes("bancodechile")) return "bdch";
-    if (n.includes("banco") || n.includes("bestado") || n.includes("estado")) return "be";
+    if (
+      n.includes("banco") ||
+      n.includes("bestado") ||
+      n.includes("estado") ||
+      n.endsWith("rg")
+    ) {
+      return "be";
+    }
     return null;
   }
 
   if (n.includes("bci")) return "bci";
   if (n.includes("chile") || n.includes("bancodechile")) return "bdch";
-  if (n === "rg" || n.startsWith("rg") || n.includes("bancoestado") || n.includes("bestado")) {
+  if (
+    n === "rg" ||
+    n.startsWith("rg") ||
+    n.endsWith("rg") ||
+    n.includes("bancoestado") ||
+    n.includes("bestado")
+  ) {
     return "be";
   }
   if (n === "happy" || n.startsWith("happy")) return "bci";

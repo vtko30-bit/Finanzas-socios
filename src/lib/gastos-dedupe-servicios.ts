@@ -39,8 +39,18 @@ function origenDeFila(r: {
 
 function fingerprintDateAmount(r: { date?: unknown; amount?: unknown }): string {
   const d = String(r.date ?? "").slice(0, 10);
-  const a = Math.round(Number(r.amount) || 0);
+  const a = Number(r.amount).toFixed(2);
   return `${d}|${a}`;
+}
+
+/** Misma huella que Transferencias BE en `fingerprintTransferenciasFechaMonto`. */
+function fingerprintTefVsBeDateAmount(r: {
+  date?: unknown;
+  amount?: unknown;
+}): string {
+  const d = String(r.date ?? "").slice(0, 10);
+  const a = Number(r.amount).toFixed(2);
+  return `be|${d}|${a}`;
 }
 
 function fingerprintOperacion(r: {
@@ -104,7 +114,10 @@ function addTransferenciasToFingerprints<
     const familia = origenFamiliaBanco(origenDeFila(r));
     if (familia !== familiaFiltro) continue;
     if (!esOrigenTransferencias(origenDeFila(r))) continue;
-    const k = scopedKey(familia, fingerprintDateAmount(r));
+    const k =
+      familiaFiltro === "be"
+        ? fingerprintTefVsBeDateAmount(r)
+        : scopedKey(familia, fingerprintDateAmount(r));
     fingerprints.dateAmount.set(k, (fingerprints.dateAmount.get(k) ?? 0) + 1);
     const op = fingerprintOperacion(r);
     if (op) {
@@ -200,21 +213,21 @@ export function omitTefExpenseWhenMirroredInTransferenciasBancoEstado<
     }
 
     let matched = false;
-    const op = fingerprintOperacion(r);
-    if (op) {
-      const opKey = scopedKey("be", op);
-      const nOp = operacionCounts.get(opKey) ?? 0;
-      if (nOp > 0) {
-        operacionCounts.set(opKey, nOp - 1);
-        matched = true;
-      }
+    const kDate = fingerprintTefVsBeDateAmount(r);
+    const nDate = dateAmountCounts.get(kDate) ?? 0;
+    if (nDate > 0) {
+      dateAmountCounts.set(kDate, nDate - 1);
+      matched = true;
     }
     if (!matched) {
-      const k = scopedKey("be", fingerprintDateAmount(r));
-      const n = dateAmountCounts.get(k) ?? 0;
-      if (n > 0) {
-        dateAmountCounts.set(k, n - 1);
-        matched = true;
+      const op = fingerprintOperacion(r);
+      if (op) {
+        const opKey = scopedKey("be", op);
+        const nOp = operacionCounts.get(opKey) ?? 0;
+        if (nOp > 0) {
+          operacionCounts.set(opKey, nOp - 1);
+          matched = true;
+        }
       }
     }
     if (matched) continue;
@@ -441,10 +454,9 @@ export function claveEmparejarTefTransferenciasBe(m: {
   const transBe = esOrigenTransferenciasBancoEstado(orig);
   const cartolaTef =
     esDescripcionTef(String(m.description ?? "")) &&
-    origenFamiliaBanco(orig) === "be";
+    !esOrigenTransferencias(orig);
   if (!transBe && !cartolaTef) return null;
-  const op = String(m.external_ref ?? "").trim().toLowerCase();
-  return `tef-be|${m.date}|${Number(m.amount).toFixed(2)}|${op}`;
+  return `tef-be|${m.date}|${Number(m.amount).toFixed(2)}`;
 }
 
 /** Clave cartola ↔ Transferencias del mismo banco (BCI o Banco de Chile). */
@@ -507,13 +519,14 @@ export function omitMirroredExpenseDuplicates<
   rows: T[],
   transferenciasExisting?: TransferenciasExistingByFamilia,
 ): T[] {
-  return omitTransferenciasDuplicadas(
-    omitCartolaWhenMirroredInTransferenciasMismoBanco(
-      omitTefExpenseWhenMirroredInTransferenciasBancoEstado(
-        omitServiciosExpenseWhenMirroredInExcelEgresos(rows),
-        transferenciasExisting?.be,
-      ),
-      transferenciasExisting,
-    ),
+  const afterServicios = omitServiciosExpenseWhenMirroredInExcelEgresos(rows);
+  const afterCartola = omitCartolaWhenMirroredInTransferenciasMismoBanco(
+    afterServicios,
+    transferenciasExisting,
+  );
+  const afterTransferenciasDup = omitTransferenciasDuplicadas(afterCartola);
+  return omitTefExpenseWhenMirroredInTransferenciasBancoEstado(
+    afterTransferenciasDup,
+    transferenciasExisting?.be,
   );
 }
