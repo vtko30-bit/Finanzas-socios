@@ -1,3 +1,5 @@
+import { origenFamiliaBanco } from "@/lib/origen-maestro";
+
 /** Import de pago de servicios BancoEstado (resumen desagregado). */
 export const SOURCE_EXCEL_EGRESOS_SERVICIOS = "excel_egresos_banco_estado_servicios";
 /** Import principal de movimientos del banco (misma operación suele aparecer aquí categorizada). */
@@ -37,10 +39,10 @@ function fingerprintOperacion(r: {
   return `${String(r.date ?? "").slice(0, 10)}|${op}`;
 }
 
-/** Hoja / origen tipo Transferencias (BE, BCI, Banco de Chile, etc.). */
+/** Hoja / origen tipo Transferencias (BE, BCI o Banco de Chile — bancos distintos). */
 export function esOrigenTransferencias(origen: string): boolean {
   const n = normOrigenKey(origen);
-  if (n.includes("transbe") || n.includes("transcl")) return true;
+  if (n.includes("transbe") || n.includes("transcl") || n.includes("transbci")) return true;
   if (!n.includes("transferencias") && !n.includes("transferencia")) return false;
   return (
     n.includes("banco") ||
@@ -108,8 +110,7 @@ export function omitServiciosExpenseWhenMirroredInExcelEgresos<
 
 /**
  * Omite filas de Movimientos (cartola) cuando el mismo pago ya está en una hoja
- * Transferencias (BE, BCI, Banco de Chile): por N° Operación o, si la descripción
- * es de transferencia, por fecha + monto.
+ * Transferencias del mismo banco (BE↔BE, BCI↔BCI, Banco de Chile↔Banco de Chile).
  */
 export function omitMovimientoExpenseWhenMirroredInTransferencias<
   T extends {
@@ -133,10 +134,15 @@ export function omitMovimientoExpenseWhenMirroredInTransferencias<
   for (const r of rows) {
     if (!isEgresosPrincipal(r)) continue;
     if (!esOrigenTransferencias(origenDeFila(r))) continue;
-    const k = fingerprintDateAmount(r);
+    const familia = origenFamiliaBanco(origenDeFila(r));
+    if (!familia) continue;
+    const k = `${familia}|${fingerprintDateAmount(r)}`;
     dateAmountCounts.set(k, (dateAmountCounts.get(k) ?? 0) + 1);
     const op = fingerprintOperacion(r);
-    if (op) operacionCounts.set(op, (operacionCounts.get(op) ?? 0) + 1);
+    if (op) {
+      const opKey = `${familia}|${op}`;
+      operacionCounts.set(opKey, (operacionCounts.get(opKey) ?? 0) + 1);
+    }
   }
 
   const out: T[] = [];
@@ -151,19 +157,22 @@ export function omitMovimientoExpenseWhenMirroredInTransferencias<
     }
 
     let matched = false;
+    const familia = origenFamiliaBanco(origenDeFila(r));
     const op = fingerprintOperacion(r);
-    if (op) {
-      const nOp = operacionCounts.get(op) ?? 0;
+    if (familia && op) {
+      const opKey = `${familia}|${op}`;
+      const nOp = operacionCounts.get(opKey) ?? 0;
       if (nOp > 0) {
-        operacionCounts.set(op, nOp - 1);
+        operacionCounts.set(opKey, nOp - 1);
         matched = true;
       }
     }
     if (
       !matched &&
+      familia &&
       esDescripcionTransferencia(String(r.description ?? ""))
     ) {
-      const k = fingerprintDateAmount(r);
+      const k = `${familia}|${fingerprintDateAmount(r)}`;
       const n = dateAmountCounts.get(k) ?? 0;
       if (n > 0) {
         dateAmountCounts.set(k, n - 1);
@@ -178,13 +187,16 @@ export function omitMovimientoExpenseWhenMirroredInTransferencias<
 
 /**
  * Entre dos filas duplicadas (misma fecha/monto/destino/descripción/operación),
- * conserva la de hoja Transferencias frente a cartola Movimientos (Rg/Happy).
+ * conserva la de hoja Transferencias frente a cartola del mismo banco.
  */
 export function preferirEgresoDuplicadoEnImport<
   T extends { account_name?: string },
 >(current: T, next: T): T {
   const curOrig = String(current.account_name ?? "");
   const nextOrig = String(next.account_name ?? "");
+  const curFam = origenFamiliaBanco(curOrig);
+  const nextFam = origenFamiliaBanco(nextOrig);
+  if (curFam && nextFam && curFam !== nextFam) return current;
   const curTrans = esOrigenTransferencias(curOrig);
   const nextTrans = esOrigenTransferencias(nextOrig);
   if (!curTrans && nextTrans) return next;
