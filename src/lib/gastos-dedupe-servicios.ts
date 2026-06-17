@@ -4,6 +4,7 @@ export const SOURCE_EXCEL_EGRESOS_SERVICIOS = "excel_egresos_banco_estado_servic
 export const SOURCE_EXCEL_EGRESOS = "excel_egresos";
 
 import {
+  esFilaTransferenciasBe,
   esOrigenTransferencias,
   esOrigenTransferenciasBancoEstado,
   origenFamiliaBanco,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/origen-familia-banco";
 
 export {
+  esFilaTransferenciasBe,
   esOrigenTransferencias,
   esOrigenTransferenciasBancoDeChile,
   esOrigenTransferenciasBancoEstado,
@@ -37,10 +39,15 @@ function origenDeFila(r: {
   return String(r.origen_cuenta ?? r.account_name ?? "").trim();
 }
 
+function amountCanon(amount: unknown): string {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "0.00";
+  return Math.abs(n).toFixed(2);
+}
+
 function fingerprintDateAmount(r: { date?: unknown; amount?: unknown }): string {
   const d = String(r.date ?? "").slice(0, 10);
-  const a = Number(r.amount).toFixed(2);
-  return `${d}|${a}`;
+  return `${d}|${amountCanon(r.amount)}`;
 }
 
 /** Misma huella que Transferencias BE en `fingerprintTransferenciasFechaMonto`. */
@@ -49,8 +56,17 @@ function fingerprintTefVsBeDateAmount(r: {
   amount?: unknown;
 }): string {
   const d = String(r.date ?? "").slice(0, 10);
-  const a = Number(r.amount).toFixed(2);
-  return `be|${d}|${a}`;
+  return `be|${d}|${amountCanon(r.amount)}`;
+}
+
+function fingerprintTefVsBeDateOperacion(r: {
+  date?: unknown;
+  external_ref?: unknown;
+}): string {
+  const op = String(r.external_ref ?? "").trim().toLowerCase();
+  if (!op) return "";
+  const d = String(r.date ?? "").slice(0, 10);
+  return `be-op|${d}|${op}`;
 }
 
 function fingerprintOperacion(r: {
@@ -67,10 +83,11 @@ function scopedKey(familia: OrigenFamiliaBanco, fingerprint: string): string {
 }
 
 export function esDescripcionTef(description: string): boolean {
-  return String(description ?? "")
+  const d = String(description ?? "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .trim()
-    .toUpperCase()
-    .startsWith("TEF");
+    .toUpperCase();
+  return d.startsWith("TEF");
 }
 
 /** Descripción típica de transferencia en cartola Movimientos (TEF, TRANSFERENCIA…). */
@@ -111,18 +128,32 @@ function addTransferenciasToFingerprints<
 ): void {
   for (const r of rows) {
     if (!isEgresosPrincipalRow(r.source)) continue;
-    const familia = origenFamiliaBanco(origenDeFila(r));
-    if (familia !== familiaFiltro) continue;
-    if (!esOrigenTransferencias(origenDeFila(r))) continue;
+    const origen = origenDeFila(r);
+    if (familiaFiltro === "be") {
+      if (!esFilaTransferenciasBe(origen)) continue;
+    } else {
+      const familia = origenFamiliaBanco(origen);
+      if (familia !== familiaFiltro) continue;
+      if (!esOrigenTransferencias(origen)) continue;
+    }
     const k =
       familiaFiltro === "be"
         ? fingerprintTefVsBeDateAmount(r)
-        : scopedKey(familia, fingerprintDateAmount(r));
+        : scopedKey(familiaFiltro, fingerprintDateAmount(r));
     fingerprints.dateAmount.set(k, (fingerprints.dateAmount.get(k) ?? 0) + 1);
     const op = fingerprintOperacion(r);
     if (op) {
-      const opKey = scopedKey(familia, op);
+      const opKey = scopedKey(familiaFiltro, op);
       fingerprints.operacion.set(opKey, (fingerprints.operacion.get(opKey) ?? 0) + 1);
+    }
+    if (familiaFiltro === "be") {
+      const dateOp = fingerprintTefVsBeDateOperacion(r);
+      if (dateOp) {
+        fingerprints.operacion.set(
+          dateOp,
+          (fingerprints.operacion.get(dateOp) ?? 0) + 1,
+        );
+      }
     }
   }
 }
@@ -200,9 +231,10 @@ export function omitTefExpenseWhenMirroredInTransferenciasBancoEstado<
 
   const out: T[] = [];
   for (const r of rows) {
+    const origen = origenDeFila(r);
     if (
       !isEgresosPrincipalRow(r.source) ||
-      esOrigenTransferenciasBancoEstado(origenDeFila(r))
+      esFilaTransferenciasBe(origen)
     ) {
       out.push(r);
       continue;
@@ -218,6 +250,16 @@ export function omitTefExpenseWhenMirroredInTransferenciasBancoEstado<
     if (nDate > 0) {
       dateAmountCounts.set(kDate, nDate - 1);
       matched = true;
+    }
+    if (!matched) {
+      const kOp = fingerprintTefVsBeDateOperacion(r);
+      if (kOp) {
+        const nOp = operacionCounts.get(kOp) ?? 0;
+        if (nOp > 0) {
+          operacionCounts.set(kOp, nOp - 1);
+          matched = true;
+        }
+      }
     }
     if (!matched) {
       const op = fingerprintOperacion(r);
@@ -347,12 +389,14 @@ export function fingerprintTransferenciasFechaMonto(r: {
 }): string | null {
   if (!isEgresosPrincipalRow(r.source)) return null;
   const origen = origenDeFila(r);
+  if (esFilaTransferenciasBe(origen)) {
+    return fingerprintTefVsBeDateAmount(r);
+  }
   if (!esOrigenTransferencias(origen)) return null;
   const familia = origenFamiliaBanco(origen);
   if (!familia) return null;
   const d = String(r.date ?? "").slice(0, 10);
-  const a = Number(r.amount).toFixed(2);
-  return `${familia}|${d}|${a}`;
+  return `${familia}|${d}|${amountCanon(r.amount)}`;
 }
 
 /** Omite filas Transferencias duplicadas (mismo banco, fecha y monto). */
@@ -451,7 +495,7 @@ export function claveEmparejarTefTransferenciasBe(m: {
   external_ref?: string;
 }): string | null {
   const orig = String(m.account_name ?? "");
-  const transBe = esOrigenTransferenciasBancoEstado(orig);
+  const transBe = esFilaTransferenciasBe(orig);
   const cartolaTef =
     esDescripcionTef(String(m.description ?? "")) &&
     !esOrigenTransferencias(orig);

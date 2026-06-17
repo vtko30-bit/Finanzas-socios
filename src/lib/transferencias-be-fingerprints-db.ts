@@ -6,6 +6,7 @@ import {
   type TransferenciasExistingByFamilia,
 } from "@/lib/gastos-dedupe-servicios";
 import {
+  esFilaTransferenciasBe,
   esOrigenTransferencias,
   origenFamiliaBanco,
   type OrigenFamiliaBanco,
@@ -54,9 +55,13 @@ export async function fetchTransferenciasFingerprintsForOrg(
 
   for (const r of rows) {
     const origen = String(r.origen_cuenta ?? "");
-    if (!esOrigenTransferencias(origen)) continue;
     const familia = origenFamiliaBanco(origen);
-    if (!familia) continue;
+    const esBe = esFilaTransferenciasBe(origen);
+    if (esBe) {
+      byFamilia.be.push({ ...r, source: "excel_egresos" });
+      continue;
+    }
+    if (!esOrigenTransferencias(origen) || !familia || familia === "be") continue;
     byFamilia[familia].push({ ...r, source: "excel_egresos" });
   }
 

@@ -49,6 +49,21 @@ export function esOrigenTransferenciasBancoEstado(origen: string): boolean {
   return origenFamiliaBanco(origen) === "be" && normalizeKey(origen).includes("transferencias");
 }
 
+/** Transferencias BE aunque `origenFamiliaBanco` falle por formato de etiqueta. */
+export function esFilaTransferenciasBe(origenRaw: string): boolean {
+  if (esOrigenTransferenciasBancoEstado(origenRaw)) return true;
+  const n = normalizeKey(origenRaw);
+  if (!n.includes("transferencias") && !n.includes("transferencia")) return false;
+  if (n.includes("bci") || n.includes("chile") || n.includes("bancodechile")) return false;
+  return (
+    n.includes("banco") ||
+    n.includes("bestado") ||
+    n.includes("estado") ||
+    n.includes("bancoestado") ||
+    n.endsWith("rg")
+  );
+}
+
 export function esOrigenTransferenciasBci(origen: string): boolean {
   return origenFamiliaBanco(origen) === "bci" && normalizeKey(origen).includes("transferencias");
 }
