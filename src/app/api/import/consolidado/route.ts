@@ -256,12 +256,16 @@ export async function POST(request: Request) {
         external_ref: m.external_ref,
         counterparty: m.counterparty,
         origen_cuenta: m.account_name,
+        source_id: m.source_id,
         source: "excel_egresos" as const,
       };
-      const loose = fingerprintTransferenciasFechaMonto(row);
+      const sourceId = String(m.source_id ?? "").trim();
       const strict = fingerprintTransferenciasDuplicado(row);
-      if (loose && transferenciasDupKeysInDb.has(loose)) return false;
       if (strict && transferenciasDupKeysInDb.has(strict)) return false;
+      if (!sourceId) {
+        const loose = fingerprintTransferenciasFechaMonto(row);
+        if (loose && transferenciasDupKeysInDb.has(loose)) return false;
+      }
       return true;
     });
 
