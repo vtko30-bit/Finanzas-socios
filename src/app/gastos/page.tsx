@@ -499,6 +499,7 @@ function GastosPageContent() {
   const [filtroOrigen, setFiltroOrigen] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
+  const [soloSeleccionados, setSoloSeleccionados] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -729,9 +730,14 @@ function GastosPageContent() {
     ],
   );
 
+  const filasTrasSeleccion = useMemo(() => {
+    if (!soloSeleccionados) return filasFiltradas;
+    return filasFiltradas.filter((r) => selectedGastoIds.has(r.id));
+  }, [filasFiltradas, soloSeleccionados, selectedGastoIds]);
+
   const displayRows = useMemo(
-    () => sortRows(filasFiltradas, sortKey, sortDir),
-    [filasFiltradas, sortKey, sortDir],
+    () => sortRows(filasTrasSeleccion, sortKey, sortDir),
+    [filasTrasSeleccion, sortKey, sortDir],
   );
 
   const totalGastosFiltrados = useMemo(
@@ -750,6 +756,12 @@ function GastosPageContent() {
   }, [displayRows, paginaGastos]);
 
   useEffect(() => {
+    if (soloSeleccionados && selectedGastoIds.size === 0) {
+      setSoloSeleccionados(false);
+    }
+  }, [soloSeleccionados, selectedGastoIds]);
+
+  useEffect(() => {
     setPaginaGastos(1);
   }, [
     modoFecha,
@@ -764,6 +776,7 @@ function GastosPageContent() {
     filtroOrigen,
     filtroCategoria,
     incluirFinanciamiento,
+    soloSeleccionados,
   ]);
 
   useEffect(() => {
@@ -796,6 +809,7 @@ function GastosPageContent() {
     setFiltroOrigen("");
     setFiltroCategoria("");
     setIncluirFinanciamiento(false);
+    setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
   };
 
@@ -1094,9 +1108,9 @@ function GastosPageContent() {
   const headerNombreCbRef = useRef<HTMLInputElement>(null);
   const headerNombreCbRefMovil = useRef<HTMLInputElement>(null);
   const todosNombreSeleccionados =
-    displayRows.length > 0 &&
-    displayRows.every((r) => selectedGastoIds.has(r.id));
-  const algunoNombreSeleccionado = displayRows.some((r) =>
+    filasFiltradas.length > 0 &&
+    filasFiltradas.every((r) => selectedGastoIds.has(r.id));
+  const algunoNombreSeleccionado = filasFiltradas.some((r) =>
     selectedGastoIds.has(r.id),
   );
   useEffect(() => {
@@ -1104,7 +1118,7 @@ function GastosPageContent() {
     for (const el of [headerNombreCbRef.current, headerNombreCbRefMovil.current]) {
       if (el) el.indeterminate = indet;
     }
-  }, [algunoNombreSeleccionado, todosNombreSeleccionados, displayRows.length]);
+  }, [algunoNombreSeleccionado, todosNombreSeleccionados, filasFiltradas.length]);
 
   const toggleSeleccionGasto = (id: string) => {
     setSelectedGastoIds((prev) => {
@@ -1367,6 +1381,23 @@ function GastosPageContent() {
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-sky-700"
+                  checked={soloSeleccionados}
+                  disabled={selectedGastoIds.size === 0}
+                  onChange={(e) => setSoloSeleccionados(e.target.checked)}
+                />
+                <span className="text-slate-900">
+                  Solo seleccionados
+                  {selectedGastoIds.size > 0 ? (
+                    <span className="ml-0.5 text-xs opacity-80">
+                      ({selectedGastoIds.size})
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-sky-700"
                   checked={incluirFinanciamiento}
                   onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
                 />
@@ -1380,7 +1411,9 @@ function GastosPageContent() {
                 Limpiar filtros
               </button>
               <span className="rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900">
-                Mostrando {displayRows.length} de {rows.length} gastos
+                {soloSeleccionados
+                  ? `Mostrando ${displayRows.length} seleccionados (de ${filasFiltradas.length} filtrados, ${rows.length} total)`
+                  : `Mostrando ${displayRows.length} de ${rows.length} gastos`}
               </span>
               <span className="rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-900">
                 Total filtrado: {formatClp(totalGastosFiltrados)}
@@ -1463,20 +1496,20 @@ function GastosPageContent() {
                 type="checkbox"
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
                 checked={todosNombreSeleccionados}
-                disabled={displayRows.length === 0 || uiBloqueadoGuardado}
-                title="Seleccionar todos los gastos visibles"
+                disabled={filasFiltradas.length === 0 || uiBloqueadoGuardado}
+                title="Seleccionar todos los gastos del filtro actual"
                 aria-label="Seleccionar todos en Nombre destino"
                 onChange={() => {
                   if (todosNombreSeleccionados) {
                     setSelectedGastoIds((prev) => {
                       const next = new Set(prev);
-                      displayRows.forEach((r) => next.delete(r.id));
+                      filasFiltradas.forEach((r) => next.delete(r.id));
                       return next;
                     });
                   } else {
                     setSelectedGastoIds((prev) => {
                       const next = new Set(prev);
-                      displayRows.forEach((r) => next.add(r.id));
+                      filasFiltradas.forEach((r) => next.add(r.id));
                       return next;
                     });
                   }
@@ -1543,20 +1576,20 @@ function GastosPageContent() {
                 type="checkbox"
                 className="h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
                 checked={todosNombreSeleccionados}
-                disabled={displayRows.length === 0 || uiBloqueadoGuardado}
-                title="Seleccionar todos"
+                disabled={filasFiltradas.length === 0 || uiBloqueadoGuardado}
+                title="Seleccionar todos los gastos del filtro actual"
                 aria-label="Seleccionar todos en Nombre destino"
                 onChange={() => {
                   if (todosNombreSeleccionados) {
                     setSelectedGastoIds((prev) => {
                       const next = new Set(prev);
-                      displayRows.forEach((r) => next.delete(r.id));
+                      filasFiltradas.forEach((r) => next.delete(r.id));
                       return next;
                     });
                   } else {
                     setSelectedGastoIds((prev) => {
                       const next = new Set(prev);
-                      displayRows.forEach((r) => next.add(r.id));
+                      filasFiltradas.forEach((r) => next.add(r.id));
                       return next;
                     });
                   }
