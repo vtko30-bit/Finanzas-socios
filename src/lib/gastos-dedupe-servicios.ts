@@ -693,7 +693,14 @@ export function esOrigenSinAsignar(origen: string): boolean {
   return !n || n === "sinorigen" || n === "sincuenta";
 }
 
-/** Huella del movimiento (independiente del origen en la fila). */
+function normOpRefRetirosMp(v: unknown): string {
+  const s = normDupText(v);
+  if (!s) return "";
+  if (/^\d+$/.test(s)) return s.replace(/^0+/, "") || "0";
+  return s;
+}
+
+/** Huella del movimiento (independiente del origen en la fila). Normaliza N° op. numérico (0001 = 1). */
 export function fingerprintRetirosMercadoPagoMovimiento(r: {
   date?: unknown;
   amount?: unknown;
@@ -702,9 +709,21 @@ export function fingerprintRetirosMercadoPagoMovimiento(r: {
 }): string | null {
   const d = String(r.date ?? "").slice(0, 10);
   if (!d) return null;
-  const op = normDupText(r.external_ref);
+  const op = normOpRefRetirosMp(r.external_ref);
   const dest = normDupText(r.counterparty);
   return `retiros-mp|${d}|${amountCanon(r.amount)}|${dest}|${op}`;
+}
+
+/** Huella laxa: fecha + monto + destino (reimportaciones con Id y N° op. distintos). */
+export function fingerprintRetirosMercadoPagoMovimientoLaxo(r: {
+  date?: unknown;
+  amount?: unknown;
+  counterparty?: unknown;
+}): string | null {
+  const d = String(r.date ?? "").slice(0, 10);
+  if (!d) return null;
+  const dest = normDupText(r.counterparty);
+  return `retiros-mp-loose|${d}|${amountCanon(r.amount)}|${dest}`;
 }
 
 /** Huella de fila Retiros MP ya guardada (solo origen explícito). */

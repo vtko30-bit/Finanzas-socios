@@ -30,6 +30,7 @@ import {
   esOrigenRetirosMercadoPago,
   esOrigenSinAsignar,
   fingerprintRetirosMercadoPagoMovimiento,
+  fingerprintRetirosMercadoPagoMovimientoLaxo,
 } from "@/lib/gastos-dedupe-servicios";
 
 function normalizarEtiquetaConcepto(raw: string): string {
@@ -266,7 +267,13 @@ export async function POST(request: Request) {
           /retiros.*mercado|mercado.*retiros/i.test(fileName);
         if (esRetirosImport) {
           const fp = fingerprintRetirosMercadoPagoMovimiento(m);
-          if (fp && retirosMpDupKeysInDb.has(fp)) return false;
+          const fpLoose = fingerprintRetirosMercadoPagoMovimientoLaxo(m);
+          if (
+            (fp && retirosMpDupKeysInDb.has(fp)) ||
+            (fpLoose && retirosMpDupKeysInDb.has(fpLoose))
+          ) {
+            return false;
+          }
         }
       }
       if (!esOrigenTransferencias(String(m.account_name ?? ""))) return true;

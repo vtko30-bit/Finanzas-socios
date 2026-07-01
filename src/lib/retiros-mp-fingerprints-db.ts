@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fingerprintRetirosMercadoPagoMovimiento } from "@/lib/gastos-dedupe-servicios";
+import {
+  fingerprintRetirosMercadoPagoMovimiento,
+  fingerprintRetirosMercadoPagoMovimientoLaxo,
+} from "@/lib/gastos-dedupe-servicios";
 
 const PAGE_SIZE = 1000;
 
@@ -40,7 +43,9 @@ export async function fetchRetirosMercadoPagoDuplicateKeysForOrg(
   const keys = new Set<string>();
   for (const r of rows) {
     const fp = fingerprintRetirosMercadoPagoMovimiento(r);
+    const fpLoose = fingerprintRetirosMercadoPagoMovimientoLaxo(r);
     if (fp) keys.add(fp);
+    if (fpLoose) keys.add(fpLoose);
   }
   return keys;
 }

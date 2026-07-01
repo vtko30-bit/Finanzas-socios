@@ -157,3 +157,66 @@ order by date desc, amount_n desc;
 -- group by 1, 2, 3, 4
 -- having count(*) > 1
 -- order by 1 desc;
+
+-- =============================================================================
+-- Paso 7 — Reimportaciones (mismo día + monto + destino, distinto Id / N° op.)
+-- Preview: conservar rn=1 (más antiguo), borrar rn>1
+-- =============================================================================
+-- with base as (
+--   select
+--     t.id,
+--     t.date,
+--     round(t.amount::numeric, 2) as amount_n,
+--     t.counterparty,
+--     t.external_ref,
+--     t.source_id,
+--     t.concepto,
+--     t.created_at,
+--     row_number() over (
+--       partition by
+--         t.date,
+--         round(t.amount::numeric, 2),
+--         lower(trim(coalesce(t.counterparty, '')))
+--       order by t.created_at asc, t.id asc
+--     ) as rn,
+--     count(*) over (
+--       partition by
+--         t.date,
+--         round(t.amount::numeric, 2),
+--         lower(trim(coalesce(t.counterparty, '')))
+--     ) as total_en_grupo
+--   from public.transactions t
+--   where t.organization_id = 'fea07b74-332b-4f39-832b-dcb27582f011'::uuid
+--     and t.type = 'expense'
+--     and t.source = 'excel_egresos'
+--     and lower(coalesce(t.origen_cuenta, '')) like '%retiros%'
+-- )
+-- select * from base where total_en_grupo > 1 and rn > 1 order by date desc;
+
+-- delete from public.transactions t
+-- using (
+--   with base as (
+--     select
+--       t.id,
+--       row_number() over (
+--         partition by
+--           t.date,
+--           round(t.amount::numeric, 2),
+--           lower(trim(coalesce(t.counterparty, '')))
+--         order by t.created_at asc, t.id asc
+--       ) as rn,
+--       count(*) over (
+--         partition by
+--           t.date,
+--           round(t.amount::numeric, 2),
+--           lower(trim(coalesce(t.counterparty, '')))
+--       ) as total_en_grupo
+--     from public.transactions t
+--     where t.organization_id = 'fea07b74-332b-4f39-832b-dcb27582f011'::uuid
+--       and t.type = 'expense'
+--       and t.source = 'excel_egresos'
+--       and lower(coalesce(t.origen_cuenta, '')) like '%retiros%'
+--   )
+--   select id from base where total_en_grupo > 1 and rn > 1
+-- ) d
+-- where t.id = d.id;
