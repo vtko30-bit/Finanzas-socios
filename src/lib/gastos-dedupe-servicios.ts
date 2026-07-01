@@ -671,10 +671,110 @@ export function preferirEgresoDuplicadoEnImport<
   const nextTrans = esOrigenTransferencias(nextOrig);
   if (!curTrans && nextTrans) return next;
   if (curTrans && !nextTrans) return current;
-  const curSin = normOrigenKey(curOrig) === "sinorigen";
-  const nextSin = normOrigenKey(nextOrig) === "sinorigen";
+  const curSin = esOrigenSinAsignar(curOrig);
+  const nextSin = esOrigenSinAsignar(nextOrig);
   if (curSin && !nextSin) return next;
+  if (!curSin && nextSin) return current;
+  const curRetiros = esOrigenRetirosMercadoPago(curOrig);
+  const nextRetiros = esOrigenRetirosMercadoPago(nextOrig);
+  if (!curRetiros && nextRetiros) return next;
+  if (curRetiros && !nextRetiros) return current;
   return current;
+}
+
+/** Retiros Mercado Pago (maestro excel-movimientos / import egresos). */
+export function esOrigenRetirosMercadoPago(origen: string): boolean {
+  const n = normOrigenKey(origen);
+  return n.includes("retiros") && (n.includes("mercadopago") || n.includes("mercadolibre"));
+}
+
+export function esOrigenSinAsignar(origen: string): boolean {
+  const n = normOrigenKey(origen);
+  return !n || n === "sinorigen" || n === "sincuenta";
+}
+
+/** Huella del movimiento (independiente del origen en la fila). */
+export function fingerprintRetirosMercadoPagoMovimiento(r: {
+  date?: unknown;
+  amount?: unknown;
+  external_ref?: unknown;
+  counterparty?: unknown;
+}): string | null {
+  const d = String(r.date ?? "").slice(0, 10);
+  if (!d) return null;
+  const op = normDupText(r.external_ref);
+  const dest = normDupText(r.counterparty);
+  return `retiros-mp|${d}|${amountCanon(r.amount)}|${dest}|${op}`;
+}
+
+/** Huella de fila Retiros MP ya guardada (solo origen explícito). */
+export function fingerprintRetirosMercadoPago(r: {
+  date?: unknown;
+  amount?: unknown;
+  external_ref?: unknown;
+  counterparty?: unknown;
+  origen_cuenta?: unknown;
+  account_name?: unknown;
+  source?: unknown;
+}): string | null {
+  if (!isEgresosPrincipalRow(r.source)) return null;
+  if (!esOrigenRetirosMercadoPago(origenDeFila(r))) return null;
+  return fingerprintRetirosMercadoPagoMovimiento(r);
+}
+
+function esFilaRetirosMercadoPagoImport<
+  T extends { origen_cuenta?: unknown; account_name?: unknown },
+>(r: T): boolean {
+  const origen = origenDeFila(r);
+  return esOrigenRetirosMercadoPago(origen) || esOrigenSinAsignar(origen);
+}
+
+/** Omite filas Retiros MP / Sin origen duplicadas en el mismo lote (distinto Id origen). */
+export function omitRetirosMercadoPagoDuplicadosEnLote<
+  T extends {
+    date?: unknown;
+    amount?: unknown;
+    external_ref?: unknown;
+    counterparty?: unknown;
+    origen_cuenta?: unknown;
+    account_name?: unknown;
+    source?: unknown;
+  },
+>(rows: T[]): T[] {
+  const preferByFp = new Map<string, T>();
+  for (const r of rows) {
+    if (!esFilaRetirosMercadoPagoImport(r)) continue;
+    const fp = fingerprintRetirosMercadoPagoMovimiento(r);
+    if (!fp) continue;
+    const current = preferByFp.get(fp);
+    if (!current) {
+      preferByFp.set(fp, r);
+    } else {
+      const curOrig = String(current.account_name ?? current.origen_cuenta ?? "");
+      const nextOrig = String(r.account_name ?? r.origen_cuenta ?? "");
+      const keepNext =
+        (esOrigenSinAsignar(curOrig) && !esOrigenSinAsignar(nextOrig)) ||
+        (!esOrigenRetirosMercadoPago(curOrig) && esOrigenRetirosMercadoPago(nextOrig));
+      preferByFp.set(fp, keepNext ? r : current);
+    }
+  }
+
+  const out: T[] = [];
+  for (const r of rows) {
+    if (!esFilaRetirosMercadoPagoImport(r)) {
+      out.push(r);
+      continue;
+    }
+    const fp = fingerprintRetirosMercadoPagoMovimiento(r);
+    if (!fp) {
+      out.push(r);
+      continue;
+    }
+    if (preferByFp.get(fp) !== r) continue;
+    preferByFp.delete(fp);
+    out.push(r);
+  }
+  return out;
 }
 
 export type TransferenciasExistingByFamilia = Partial<
@@ -703,8 +803,9 @@ export function omitMirroredExpenseDuplicates<
     transferenciasExisting,
   );
   const afterTransferenciasDup = omitTransferenciasDuplicadas(afterCartola);
+  const afterRetiros = omitRetirosMercadoPagoDuplicadosEnLote(afterTransferenciasDup);
   return omitTefExpenseWhenMirroredInTransferenciasBancoEstado(
-    afterTransferenciasDup,
+    afterRetiros,
     transferenciasExisting?.be,
   );
 }

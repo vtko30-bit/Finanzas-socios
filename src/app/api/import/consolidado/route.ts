@@ -25,6 +25,12 @@ import {
   fetchTransferenciasDuplicateKeysForOrg,
   fetchTransferenciasFingerprintsForOrg,
 } from "@/lib/transferencias-be-fingerprints-db";
+import { fetchRetirosMercadoPagoDuplicateKeysForOrg } from "@/lib/retiros-mp-fingerprints-db";
+import {
+  esOrigenRetirosMercadoPago,
+  esOrigenSinAsignar,
+  fingerprintRetirosMercadoPagoMovimiento,
+} from "@/lib/gastos-dedupe-servicios";
 
 function normalizarEtiquetaConcepto(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
@@ -122,7 +128,7 @@ export async function POST(request: Request) {
 
     let parsed: ReturnType<typeof parseExpensesEgresosExcel>;
     try {
-      parsed = parseExpensesEgresosExcel(buffer);
+      parsed = parseExpensesEgresosExcel(buffer, { fileName });
     } catch (error) {
       return NextResponse.json(
         {
@@ -224,11 +230,14 @@ export async function POST(request: Request) {
 
     let transferenciasInDb;
     let transferenciasDupKeysInDb: Set<string>;
+    let retirosMpDupKeysInDb: Set<string>;
     try {
-      [transferenciasInDb, transferenciasDupKeysInDb] = await Promise.all([
-        fetchTransferenciasFingerprintsForOrg(supabase, orgId),
-        fetchTransferenciasDuplicateKeysForOrg(supabase, orgId),
-      ]);
+      [transferenciasInDb, transferenciasDupKeysInDb, retirosMpDupKeysInDb] =
+        await Promise.all([
+          fetchTransferenciasFingerprintsForOrg(supabase, orgId),
+          fetchTransferenciasDuplicateKeysForOrg(supabase, orgId),
+          fetchRetirosMercadoPagoDuplicateKeysForOrg(supabase, orgId),
+        ]);
     } catch (e) {
       return NextResponse.json(
         {
@@ -249,6 +258,17 @@ export async function POST(request: Request) {
       })),
       transferenciasInDb,
     ).filter((m) => {
+      if (!esOrigenTransferencias(String(m.account_name ?? ""))) {
+        const origen = String(m.account_name ?? "");
+        const esRetirosImport =
+          esOrigenRetirosMercadoPago(origen) ||
+          esOrigenSinAsignar(origen) ||
+          /retiros.*mercado|mercado.*retiros/i.test(fileName);
+        if (esRetirosImport) {
+          const fp = fingerprintRetirosMercadoPagoMovimiento(m);
+          if (fp && retirosMpDupKeysInDb.has(fp)) return false;
+        }
+      }
       if (!esOrigenTransferencias(String(m.account_name ?? ""))) return true;
       const row = {
         date: m.date,

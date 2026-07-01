@@ -599,10 +599,31 @@ export const parseConsolidatedExcel = (
  * - Solo considera hojas cuyo nombre contiene "egres"
  * - Usa columna "Cheques / Cargos" como monto del gasto
  */
-export const parseExpensesEgresosExcel = (file: Buffer) => {
+export const parseExpensesEgresosExcel = (
+  file: Buffer,
+  opts?: { fileName?: string },
+) => {
+  const fileNameKey = normalizeKey(opts?.fileName ?? "");
+  const esArchivoRetirosMp =
+    fileNameKey.includes("retiros") &&
+    (fileNameKey.includes("mercadopago") || fileNameKey.includes("mercadolibre"));
+
   const normalizeOrigen = (origen: string, sheetName: string): string => {
     const n = normalizeKey(origen);
     const sheetN = normalizeKey(sheetName);
+
+    if (n.includes("retiros") && (n.includes("mercadopago") || n.includes("mercadolibre"))) {
+      return origen.trim() || "Retiros_Mercado_Pago";
+    }
+    if (
+      sheetN.includes("retiros") &&
+      (sheetN.includes("mercadopago") || sheetN.includes("mercadolibre"))
+    ) {
+      return "Retiros_Mercado_Pago";
+    }
+    if (esArchivoRetirosMp && !n) {
+      return "Retiros_Mercado_Pago";
+    }
 
     if (n.includes("transferencias") || n.includes("transferencia")) {
       if (n.includes("chile") || n.includes("bancodechile")) {
