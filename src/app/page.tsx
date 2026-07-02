@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DashboardOverview } from "@/components/dashboard-overview";
 import { SetupBootstrapButton } from "@/components/setup-bootstrap-button";
 
 export default function Home() {
@@ -13,8 +12,6 @@ export default function Home() {
           <SetupBootstrapButton />
         </div>
       </header>
-
-      <DashboardOverview />
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
