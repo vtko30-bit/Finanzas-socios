@@ -118,7 +118,7 @@ export default function ImportacionesPage() {
 
   if (!ready) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
+      <main className="page-main page-main--xl">
         <p className="text-slate-600">Cargando…</p>
       </main>
     );
@@ -126,10 +126,10 @@ export default function ImportacionesPage() {
 
   if (!authenticated) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
+      <main className="page-main page-main--xl">
         <p className="text-slate-700">
           Inicia sesión para ver el historial de importaciones.{" "}
-          <Link href="/login" className="text-sky-400 underline">
+          <Link href="/login" className="text-[#0056ff] underline hover:text-[#0046d9]">
             Ir a login
           </Link>
         </p>
@@ -138,10 +138,10 @@ export default function ImportacionesPage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="page-main page-main--xl">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Importaciones</h1>
+          <h1 className="page-title">Importaciones</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
             Registro de Archivos Importados
           </p>
@@ -150,14 +150,14 @@ export default function ImportacionesPage() {
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:border-sky-500 hover:text-slate-900 disabled:opacity-50"
+          className="ui-btn-secondary px-3 py-1.5 disabled:opacity-50"
         >
           {loading ? "Actualizando…" : "Actualizar"}
         </button>
       </div>
 
       {error ? (
-        <p className="mt-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <p className="mt-6 ui-alert-error">
           {error}
         </p>
       ) : null}
@@ -165,7 +165,7 @@ export default function ImportacionesPage() {
       {data && !error ? (
         <>
           <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/95 p-5">
+            <div className="ui-card p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Ventas (en BD)
               </p>
@@ -176,7 +176,7 @@ export default function ImportacionesPage() {
                 Ingresos desde importación de ventas (planilla de punto de venta).
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/95 p-5">
+            <div className="ui-card p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Otros ingresos (en BD)
               </p>
@@ -187,7 +187,7 @@ export default function ImportacionesPage() {
                 Ingresos desde hoja Ingresos (planilla banco, Depósitos / Abonos).
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/95 p-5 sm:col-span-2 lg:col-span-1">
+            <div className="ui-card p-5 sm:col-span-2 lg:col-span-1">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Gastos / egresos (en BD)
               </p>
@@ -201,9 +201,9 @@ export default function ImportacionesPage() {
           </section>
 
           <div className="mt-10 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-left text-xs">
               <thead>
-                <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                <tr className="ui-table-header">
                   <th className="px-4 py-3 font-medium text-white">Fecha</th>
                   <th className="px-4 py-3 font-medium text-white">Archivo</th>
                   <th className="px-4 py-3 font-medium text-white">Tipo</th>

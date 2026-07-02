@@ -406,12 +406,12 @@ export default function VentasPage() {
     "inline-flex w-full items-center gap-1 border-0 bg-transparent px-0.5 py-0.5 text-left font-medium text-white shadow-none outline-none hover:bg-white/15 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-0";
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
+    <main className="page-main page-main--2xl">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-        <h1 className="text-xl font-semibold">Detalle de ventas</h1>
+        <h1 className="page-title">Detalle de ventas</h1>
         <Link
           href="/movimientos-excluidos"
-          className="text-sm font-medium text-sky-700 underline hover:text-sky-900"
+          className="text-sm font-medium text-[#0056ff] underline hover:text-[#0046d9]"
         >
           Movimientos excluidos del resumen
         </Link>
@@ -419,14 +419,14 @@ export default function VentasPage() {
 
       <section
         aria-label="Filtros"
-        className="rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-3 py-2 text-white shadow-sm [&_label]:!text-white"
+        className="ui-filter-bar"
       >
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-end gap-1.5">
             <label className="flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600">
               Fecha
               <select
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 value={modoFecha}
                 onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
               >
@@ -442,7 +442,7 @@ export default function VentasPage() {
                 Día
                 <input
                   type="date"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                  className="ui-filter-control"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
@@ -453,7 +453,7 @@ export default function VentasPage() {
                 Mes
                 <input
                   type="month"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                  className="ui-filter-control"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
@@ -467,19 +467,19 @@ export default function VentasPage() {
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-400"
+                  className="w-24 ui-filter-control placeholder:text-slate-400"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "rango" ? (
-              <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap items-end gap-1.5">
                 <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Desde
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                    className="ui-filter-control"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
@@ -488,7 +488,7 @@ export default function VentasPage() {
                   Hasta
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                    className="ui-filter-control"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
@@ -502,7 +502,7 @@ export default function VentasPage() {
               Forma de pago
               <input
                 type="text"
-                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-400"
+                className="w-full ui-filter-control placeholder:text-slate-400"
                 placeholder="Ej: Efectivo, Débito, transferencia…"
                 value={filtroFormaPago}
                 onChange={(e) => setFiltroFormaPago(e.target.value)}
@@ -512,7 +512,7 @@ export default function VentasPage() {
               Sucursal
               <input
                 type="text"
-                className="w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-400"
+                className="w-full ui-filter-control placeholder:text-slate-400"
                 placeholder="Ej: nombre de sucursal…"
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
@@ -520,49 +520,51 @@ export default function VentasPage() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm !text-slate-900 hover:bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+            <label className="ui-filter-chip">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-sky-700"
                 checked={filtroEventoActivo}
                 onChange={toggleFiltroEventos}
               />
-              <span className="!text-slate-900">Solo eventos</span>
+              <span>Solo eventos</span>
             </label>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm !text-slate-900 hover:bg-white">
+            <label className="ui-filter-chip">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-sky-700"
                 checked={soloSucursalesFijas}
                 onChange={toggleSucursalesFijas}
               />
-              <span className="!text-slate-900">Solo sucursales fijas</span>
+              <span>Solo sucursales fijas</span>
             </label>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm !text-slate-900 hover:bg-white">
+            <label className="ui-filter-chip">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-sky-700"
                 checked={incluirFinanciamiento}
                 onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
               />
-              <span className="!text-slate-900">Incluir financiamiento</span>
+              <span>Incluir financiamiento</span>
             </label>
-            <button
-              type="button"
-              className="rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white"
-              onClick={limpiarFiltros}
-            >
-              Limpiar filtros
-            </button>
-            <span className="text-xs text-white">
+            <span className="ui-filter-stat">
               Mostrando {displayRows.length} de {rows.length} ventas
               {hayFiltroVentas ? (
-                <span className="ml-1.5 font-semibold tabular-nums text-white">
+                <span className="ml-1.5 font-semibold tabular-nums">
                   · Total filtrado: {formatClp(totalMontoFiltrado)}
                 </span>
               ) : null}
             </span>
+            </div>
+            <button
+              type="button"
+              className="ui-btn-soft-xs shrink-0"
+              onClick={limpiarFiltros}
+            >
+              Limpiar filtros
+            </button>
           </div>
         </div>
       </section>
@@ -573,8 +575,9 @@ export default function VentasPage() {
         </p>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-        <div className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+      <section className="ui-card-panel min-w-0">
+        <div className="min-w-[720px]">
+        <div className="ui-table-header">
           <div
             className={`hidden sm:grid ${VENTAS_ROW_GRID} px-2 py-2 text-left text-sm text-white`}
           >
@@ -679,7 +682,7 @@ export default function VentasPage() {
                     className="border-t border-slate-200"
                   >
                     <div
-                      className={`hidden sm:grid ${VENTAS_ROW_GRID} px-3 py-2 text-sm`}
+                      className={`hidden sm:grid ${VENTAS_ROW_GRID} px-3 py-2 text-xs`}
                     >
                       <div
                         className="min-w-0 font-mono text-xs"
@@ -697,7 +700,7 @@ export default function VentasPage() {
                       <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
                     </div>
                     <div
-                      className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-3 py-2 text-sm`}
+                      className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-3 py-2 text-xs`}
                       title={
                         row.externalRef
                           ? `Id: ${row.idVenta} · Ref.: ${row.externalRef}`
@@ -724,6 +727,7 @@ export default function VentasPage() {
               })}
             </div>
           )}
+        </div>
         </div>
         {displayRows.length > 0 && totalPaginasVentas > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">

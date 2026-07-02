@@ -13,14 +13,32 @@ export const DEFAULT_BANK_POSITION_LABELS = [
 
 export type BankPositionRow = {
   banco: string;
+  saldoCtaCte: number;
   ahorro: number;
   efectivo: number;
   total: number;
 };
 
+export function isCtaCorrienteLabel(banco: string): boolean {
+  return /cta\.cte/i.test(banco);
+}
+
+export function rowTotal(
+  saldoCtaCte: number,
+  ahorro: number,
+  efectivo: number,
+): number {
+  return (
+    (Number(saldoCtaCte) || 0) +
+    (Number(ahorro) || 0) +
+    (Number(efectivo) || 0)
+  );
+}
+
 export function emptyBankPositionRows(): BankPositionRow[] {
   return DEFAULT_BANK_POSITION_LABELS.map((banco) => ({
     banco,
+    saldoCtaCte: 0,
     ahorro: 0,
     efectivo: 0,
     total: 0,
@@ -34,17 +52,18 @@ export function mergeBankPositionRows(
   return DEFAULT_BANK_POSITION_LABELS.map((banco) => {
     const hit = byBanco.get(banco);
     if (hit) return hit;
-    return { banco, ahorro: 0, efectivo: 0, total: 0 };
+    return { banco, saldoCtaCte: 0, ahorro: 0, efectivo: 0, total: 0 };
   });
 }
 
 export function sumBankPositionRows(rows: BankPositionRow[]) {
   return rows.reduce(
     (acc, r) => ({
+      saldoCtaCte: acc.saldoCtaCte + (Number(r.saldoCtaCte) || 0),
       ahorro: acc.ahorro + (Number(r.ahorro) || 0),
       efectivo: acc.efectivo + (Number(r.efectivo) || 0),
       total: acc.total + (Number(r.total) || 0),
     }),
-    { ahorro: 0, efectivo: 0, total: 0 },
+    { saldoCtaCte: 0, ahorro: 0, efectivo: 0, total: 0 },
   );
 }

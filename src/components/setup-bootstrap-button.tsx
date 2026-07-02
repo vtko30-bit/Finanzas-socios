@@ -25,17 +25,17 @@ export function SetupBootstrapButton() {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
       <button
         type="button"
         onClick={onClick}
         disabled={loading}
-        className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-sm hover:border-sky-500 disabled:opacity-60"
+        className="shrink-0 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#2277ff] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:from-[#4f46e5] hover:to-[#0056ff] disabled:opacity-60"
       >
-        {loading ? "Creando organización..." : "Crear organización inicial"}
+        {loading ? "Creando organización…" : "Crear organización inicial"}
       </button>
       {message ? (
-        <p className="text-xs text-slate-700">{message}</p>
+        <p className="max-w-xs text-right text-xs text-slate-600">{message}</p>
       ) : null}
     </div>
   );

@@ -127,9 +127,7 @@ export function AnalisisCharts() {
 
   if (error) {
     return (
-      <p className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-        {error}
-      </p>
+      <p className="ui-alert-warning">{error}</p>
     );
   }
 
@@ -144,7 +142,7 @@ export function AnalisisCharts() {
   return (
     <div className="flex flex-col gap-10">
       <section>
-        <h2 className="text-lg font-semibold">Evolución mensual</h2>
+        <h2 className="text-lg font-semibold text-[#0a2a6e]">Evolución mensual</h2>
         <p className="mt-1 text-sm text-slate-600">
           Ingresos, gastos y resultado neto por mes.
         </p>
@@ -173,7 +171,7 @@ export function AnalisisCharts() {
               <Legend />
               <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#4ade80" dot={false} />
               <Line type="monotone" dataKey="gastos" name="Gastos" stroke="#f87171" dot={false} />
-              <Line type="monotone" dataKey="neto" name="Neto" stroke="#38bdf8" dot={false} />
+              <Line type="monotone" dataKey="neto" name="Neto" stroke="#00bcd4" dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -189,7 +187,7 @@ export function AnalisisCharts() {
             <label className="text-sm text-slate-700">
               Año A
               <select
-                className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1"
+                className="ui-field ml-2 inline-block w-auto"
                 value={yearA}
                 onChange={(e) => setYearA(e.target.value)}
               >
@@ -203,7 +201,7 @@ export function AnalisisCharts() {
             <label className="text-sm text-slate-700">
               Año B
               <select
-                className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1"
+                className="ui-field ml-2 inline-block w-auto"
                 value={yearB}
                 onChange={(e) => setYearB(e.target.value)}
               >

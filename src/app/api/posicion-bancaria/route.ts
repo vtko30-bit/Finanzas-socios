@@ -7,12 +7,14 @@ import {
   emptyBankPositionRows,
   mergeBankPositionRows,
   sumBankPositionRows,
+  rowTotal,
   DEFAULT_BANK_POSITION_LABELS,
   type BankPositionRow,
 } from "@/lib/bank-position-defaults";
 
 type LineInput = {
   banco?: unknown;
+  saldoCtaCte?: unknown;
   ahorro?: unknown;
   efectivo?: unknown;
 };
@@ -24,7 +26,7 @@ function dbErrorMessage(err: { message?: string; code?: string } | null): string
     /bank_position/i.test(msg) ||
     /schema cache/i.test(msg)
   ) {
-    return `${msg}. Ejecuta la migración 0037_bank_position_snapshots.sql en Supabase.`;
+    return `${msg}. Ejecuta las migraciones 0037 y 0038 en Supabase.`;
   }
   return msg;
 }
@@ -82,7 +84,7 @@ export async function GET() {
 
   const { data: lines, error: linesErr } = await supabase
     .from("bank_position_lines")
-    .select("banco, ahorro, efectivo, total, sort_order")
+    .select("banco, saldo_cta_cte, ahorro, efectivo, total, sort_order")
     .eq("snapshot_id", snapshot.id)
     .order("sort_order", { ascending: true });
 
@@ -91,12 +93,18 @@ export async function GET() {
   }
 
   const rows = mergeBankPositionRows(
-    (lines ?? []).map((l) => ({
-      banco: String(l.banco ?? ""),
-      ahorro: Number(l.ahorro) || 0,
-      efectivo: Number(l.efectivo) || 0,
-      total: Number(l.total) || 0,
-    })),
+    (lines ?? []).map((l) => {
+      const saldoCtaCte = Number(l.saldo_cta_cte) || 0;
+      const ahorro = Number(l.ahorro) || 0;
+      const efectivo = Number(l.efectivo) || 0;
+      return {
+        banco: String(l.banco ?? ""),
+        saldoCtaCte,
+        ahorro,
+        efectivo,
+        total: Number(l.total) || rowTotal(saldoCtaCte, ahorro, efectivo),
+      };
+    }),
   );
 
   return NextResponse.json(
@@ -141,13 +149,15 @@ export async function POST(request: Request) {
 
   for (const label of DEFAULT_BANK_POSITION_LABELS) {
     const input = rawLines.find((l) => String(l.banco ?? "").trim() === label);
+    const saldoCtaCte = parseAmount(input?.saldoCtaCte);
     const ahorro = parseAmount(input?.ahorro);
     const efectivo = parseAmount(input?.efectivo);
     rows.push({
       banco: label,
+      saldoCtaCte,
       ahorro,
       efectivo,
-      total: ahorro + efectivo,
+      total: rowTotal(saldoCtaCte, ahorro, efectivo),
     });
   }
 
@@ -218,6 +228,7 @@ export async function POST(request: Request) {
   const lineRows = rows.map((r, idx) => ({
     snapshot_id: snapshotId!,
     banco: r.banco,
+    saldo_cta_cte: r.saldoCtaCte,
     ahorro: r.ahorro,
     efectivo: r.efectivo,
     total: r.total,

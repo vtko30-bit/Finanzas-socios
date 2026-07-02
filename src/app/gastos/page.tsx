@@ -15,11 +15,11 @@ import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 
 const GASTOS_ROW_GRID =
-  "grid w-full min-w-[1042px] grid-cols-[minmax(0,6rem)_minmax(0,0.3fr)_minmax(0,0.85fr)_minmax(0,130px)_minmax(0,200px)_minmax(0,0.6fr)_minmax(0,5rem)] items-start gap-0";
+  "grid w-full grid-cols-[minmax(0,5rem)_minmax(0,0.28fr)_minmax(0,0.455fr)_minmax(0,120px)_minmax(0,140px)_minmax(0,0.395fr)_minmax(0,4.75rem)] items-start gap-0";
 
 /** Solo móvil: Fecha, Nombre destino, Descripción, Monto (el resto en el modal al tocar). */
 const GASTOS_ROW_GRID_MOVIL =
-  "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,4.75rem)] items-center gap-1";
+  "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,0.7fr)_minmax(0,1.3fr)_minmax(0,4.75rem)] items-center gap-1";
 
 const GASTOS_POR_PAGINA = 40;
 
@@ -498,7 +498,6 @@ function GastosPageContent() {
   const [filtroFamilia, setFiltroFamilia] = useState("");
   const [filtroOrigen, setFiltroOrigen] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
-  const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
@@ -532,7 +531,6 @@ function GastosPageContent() {
   const cargar = useCallback(() => {
     setStatus("Cargando...");
     const params = new URLSearchParams();
-    if (incluirFinanciamiento) params.set("incluirFinanciamiento", "1");
     if (sourceView) params.set("source", sourceView);
     const url = params.size ? `/api/gastos/detalle?${params.toString()}` : "/api/gastos/detalle";
     fetch(url)
@@ -556,7 +554,7 @@ function GastosPageContent() {
       .catch((e: Error) => {
         setStatus(e.message);
       });
-  }, [incluirFinanciamiento, sourceView]);
+  }, [sourceView]);
 
   useEffect(() => {
     setMounted(true);
@@ -775,7 +773,6 @@ function GastosPageContent() {
     filtroFamilia,
     filtroOrigen,
     filtroCategoria,
-    incluirFinanciamiento,
     soloSeleccionados,
   ]);
 
@@ -808,7 +805,6 @@ function GastosPageContent() {
     setFiltroFamilia("");
     setFiltroOrigen("");
     setFiltroCategoria("");
-    setIncluirFinanciamiento(false);
     setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
   };
@@ -1208,16 +1204,16 @@ function GastosPageContent() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-2 px-6 pb-10 pt-4">
+    <main className="page-main page-main--2xl">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-        <h1 className="text-xl font-semibold">
+        <h1 className="page-title">
           {esVistaPagoServiciosBancoEstado
             ? "Detalle de gastos — Pago servicios BancoEstado"
             : "Detalle de gastos"}
         </h1>
         <Link
           href="/movimientos-excluidos"
-          className="text-sm font-medium text-sky-700 underline hover:text-sky-900"
+          className="text-sm font-medium text-[#0056ff] underline hover:text-[#0046d9]"
         >
           Movimientos excluidos del resumen
         </Link>
@@ -1230,14 +1226,14 @@ function GastosPageContent() {
 
       <section
         aria-label="Filtros"
-        className="rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-3 py-2 text-white shadow-sm [&_label]:!text-white"
+        className="ui-filter-bar"
       >
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-end gap-1.5">
             <label className="flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600">
               Fecha
               <select
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 value={modoFecha}
                 onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
               >
@@ -1253,7 +1249,7 @@ function GastosPageContent() {
                 Día
                 <input
                   type="date"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                  className="ui-filter-control"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
@@ -1264,7 +1260,7 @@ function GastosPageContent() {
                 Mes
                 <input
                   type="month"
-                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                  className="ui-filter-control"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
@@ -1278,19 +1274,19 @@ function GastosPageContent() {
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                  className="w-24 ui-filter-control"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "rango" ? (
-              <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap items-end gap-1.5">
                 <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Desde
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                    className="ui-filter-control"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
@@ -1299,7 +1295,7 @@ function GastosPageContent() {
                   Hasta
                   <input
                     type="date"
-                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                    className="ui-filter-control"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
@@ -1308,12 +1304,12 @@ function GastosPageContent() {
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap items-end gap-1.5">
             <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Origen
               <input
                 type="text"
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 placeholder="Ej: Banco, Mercado Pago…"
                 value={filtroOrigen}
                 onChange={(e) => setFiltroOrigen(e.target.value)}
@@ -1323,7 +1319,7 @@ function GastosPageContent() {
               Nombre
               <input
                 type="text"
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 placeholder="Buscar…"
                 value={filtroNombreDestino}
                 onChange={(e) => setFiltroNombreDestino(e.target.value)}
@@ -1332,7 +1328,7 @@ function GastosPageContent() {
             <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Familia
               <select
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 value={filtroFamilia}
                 onChange={(e) => setFiltroFamilia(e.target.value)}
               >
@@ -1348,7 +1344,7 @@ function GastosPageContent() {
             <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Categoría
               <select
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
@@ -1367,7 +1363,7 @@ function GastosPageContent() {
               Descripción
               <input
                 type="text"
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-sm text-slate-900"
+                className="ui-filter-control"
                 placeholder="Buscar…"
                 value={filtroDescripcion}
                 onChange={(e) => setFiltroDescripcion(e.target.value)}
@@ -1375,9 +1371,9 @@ function GastosPageContent() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <label className="ui-filter-chip">
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-sky-700"
@@ -1386,7 +1382,7 @@ function GastosPageContent() {
                   onChange={(e) => setSoloSeleccionados(e.target.checked)}
                 />
                 <span className="text-slate-900">
-                  Solo seleccionados
+                  Seleccionados
                   {selectedGastoIds.size > 0 ? (
                     <span className="ml-0.5 text-xs opacity-80">
                       ({selectedGastoIds.size})
@@ -1394,51 +1390,48 @@ function GastosPageContent() {
                   ) : null}
                 </span>
               </label>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-sky-700"
-                  checked={incluirFinanciamiento}
-                  onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
-                />
-                <span className="text-slate-900">Incluir financiamiento</span>
-              </label>
-              <button
-                type="button"
-                className="rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white"
-                onClick={limpiarFiltros}
-              >
-                Limpiar filtros
-              </button>
-              <span className="rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900">
+              <span className="ui-filter-stat">
                 {soloSeleccionados
                   ? `Mostrando ${displayRows.length} seleccionados (de ${filasFiltradas.length} filtrados, ${rows.length} total)`
                   : `Mostrando ${displayRows.length} de ${rows.length} gastos`}
               </span>
-              <span className="rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-900">
+              <span className="ui-filter-stat-emphasis">
                 Total filtrado: {formatClp(totalGastosFiltrados)}
               </span>
             </div>
-            <button
-              type="button"
-              className="shrink-0 rounded border border-slate-900/20 bg-white/90 px-2.5 py-0.5 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={
-                selectedGastoIds.size === 0 || uiBloqueadoGuardado
-              }
-              title={
-                selectedGastoIds.size === 0
-                  ? "Marca gastos en Nombre destino"
-                  : "Editar categoría de todos los gastos marcados (incluye los que no ves con el filtro actual)"
-              }
-              onClick={() => abrirEdicionCategoriaSeleccion()}
-            >
-              Editar categoría
-              {selectedGastoIds.size > 0 ? (
-                <span className="ml-1 text-xs opacity-90">
-                  ({selectedGastoIds.size})
-                </span>
-              ) : null}
-            </button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="ui-btn-soft-xs"
+                onClick={limpiarFiltros}
+              >
+                Limpiar filtros
+              </button>
+              <button
+                type="button"
+                className={
+                  selectedGastoIds.size === 0 || uiBloqueadoGuardado
+                    ? "rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900 opacity-40 cursor-not-allowed"
+                    : "ui-btn-soft-xs"
+                }
+                disabled={
+                  selectedGastoIds.size === 0 || uiBloqueadoGuardado
+                }
+                title={
+                  selectedGastoIds.size === 0
+                    ? "Marca gastos en Nombre destino"
+                    : "Editar categoría de todos los gastos marcados (incluye los que no ves con el filtro actual)"
+                }
+                onClick={() => abrirEdicionCategoriaSeleccion()}
+              >
+                Editar
+                {selectedGastoIds.size > 0 ? (
+                  <span className="ml-0.5 text-[10px] opacity-90">
+                    ({selectedGastoIds.size})
+                  </span>
+                ) : null}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1469,8 +1462,8 @@ function GastosPageContent() {
         </p>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-        <div className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+      <section className="ui-card-panel min-w-0 overflow-x-hidden">
+        <div className="ui-table-header">
           <div
             className={`hidden sm:grid ${GASTOS_ROW_GRID} px-2 py-1.5 text-left text-sm text-white`}
           >
@@ -1662,7 +1655,7 @@ function GastosPageContent() {
                     }}
                   >
                     <div
-                      className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1 text-sm leading-snug`}
+                      className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1 text-xs leading-snug`}
                     >
                       <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
                       <div className="min-w-0 truncate" title={row.origen}>
@@ -1685,7 +1678,7 @@ function GastosPageContent() {
                       </div>
                       <div className="min-w-0 text-slate-700">{row.familia ?? "—"}</div>
                       <div className="min-w-0 pr-2">
-                        <div className="flex min-w-[140px] items-center justify-between gap-2">
+                        <div className="flex min-w-[98px] items-center justify-between gap-2">
                           <span
                             className={`min-w-0 flex-1 truncate ${
                               row.necesitaConcepto ? "text-amber-800" : "text-slate-900"
@@ -1718,7 +1711,7 @@ function GastosPageContent() {
                         ) : null}
                       </div>
                       <div
-                        className="min-w-0 max-w-[220px] truncate"
+                        className="min-w-0 truncate"
                         title={row.descripcion}
                       >
                         {row.descripcion}
@@ -1726,7 +1719,7 @@ function GastosPageContent() {
                       <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
                     </div>
                     <div
-                      className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1 text-sm leading-snug`}
+                      className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1 text-xs leading-snug`}
                     >
                       <div className="min-w-0 whitespace-nowrap text-slate-900">
                         {row.fecha}
@@ -2175,7 +2168,7 @@ function GastosPageContent() {
 
 export default function GastosPage() {
   return (
-    <Suspense fallback={<main className="mx-auto flex w-full max-w-7xl flex-1 px-6 py-4">Cargando…</main>}>
+    <Suspense fallback={<main className="page-main page-main--2xl">Cargando…</main>}>
       <GastosPageContent />
     </Suspense>
   );

@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 import { useAuthState } from "@/hooks/use-auth-state";
 import { REPORTE_VISTAS, type ReporteVista } from "@/lib/reportes-vistas";
+import {
+  AuthNotice,
+  PageCard,
+  PageHeader,
+  PageShell,
+} from "@/components/ui/page-layout";
 
 const VISTA_LABEL: Record<ReporteVista, string> = {
   movimientos: "Movimientos (todas las transacciones)",
@@ -30,12 +36,20 @@ export default function ReportesPage() {
   const query = useMemo(() => {
     const params = new URLSearchParams();
     params.set("vista", vista);
-    if (vista === "resumen" || vista === "movimientos" || vista === "ventas" || vista === "gastos" || vista === "excluidos" || vista === "socios") {
+    if (
+      vista === "resumen" ||
+      vista === "movimientos" ||
+      vista === "ventas" ||
+      vista === "gastos" ||
+      vista === "excluidos" ||
+      vista === "socios"
+    ) {
       params.set("from", from);
       params.set("to", to);
     }
     if (filtroTipoAplica && type !== "all") params.set("type", type);
-    if (vista === "resumen" && resumenPorSucursal) params.set("resumenPorSucursal", "1");
+    if (vista === "resumen" && resumenPorSucursal)
+      params.set("resumenPorSucursal", "1");
     return params.toString();
   }, [from, to, type, vista, filtroTipoAplica, resumenPorSucursal]);
 
@@ -48,22 +62,23 @@ export default function ReportesPage() {
     vista === "socios";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <section className="rounded-xl border border-slate-200/90 bg-white/90 p-6 shadow-md backdrop-blur-sm">
-        <h1 className="text-xl font-semibold">Reportes y descargas</h1>
-        {!ready ? (
-          <p className="mt-3 text-xs text-slate-600">Verificando sesión...</p>
-        ) : null}
-        {ready && !authenticated ? (
-          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-            Debes iniciar sesión para exportar reportes.
-          </p>
-        ) : null}
+    <PageShell size="md">
+      <PageHeader
+        title="Reportes y descargas"
+        description="Exporta datos filtrados en CSV o Excel."
+      />
 
-        <label className="mt-4 block text-sm">
+      <PageCard>
+        <AuthNotice
+          ready={ready}
+          authenticated={authenticated}
+          message="Debes iniciar sesión para exportar reportes."
+        />
+
+        <label className="mt-4 block text-sm font-medium text-slate-700">
           Vista a exportar
           <select
-            className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+            className="ui-field mt-2"
             value={vista}
             onChange={(e) => setVista(e.target.value as ReporteVista)}
             disabled={!authenticated}
@@ -76,18 +91,18 @@ export default function ReportesPage() {
           </select>
         </label>
 
-        <p className="mt-2 text-xs text-slate-600">
+        <p className="mt-2 text-xs text-slate-500">
           En movimientos, ventas, gastos y “Todos” verás columnas{" "}
           <strong>tipo_movimiento</strong> (Ingreso/Gasto), <strong>familia</strong>,{" "}
           <strong>categoria</strong>, valor importado en{" "}
           <strong>medio_pago_valor_importado</strong> y en{" "}
-          <strong>medio_pago_resumen</strong> la misma heurística que el resumen por forma de
-          pago (ingresos); en gastos, si el valor es solo un código numérico largo, se indica
-          como tal para que compares con el valor importado.
+          <strong>medio_pago_resumen</strong> la misma heurística que el resumen por
+          forma de pago (ingresos); en gastos, si el valor es solo un código numérico
+          largo, se indica como tal para que compares con el valor importado.
         </p>
 
         {vista === "resumen" ? (
-          <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+          <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               className="mt-1"
@@ -96,30 +111,31 @@ export default function ReportesPage() {
               disabled={!authenticated}
             />
             <span>
-              Incluir desglose por sucursal (agrupa por <strong>origen de cuenta</strong>, igual
-              que el resumen con desglose por sucursal en la app). En CSV se añade una segunda
-              tabla; en XLSX una hoja <strong>Por sucursal</strong> además del consolidado.
+              Incluir desglose por sucursal (agrupa por{" "}
+              <strong>origen de cuenta</strong>, igual que el resumen con desglose por
+              sucursal en la app). En CSV se añade una segunda tabla; en XLSX una hoja{" "}
+              <strong>Por sucursal</strong> además del consolidado.
             </span>
           </label>
         ) : null}
 
         {requiereRangoFechas ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
+            <label className="text-sm font-medium text-slate-700">
               Desde
               <input
                 type="date"
-                className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+                className="ui-field mt-2"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
                 disabled={!authenticated}
               />
             </label>
-            <label className="text-sm">
+            <label className="text-sm font-medium text-slate-700">
               Hasta
               <input
                 type="date"
-                className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+                className="ui-field mt-2"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 disabled={!authenticated}
@@ -129,10 +145,10 @@ export default function ReportesPage() {
         ) : null}
 
         {filtroTipoAplica ? (
-          <label className="mt-4 block text-sm">
+          <label className="mt-4 block text-sm font-medium text-slate-700">
             Tipo (solo movimientos)
             <select
-              className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+              className="ui-field mt-2"
               value={type}
               onChange={(e) => setType(e.target.value)}
               disabled={!authenticated}
@@ -144,14 +160,14 @@ export default function ReportesPage() {
           </label>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <a
             href={authenticated ? `/api/reportes/csv?${query}` : "#"}
             aria-disabled={!authenticated}
             onClick={(e) => {
               if (!authenticated) e.preventDefault();
             }}
-            className="rounded-md bg-sky-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+            className="ui-btn-primary"
           >
             Descargar CSV
           </a>
@@ -161,12 +177,12 @@ export default function ReportesPage() {
             onClick={(e) => {
               if (!authenticated) e.preventDefault();
             }}
-            className="rounded-md border border-slate-300 px-4 py-2 font-medium disabled:opacity-60"
+            className="ui-btn-secondary"
           >
             Descargar XLSX
           </a>
         </div>
-      </section>
-    </main>
+      </PageCard>
+    </PageShell>
   );
 }

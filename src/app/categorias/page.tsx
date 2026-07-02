@@ -205,7 +205,7 @@ export default function CategoriasPage() {
   }, [modalNuevo, families]);
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="page-main page-main--lg">
       {toast ? (
         <div
           role="alert"
@@ -216,15 +216,15 @@ export default function CategoriasPage() {
       ) : null}
 
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Categorías</h1>
+        <h1 className="page-title">Categorías</h1>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
-        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-[#3a9fe0] bg-[#5AC4FF] px-6 py-2">
+      <section className="ui-card-panel">
+        <div className="flex flex-wrap items-center justify-end gap-3 ui-table-header px-6 py-2">
           <button
             type="button"
             disabled={!families.length || !canWrite}
-            className="shrink-0 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            className="shrink-0 ui-btn-primary disabled:opacity-50"
             onClick={abrirNuevoConcepto}
           >
             Nueva categoría
@@ -237,13 +237,13 @@ export default function CategoriasPage() {
             <p className="py-4 text-sm text-slate-500">
               No hay categorías aún. Importa gastos o crea una categoría nueva (necesitas al menos
               una familia en{" "}
-              <Link href="/familias" className="text-sky-400 underline hover:text-sky-700">
+              <Link href="/familias" className="text-[#0056ff] underline hover:text-[#0046d9] hover:text-sky-700">
                 Familias
               </Link>
               ).
             </p>
           ) : (
-            <ul className="max-h-[min(60vh,32rem)] space-y-1 overflow-y-auto pr-1 text-sm">
+            <ul className="max-h-[min(60vh,32rem)] space-y-1 overflow-y-auto pr-1 text-xs">
               {conceptos.map((c) => {
                 const famNombre = nombreFamiliaPorId(c.family_id);
                 return (

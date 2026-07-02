@@ -433,21 +433,19 @@ export default function CreditosPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <div className="rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold text-white">Créditos y préstamos</h1>
-          {authenticated && canWrite ? (
-            <button
-              type="button"
-              className="shrink-0 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
-              onClick={() => setShowCreateForm((v) => !v)}
-            >
-              {showCreateForm ? "Cerrar formulario" : "Nuevo crédito"}
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <main className="page-main page-main--md">
+      <header className="ui-page-header">
+        <h1 className="page-title">Créditos y préstamos</h1>
+        {authenticated && canWrite ? (
+          <button
+            type="button"
+            className="ui-btn-primary shrink-0"
+            onClick={() => setShowCreateForm((v) => !v)}
+          >
+            {showCreateForm ? "Cerrar formulario" : "Nuevo crédito"}
+          </button>
+        ) : null}
+      </header>
 
       {!ready ? <p className="text-sm text-slate-500">Verificando sesión…</p> : null}
       {ready && !authenticated ? (
@@ -455,7 +453,7 @@ export default function CreditosPage() {
       ) : null}
 
       {msg ? (
-        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">{msg}</p>
+        <p className="ui-card px-3 py-2 text-sm">{msg}</p>
       ) : null}
 
       {authenticated && canWrite ? (
@@ -584,7 +582,7 @@ export default function CreditosPage() {
             <div className="sm:col-span-2">
               <button
                 type="submit"
-                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
+                className="ui-btn-primary"
               >
                 Crear crédito y desembolso
               </button>
@@ -690,7 +688,7 @@ export default function CreditosPage() {
             );
             return (
               <>
-                <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-4 ui-card p-3">
                   <h3 className="text-sm font-semibold text-slate-800">
                     Datos del formulario del crédito
                   </h3>

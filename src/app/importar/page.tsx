@@ -574,7 +574,7 @@ export default function ImportarPage() {
 
   if (authenticated && capsLoading) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+      <main className="page-main page-main--md">
         <p className="text-sm text-slate-600">Verificando permisos…</p>
       </main>
     );
@@ -582,7 +582,7 @@ export default function ImportarPage() {
 
   if (authenticated && !canWrite) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+      <main className="page-main page-main--md">
         <p className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           Tu cuenta tiene acceso de solo lectura. Solo el administrador de la organización (rol owner)
           puede importar archivos o usar las herramientas de borrado.
@@ -592,7 +592,7 @@ export default function ImportarPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="page-main page-main--md">
       <section
         aria-label="Períodos cerrados"
         className="rounded-xl border border-indigo-200 bg-indigo-50/90 px-4 py-3 text-sm text-slate-800"
@@ -633,8 +633,8 @@ export default function ImportarPage() {
         </ul>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
-        <h1 className="text-xl font-semibold">Importar Excel de ventas</h1>
+      <section className="ui-card p-6">
+        <h1 className="page-title">Importar Excel de ventas</h1>
         <p className="mt-2 text-xs text-amber-800">
           Si este archivo corresponde a egresos, impórtalo en{" "}
           <strong className="text-slate-800">Importar gastos y egresos</strong> (sección siguiente),
@@ -644,7 +644,7 @@ export default function ImportarPage() {
           <p className="mt-3 text-xs text-slate-600">Verificando sesión...</p>
         ) : null}
         {ready && !authenticated ? (
-          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          <p className="mt-3 ui-alert-warning">
             Debes iniciar sesión para importar. Usa el botón Reingresar en la cabecera.
           </p>
         ) : null}
@@ -667,7 +667,7 @@ export default function ImportarPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+      <section className="ui-card p-6">
         <h2 className="text-lg font-semibold">Importar gastos y egresos</h2>
         <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
           <input
@@ -681,14 +681,14 @@ export default function ImportarPage() {
           />
           <button
             disabled={!authenticated || !file || loadingConsolidado}
-            className="rounded-md bg-sky-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+            className="ui-btn-primary"
           >
             {loadingConsolidado ? "Procesando..." : "Importar gastos y egresos"}
           </button>
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+      <section className="ui-card p-6">
         <h2 className="text-lg font-semibold">Importar Pago servicios BancoEstado</h2>
         <p className="mt-2 text-xs text-slate-600">
           Este archivo se carga en una vista separada para no mezclarse con el detalle normal de
@@ -715,7 +715,7 @@ export default function ImportarPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+      <section className="ui-card p-6">
         <h2 className="text-lg font-semibold">Importar otros ingresos</h2>
         <form onSubmit={submitOtrosIngresos} className="mt-5 flex flex-col gap-3">
           <input
@@ -737,7 +737,7 @@ export default function ImportarPage() {
       </section>
 
       {status ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50/95 px-4 py-3 text-sm text-slate-700">
+        <p className="ui-card px-4 py-3 text-sm text-slate-700">
           {status}
         </p>
       ) : null}
@@ -781,7 +781,7 @@ export default function ImportarPage() {
       </section>
 
       {result ? (
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+        <section className="ui-card p-6">
           <h2 className="font-semibold">Resultado del lote</h2>
           <ul className="mt-3 space-y-1 text-sm text-slate-700">
             <li>Filas totales: {result.totalRows}</li>

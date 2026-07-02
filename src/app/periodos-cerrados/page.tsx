@@ -122,7 +122,7 @@ export default function PeriodosCerradosPage() {
 
   if (!ready) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="page-main page-main--md">
         <p className="text-slate-600">Cargando…</p>
       </main>
     );
@@ -130,9 +130,9 @@ export default function PeriodosCerradosPage() {
 
   if (!authenticated) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="page-main page-main--md">
         <p className="text-slate-700">
-          <Link href="/login" className="text-sky-600 underline">
+          <Link href="/login" className="text-[#0056ff] underline hover:text-[#0046d9]">
             Inicia sesión
           </Link>{" "}
           para gestionar períodos cerrados.
@@ -143,8 +143,8 @@ export default function PeriodosCerradosPage() {
 
   if (capsLoading || !canWrite) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+      <main className="page-main page-main--md">
+        <p className="ui-card px-4 py-3 text-sm text-slate-700">
           Solo el administrador de la organización (rol owner) puede cerrar o reabrir períodos para importación.
         </p>
       </main>
@@ -152,9 +152,9 @@ export default function PeriodosCerradosPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl flex flex-col gap-8 px-6 py-10">
+    <main className="page-main page-main--md gap-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Períodos cerrados (importación)</h1>
+        <h1 className="page-title">Períodos cerrados (importación)</h1>
         <p className="mt-2 text-sm text-slate-600">
           Un período cerrado impide <strong className="font-medium text-slate-800">importar</strong> movimientos con
           fecha en ese rango y, además, la base de datos rechaza{" "}
@@ -163,14 +163,14 @@ export default function PeriodosCerradosPage() {
           cerrado, para que el resumen y los totales no cambien hasta que reabras el período.
         </p>
         <p className="mt-2 text-sm">
-          <Link href="/importar" className="text-sky-600 underline">
+          <Link href="/importar" className="text-[#0056ff] underline hover:text-[#0046d9]">
             Volver a Importar
           </Link>
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900">Cerrar período</h2>
+      <section className="ui-card p-6">
+        <h2 className="text-lg font-semibold text-[#0a2a6e]">Cerrar período</h2>
         <form onSubmit={crear} className="mt-4 flex flex-col gap-4">
           <div className="flex flex-wrap gap-4">
             <label className="flex flex-col gap-1 text-sm">
@@ -178,7 +178,7 @@ export default function PeriodosCerradosPage() {
               <select
                 value={scope}
                 onChange={(e) => setScope(e.target.value === "month" ? "month" : "year")}
-                className="rounded-md border border-slate-300 bg-white px-3 py-2"
+                className="ui-field"
               >
                 <option value="year">Año completo (calendario)</option>
                 <option value="month">Un mes</option>
@@ -201,7 +201,7 @@ export default function PeriodosCerradosPage() {
                 <select
                   value={month}
                   onChange={(e) => setMonth(Number(e.target.value))}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2"
+                  className="ui-field"
                 >
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                     <option key={m} value={m}>
@@ -218,13 +218,13 @@ export default function PeriodosCerradosPage() {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ej.: Revisado contabilidad abril"
-              className="rounded-md border border-slate-300 bg-white px-3 py-2"
+              className="ui-field"
             />
           </label>
           <button
             type="submit"
             disabled={saving}
-            className="w-fit rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+            className="w-fit ui-btn-primary disabled:opacity-60"
           >
             {saving ? "Guardando…" : "Cerrar período"}
           </button>
@@ -232,7 +232,7 @@ export default function PeriodosCerradosPage() {
       </section>
 
       {error ? (
-        <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</p>
+        <p className="ui-alert-error">{error}</p>
       ) : null}
       {status ? (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -240,14 +240,16 @@ export default function PeriodosCerradosPage() {
         </p>
       ) : null}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
+      <section className="ui-card p-6">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-slate-900">Períodos cerrados actualmente</h2>
+          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+            Períodos cerrados actualmente
+          </h2>
           <button
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="rounded border border-slate-300 px-3 py-1 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            className="ui-btn-secondary px-3 py-1 disabled:opacity-50"
           >
             {loading ? "…" : "Actualizar"}
           </button>

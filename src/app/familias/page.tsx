@@ -378,7 +378,7 @@ export default function FamiliasPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="page-main page-main--lg">
       {toast ? (
         <div
           role="alert"
@@ -389,15 +389,15 @@ export default function FamiliasPage() {
       ) : null}
 
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Familias</h1>
+        <h1 className="page-title">Familias</h1>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
-        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-[#3a9fe0] bg-[#5AC4FF] px-6 py-2">
+      <section className="ui-card-panel">
+        <div className="flex flex-wrap items-center justify-end gap-3 ui-table-header px-6 py-2">
           <button
             type="button"
             disabled={!canWrite}
-            className="shrink-0 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            className="shrink-0 ui-btn-primary disabled:opacity-50"
             onClick={() => {
               setNuevaFamilia("");
               setModalNuevaFamilia(true);
@@ -525,7 +525,7 @@ export default function FamiliasPage() {
                   </div>
                   {open ? (
                     <div className="border-t border-slate-200 px-3 py-2">
-                      <ul className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto pr-1">
+                      <ul className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto pr-1 text-xs">
                         {conceptosParaFamilia(fam.id).length === 0 ? (
                           <li className="px-2 py-3 text-sm text-slate-500">
                             No hay categorías sin asignar ni pertenecientes a esta familia. Las que
@@ -555,7 +555,7 @@ export default function FamiliasPage() {
                                       );
                                     }}
                                   />
-                                  <span className="min-w-0 truncate text-sm text-slate-800">
+                                  <span className="min-w-0 truncate text-xs text-slate-800">
                                     {c.label}
                                   </span>
                                   {c.solo_planilla ? (

@@ -495,30 +495,21 @@ export default function MovimientosExcluidosPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-6 pb-10 pt-4">
+    <main className="page-main page-main--2xl">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">
+          <h1 className="page-title">
             Movimientos excluidos del resumen
           </h1>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          <Link
-            href="/gastos"
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-slate-800 hover:bg-slate-50"
-          >
+          <Link href="/gastos" className="ui-btn-secondary px-3 py-1.5">
             Detalle de gastos
           </Link>
-          <Link
-            href="/ventas"
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-slate-800 hover:bg-slate-50"
-          >
+          <Link href="/ventas" className="ui-btn-secondary px-3 py-1.5">
             Detalle de ventas
           </Link>
-          <Link
-            href="/resumen"
-            className="rounded-md border border-sky-600 bg-sky-50 px-3 py-1.5 text-sky-900 hover:bg-sky-100"
-          >
+          <Link href="/resumen" className="ui-btn-primary px-3 py-1.5">
             Resumen
           </Link>
         </div>
@@ -527,14 +518,14 @@ export default function MovimientosExcluidosPage() {
       {!ready ? (
         <p className="text-sm text-slate-600">Verificando sesión…</p>
       ) : !authenticated ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        <p className="ui-alert-warning">
           Inicia sesión para ver esta vista.
         </p>
       ) : (
         <>
           <section
             aria-label="Familias excluidas del resumen"
-            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm"
+            className="ui-card px-4 py-3 shadow-sm"
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <button
@@ -634,7 +625,7 @@ export default function MovimientosExcluidosPage() {
           </div>
 
           {status ? (
-            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            <p className="ui-alert-warning">
               {status}
             </p>
           ) : null}
@@ -643,7 +634,7 @@ export default function MovimientosExcluidosPage() {
             <button
               type="button"
               disabled={loading}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              className="ui-btn-primary px-3 py-1.5"
               onClick={() => void cargar(tab)}
             >
               {loading ? "Cargando…" : "Actualizar"}
@@ -688,9 +679,9 @@ export default function MovimientosExcluidosPage() {
 
           {tab === "gastos" ? (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
+              <table className="w-full min-w-[720px] border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF] text-left text-xs font-medium text-white">
+                  <tr className="ui-table-header text-left text-xs font-medium text-white">
                     <th className="px-3 py-2">
                       <button type="button" onClick={() => toggleGastoSort("fecha")}>
                         Fecha<SortArrow active={gastoSortKey === "fecha"} dir={gastoSortDir} />
@@ -776,9 +767,9 @@ export default function MovimientosExcluidosPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
+              <table className="w-full min-w-[640px] border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF] text-left text-xs font-medium text-white">
+                  <tr className="ui-table-header text-left text-xs font-medium text-white">
                     <th className="px-3 py-2">
                       <button type="button" onClick={() => toggleVentaSort("fecha")}>
                         Fecha<SortArrow active={ventaSortKey === "fecha"} dir={ventaSortDir} />

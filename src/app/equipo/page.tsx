@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Users } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
+import { PageCard, PageHeader, PageShell } from "@/components/ui/page-layout";
 
 type MemberRow = {
   id: string;
@@ -67,79 +69,82 @@ export default function EquipoPage() {
 
   if (capsLoading) {
     return (
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
-        <p className="text-sm text-slate-600">Verificando permisos…</p>
-      </main>
+      <PageShell size="narrow">
+        <p className="text-sm text-slate-500">Verificando permisos…</p>
+      </PageShell>
     );
   }
 
   if (!canWrite) {
     return (
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
-        <h1 className="text-xl font-semibold text-slate-900">Equipo</h1>
-        <p className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+      <PageShell size="narrow">
+        <PageHeader title="Equipo" />
+        <p className="ui-card px-4 py-3 text-sm text-slate-700">
           Solo el administrador (owner) puede invitar usuarios y ver este apartado.
         </p>
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
-      <h1 className="text-xl font-semibold text-slate-900">Equipo</h1>
-      <p className="text-sm text-slate-600">
-        Invita por correo a socios o contadores. Recibirán un enlace para entrar; tendrán la misma
-        organización con permisos de solo lectura (no pueden importar ni editar movimientos ni
-        catálogo).
-      </p>
+    <PageShell size="narrow">
+      <PageHeader
+        title="Equipo"
+        description="Invita por correo a socios o contadores. Tendrán la misma organización con permisos de solo lectura."
+      />
 
-      <form
-        onSubmit={onSubmit}
-        className="rounded-xl border border-slate-200 bg-slate-50 p-6"
-      >
-        <label className="block text-sm text-slate-700">
-          Correo del nuevo miembro
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
-            placeholder="correo@ejemplo.cl"
+      <PageCard>
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-500">
+          <Users className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        </div>
+        <form onSubmit={onSubmit}>
+          <label className="block text-sm font-medium text-slate-700">
+            Correo del nuevo miembro
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="ui-field mt-2"
+              placeholder="correo@ejemplo.cl"
+              disabled={loading}
+            />
+          </label>
+          <button
+            type="submit"
             disabled={loading}
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 w-full rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-        >
-          {loading ? "Enviando…" : "Invitar o añadir"}
-        </button>
-        {status ? (
-          <p className="mt-3 text-sm text-slate-700">{status}</p>
-        ) : null}
-      </form>
+            className="ui-btn-primary mt-4 w-full"
+          >
+            {loading ? "Enviando…" : "Invitar o añadir"}
+          </button>
+          {status ? (
+            <p className="mt-3 text-sm text-slate-700">{status}</p>
+          ) : null}
+        </form>
+      </PageCard>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+      <PageCard>
         <h2 className="text-lg font-semibold text-slate-900">Miembros</h2>
         {loadingList ? (
-          <p className="mt-2 text-sm text-slate-600">Cargando…</p>
+          <p className="mt-2 text-sm text-slate-500">Cargando…</p>
         ) : members.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-600">Sin miembros listados.</p>
+          <p className="mt-2 text-sm text-slate-500">Sin miembros listados.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-slate-200 text-sm">
+          <ul className="mt-3 divide-y divide-slate-100 text-sm">
             {members.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-3"
+              >
                 <span className="text-slate-800">{m.email ?? m.userId}</span>
-                <span className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600">
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
                   {m.role}
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </section>
-    </main>
+      </PageCard>
+    </PageShell>
   );
 }

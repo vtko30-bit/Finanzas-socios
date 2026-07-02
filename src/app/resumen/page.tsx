@@ -696,11 +696,11 @@ export default function ResumenPage() {
 
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
-  const tdCls = "border-t border-slate-200 px-2 py-2 text-slate-800";
+  const tdCls = "border-t border-slate-200 px-2 py-2 text-xs text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
   const trTotal = "bg-sky-100/70 ring-1 ring-inset ring-sky-200";
   /** Primera columna fija al hacer scroll horizontal en cualquier tamaño. */
-  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[150px] bg-[#5AC4FF] border-r border-sky-700/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
+  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[150px] bg-[#0056ff] border-r border-sky-700/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
   const tdStickyFirst = `${tdCls} sticky left-0 z-10 min-w-[150px] bg-slate-50 border-r border-slate-200 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
   const tdStickyFirstTotal = `${tdCls} sticky left-0 z-10 min-w-[150px] bg-sky-100/70 border-r border-slate-200`;
   const COL_FIRST = 150;
@@ -719,30 +719,29 @@ export default function ResumenPage() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 pb-10 pt-4">
+    <main className="page-main page-main--2xl">
       <header>
-        <h1 className="text-xl font-semibold">Resumen mensual</h1>
+        <h1 className="page-title">Resumen mensual</h1>
       </header>
 
       {!ready ? (
-        <p className="text-sm text-slate-600">Verificando sesión…</p>
+        <p className="text-sm text-slate-500">Verificando sesión…</p>
       ) : !authenticated ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        <p className="ui-alert-warning">
           Inicia sesión para ver el resumen.
         </p>
       ) : (
         <>
-          <section
-            aria-label="Filtros"
-            className="-mt-2 rounded-xl border border-[#3a9fe0] bg-[#5AC4FF] px-3 py-2 text-white shadow-sm"
-          >
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <section aria-label="Filtros" className="ui-filter-bar">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5">
                 <div className="relative min-w-[200px] max-w-xs flex-1">
-                  <span className="mb-0.5 block text-xs text-white">Período</span>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <span className="mb-0.5 block text-xs font-medium text-slate-600">
+                    Período
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <select
-                      className="box-border h-9 min-w-[9rem] flex-1 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500 sm:max-w-[11rem] sm:flex-none"
+                      className="box-border h-8 min-w-[9rem] flex-1 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#2277ff] focus:ring-2 focus:ring-[#2277ff]/20 sm:max-w-[11rem] sm:flex-none"
                       value={modo}
                       onChange={(e) => setModo(e.target.value as FiltroModo)}
                     >
@@ -755,7 +754,7 @@ export default function ResumenPage() {
                         type="number"
                         min={1990}
                         max={2100}
-                        className="box-border h-9 w-28 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-28 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                         value={anio}
                         onChange={(e) => setAnio(e.target.value)}
                       />
@@ -763,7 +762,7 @@ export default function ResumenPage() {
                     {modo === "mes" ? (
                       <input
                         type="month"
-                        className="box-border h-9 min-w-[9rem] rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 min-w-[9rem] rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                         value={mes}
                         onChange={(e) => setMes(e.target.value)}
                       />
@@ -772,14 +771,14 @@ export default function ResumenPage() {
                       <>
                         <input
                           type="date"
-                          className="box-border h-9 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
+                          className="box-border h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
                           value={rangoDesde}
                           onChange={(e) => setRangoDesde(e.target.value)}
                         />
-                        <span className="shrink-0 text-sm text-white/90">a</span>
+                        <span className="shrink-0 text-xs text-slate-500">a</span>
                         <input
                           type="date"
-                          className="box-border h-9 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
+                          className="box-border h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
                           value={rangoHasta}
                           onChange={(e) => setRangoHasta(e.target.value)}
                         />
@@ -789,14 +788,16 @@ export default function ResumenPage() {
                 </div>
 
                 <div className="relative min-w-[200px] max-w-xs flex-1">
-                  <span className="mb-0.5 block text-xs text-white">Sucursal / origen</span>
+                  <span className="mb-0.5 block text-xs font-medium text-slate-600">
+                    Sucursal / origen
+                  </span>
                   <input
                     type="text"
                     autoComplete="off"
                     role="combobox"
                     aria-expanded={sucursalAbierta}
                     aria-controls="resumen-sucursal-lista"
-                    className="box-border h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm leading-normal text-slate-900 outline-none focus:border-sky-500"
+                    className="box-border h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                     placeholder="Todas — escribe o elige"
                     value={textoSucursalCampo}
                     onChange={(e) => {
@@ -863,8 +864,8 @@ export default function ResumenPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-900/20 bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-900">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <label className="ui-filter-chip">
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-sky-700"
@@ -873,7 +874,7 @@ export default function ResumenPage() {
                   />
                   Solo eventos
                 </label>
-                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-900/20 bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-900">
+                <label className="ui-filter-chip">
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-sky-700"
@@ -885,12 +886,12 @@ export default function ResumenPage() {
                 <button
                   type="button"
                   disabled={loading}
-                  className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                  className="ui-btn-soft-xs disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={() => void cargar()}
                 >
                   {loading ? "Cargando…" : "Actualizar"}
                 </button>
-                <span className="text-xs text-white/95">
+                <span className="ui-filter-stat">
                   Rango activo: {rangoEfectivo.desde} → {rangoEfectivo.hasta}
                 </span>
               </div>
@@ -898,7 +899,7 @@ export default function ResumenPage() {
           </section>
 
           {status ? (
-            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            <p className="ui-alert-warning">
               {status}
             </p>
           ) : null}
@@ -911,7 +912,7 @@ export default function ResumenPage() {
                     Resumen de ventas por sucursal
                   </h2>
                   {(data.ventasPorSucursalLista ?? []).length === 0 ? (
-                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                    <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
                       Sin ventas en este período.
                     </p>
                   ) : (
@@ -927,12 +928,12 @@ export default function ResumenPage() {
                             {bloque.sucursal}
                           </h3>
                           <table
-                            className="w-full border-collapse text-sm table-fixed"
+                            className="w-full border-collapse text-xs table-fixed"
                             style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                           >
                             {renderResumenColgroup(data.monthKeys.length)}
                             <thead>
-                              <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                              <tr className="ui-table-header">
                                 <th className={thStickyFirst}>Forma de pago</th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
@@ -986,19 +987,19 @@ export default function ResumenPage() {
                   )}
                 </div>
               ) : (
-                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     {sucursalSel.k === "una" && sucursalSel.v.trim()
                       ? `Resumen de ventas ${sucursalSel.v.trim()}`
                       : "Resumen de ventas"}
                   </h2>
                   <table
-                    className="w-full border-collapse text-sm table-fixed"
+                    className="w-full border-collapse text-xs table-fixed"
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
-                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                      <tr className="ui-table-header">
                         <th className={thStickyFirst}>Forma de pago</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
@@ -1072,7 +1073,7 @@ export default function ResumenPage() {
                     Resumen de gastos por sucursal
                   </h2>
                   {(data.gastosPorSucursalLista ?? []).length === 0 ? (
-                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                    <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
                       Sin gastos en este período.
                     </p>
                   ) : (
@@ -1088,12 +1089,12 @@ export default function ResumenPage() {
                             {bloque.sucursal}
                           </h3>
                           <table
-                            className="w-full border-collapse text-sm table-fixed"
+                            className="w-full border-collapse text-xs table-fixed"
                             style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                           >
                             {renderResumenColgroup(data.monthKeys.length)}
                             <thead>
-                              <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                              <tr className="ui-table-header">
                                 <th className={thStickyFirst}>Familia</th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
@@ -1162,19 +1163,19 @@ export default function ResumenPage() {
                   )}
                 </div>
               ) : (
-                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     {sucursalSel.k === "una" && sucursalSel.v.trim()
                       ? `Resumen de gastos ${sucursalSel.v.trim()}`
                       : "Resumen de gastos"}
                   </h2>
                   <table
-                    className="w-full border-collapse text-sm table-fixed"
+                    className="w-full border-collapse text-xs table-fixed"
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
-                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                      <tr className="ui-table-header">
                         <th className={thStickyFirst}>Familia</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
@@ -1243,18 +1244,18 @@ export default function ResumenPage() {
               )}
 
               {data.creditos ? (
-                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     Resumen de pagos de créditos
                   </h2>
                   
                   <table
-                    className="w-full border-collapse text-sm table-fixed"
+                    className="w-full border-collapse text-xs table-fixed"
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
-                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                      <tr className="ui-table-header">
                         <th className={thStickyFirst}>Crédito</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
@@ -1308,18 +1309,18 @@ export default function ResumenPage() {
               ) : null}
 
               {data.gastosSocios ? (
-                <section className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+                <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     Resumen de gastos socios  
                   </h2>
                  
                   <table
-                    className="w-full border-collapse text-sm table-fixed"
+                    className="w-full border-collapse text-xs table-fixed"
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
-                      <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                      <tr className="ui-table-header">
                         <th className={thStickyFirst}>Familia</th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
@@ -1392,12 +1393,12 @@ export default function ResumenPage() {
                   desembolso de créditos para ver la caja mensual.
                 </p>
                 <table
-                  className="w-full border-collapse text-sm table-fixed"
+                  className="w-full border-collapse text-xs table-fixed"
                   style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                 >
                   {renderResumenColgroup(data.monthKeys.length)}
                   <thead>
-                    <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                    <tr className="ui-table-header">
                       <th className={thStickyFirst}>Concepto</th>
                       {data.monthLabels.map((label, i) => (
                         <th key={data.monthKeys[i]} className={thNum}>
@@ -1531,14 +1532,14 @@ export default function ResumenPage() {
                   ) : familiaDetalleData && familiaDetalleData.monthKeys.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table
-                        className="w-full border-collapse text-sm table-fixed"
+                        className="w-full border-collapse text-xs table-fixed"
                         style={{
                           minWidth: tableMinWidth(familiaDetalleData.monthKeys.length),
                         }}
                       >
                         {renderResumenColgroup(familiaDetalleData.monthKeys.length)}
                         <thead>
-                          <tr className="border-b border-[#3a9fe0] bg-[#5AC4FF]">
+                          <tr className="ui-table-header">
                             <th className={thStickyFirst}>Categoría</th>
                             {familiaDetalleData.monthLabels.map((label, i) => (
                               <th key={familiaDetalleData.monthKeys[i]} className={thNum}>
