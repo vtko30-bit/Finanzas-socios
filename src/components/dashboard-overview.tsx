@@ -91,8 +91,7 @@ export function DashboardOverview() {
           key={label}
           className={`rounded-xl border border-slate-200/90 border-l-4 bg-gradient-to-br p-4 shadow-sm ${metricStyle(label)}`}
         >
-          <p className="text-sm opacity-90">{label}</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900 tabular-nums">{value}</p>
+          <p className="text-2xl font-semibold text-slate-900 tabular-nums">{value}</p>
         </article>
       ))}
     </section>
