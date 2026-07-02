@@ -46,15 +46,22 @@ function clavePreferirOrigen(m: {
   date: string;
   type: string;
   amount: number;
+  source_id?: string;
+  account_name?: string;
   counterparty?: string;
   description?: string;
   external_ref?: string;
 }) {
   const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, " ");
+  const sourceId = norm(String(m.source_id ?? ""));
+  if (sourceId) {
+    return `src|${sourceId}|${m.type}`;
+  }
   return [
     m.date,
     m.type,
     Number(m.amount).toFixed(2),
+    norm(String(m.account_name ?? "")),
     norm(String(m.counterparty ?? "")),
     norm(String(m.description ?? "")),
     norm(String(m.external_ref ?? "")),

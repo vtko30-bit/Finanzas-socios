@@ -675,6 +675,11 @@ export const parseExpensesEgresosExcel = (
       return "Transferencias Banco Estado";
     }
 
+    // Cartola Banco de Chile: conservar etiqueta de cuenta (no colapsar a Rg).
+    if (n.includes("chile") || n.includes("bancodechile")) {
+      return origen.trim();
+    }
+
     // Regla de sucursal interna de la empresa para gastos:
     // - Origen = RG o contiene Banco Estado => Rg
     // - Origen contiene Happy, Bci o Mercado Libre => Happy
