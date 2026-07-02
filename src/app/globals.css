@@ -129,7 +129,8 @@ body {
   }
 
   .ui-btn-soft-xs {
-    @apply rounded border border-[#2277ff]/25 bg-[#2277ff]/10 px-2 py-0.5 text-xs font-medium text-[#0056ff] transition hover:border-[#2277ff]/35 hover:bg-[#2277ff]/15;
+    @apply rounded border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-xs font-semibold transition hover:border-cyan-500/35 hover:bg-cyan-500/15;
+    color: #0f172a;
   }
 
   .ui-alert-warning {
