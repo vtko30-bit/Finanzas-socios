@@ -212,6 +212,32 @@ const hash = (payload: string) =>
 const normalizeReference = (value: string) =>
   value.trim().replace(/\s+/g, "").toUpperCase();
 
+const dedupeHashWithSourceContext = (entry: {
+  source_id: string;
+  date: string;
+  type: "income" | "expense";
+  amount: number;
+  account_name: string;
+  external_ref: string;
+  counterparty: string;
+  description: string;
+}) => {
+  const normalizedSourceId = normalizeReference(entry.source_id);
+  if (!normalizedSourceId) return "";
+  return hash(
+    [
+      normalizedSourceId,
+      entry.date,
+      entry.type,
+      Number(entry.amount).toFixed(2),
+      normalizeReference(entry.account_name),
+      normalizeReference(entry.external_ref),
+      normalizeReference(entry.counterparty),
+      normalizeReference(entry.description),
+    ].join("|"),
+  );
+};
+
 export type ParseConsolidatedExcelOptions = {
   /**
    * Tipo cuando el Excel no deja claro si es ingreso o egreso.
@@ -782,12 +808,10 @@ export const parseExpensesEgresosExcel = (
     }
 
     const entry = parsed.data;
-    const normalizedSourceId = normalizeReference(entry.source_id);
     const normalizedExternalRef = normalizeReference(entry.external_ref);
-    const dedupe_hash = normalizedSourceId
-      ? hash(
-          `${normalizedSourceId}|${entry.type}`,
-        )
+    const dedupeHashFromSource = dedupeHashWithSourceContext(entry);
+    const dedupe_hash = dedupeHashFromSource
+      ? dedupeHashFromSource
       : normalizedExternalRef
         ? hash(
             `${normalizedExternalRef}|${entry.date}|${entry.type}|${entry.amount}`,
@@ -947,8 +971,9 @@ export const parseOtrosIngresosExcel = (file: Buffer) => {
     }
 
     const entry = parsed.data;
-    const dedupe_hash = entry.source_id
-      ? hash(`${entry.source_id}|${entry.date}|${entry.type}|${entry.amount}`)
+    const dedupeHashFromSource = dedupeHashWithSourceContext(entry);
+    const dedupe_hash = dedupeHashFromSource
+      ? dedupeHashFromSource
       : hash(
           `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}`,
         );
