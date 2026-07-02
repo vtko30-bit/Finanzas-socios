@@ -19,8 +19,9 @@ export type BankPositionRow = {
   total: number;
 };
 
-export function isCtaCorrienteLabel(banco: string): boolean {
-  return /cta\.cte/i.test(banco);
+/** Cuentas corrientes y vista usan la columna «Saldo cta.cte.» */
+export function isSaldoCtaCteLabel(banco: string): boolean {
+  return /cta\.cte|cta\.\s*vista/i.test(banco);
 }
 
 export function rowTotal(

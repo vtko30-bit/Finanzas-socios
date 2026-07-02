@@ -11,7 +11,7 @@ import {
 } from "@/components/dashboard-balance-ui";
 import {
   emptyBankPositionRows,
-  isCtaCorrienteLabel,
+  isSaldoCtaCteLabel,
   rowTotal,
   type BankPositionRow,
 } from "@/lib/bank-position-defaults";
@@ -349,14 +349,14 @@ export function BankPositionSection({
                 </thead>
                 <tbody>
                   {formRows.map((row, idx) => {
-                    const esCtaCte = isCtaCorrienteLabel(row.banco);
+                    const esSaldoCtaCte = isSaldoCtaCteLabel(row.banco);
                     return (
                     <tr key={row.banco} className="border-b border-slate-100">
                       <td className="max-w-[12rem] px-2 py-2 text-slate-900">
                         {row.banco}
                       </td>
                       <td className="px-2 py-2">
-                        {esCtaCte ? (
+                        {esSaldoCtaCte ? (
                           <input
                             type="number"
                             min={0}
