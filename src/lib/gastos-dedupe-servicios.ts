@@ -404,7 +404,7 @@ export function omitCartolaWhenMirroredInTransferenciasMismoBanco<
         matched = true;
       }
     }
-    if (!matched && esDescripcionTransferencia(String(r.description ?? ""))) {
+    if (!matched) {
       const k = scopedKey(familia, fingerprintDateAmount(r));
       const n = dateAmountCounts.get(k) ?? 0;
       if (n > 0) {
@@ -637,7 +637,7 @@ export function claveEmparejarTefTransferenciasBe(m: {
   return `tef-be|${m.date}|${Number(m.amount).toFixed(2)}`;
 }
 
-/** Clave cartola ↔ Transferencias del mismo banco (BCI o Banco de Chile). */
+/** Clave cartola ↔ Transferencias del mismo banco (BCI o Banco de Chile). Solo hoja Transferencias. */
 export function claveEmparejarCartolaTransferenciasMismoBanco(m: {
   date: string;
   amount: number;
@@ -648,9 +648,7 @@ export function claveEmparejarCartolaTransferenciasMismoBanco(m: {
   const orig = String(m.account_name ?? "");
   const familia = origenFamiliaBanco(orig);
   if (!familia || familia === "be") return null;
-  const trans = esOrigenTransferencias(orig);
-  const cartola = !trans && familia !== null;
-  if (!trans && !cartola) return null;
+  if (!esOrigenTransferencias(orig)) return null;
   const op = String(m.external_ref ?? "").trim().toLowerCase();
   return `trans-${familia}|${m.date}|${Number(m.amount).toFixed(2)}|${op}`;
 }
