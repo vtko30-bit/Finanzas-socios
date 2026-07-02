@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BankPositionSection } from "@/components/bank-position-section";
 import { SetupBootstrapButton } from "@/components/setup-bootstrap-button";
 
 export default function Home() {
@@ -12,6 +13,8 @@ export default function Home() {
           <SetupBootstrapButton />
         </div>
       </header>
+
+      <BankPositionSection />
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
