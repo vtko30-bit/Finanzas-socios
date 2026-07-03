@@ -13,6 +13,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
+import {
+  getClientCache,
+  setClientCache,
+} from "@/lib/client-fetch-cache";
 
 const GASTOS_ROW_GRID =
   "grid w-full grid-cols-[minmax(0,5rem)_minmax(0,0.28fr)_minmax(0,0.455fr)_minmax(0,120px)_minmax(0,140px)_minmax(0,0.395fr)_minmax(0,4.75rem)] items-start gap-0";
@@ -449,12 +453,41 @@ function parseApiBody(text: string): { error?: string; [k: string]: unknown } {
   }
 }
 
+const FAMILIAS_CACHE_KEY = "/api/familias";
+
+function buildGastosDetalleUrl(sourceView: string): string {
+  const params = new URLSearchParams();
+  if (sourceView) params.set("source", sourceView);
+  return params.size ? `/api/gastos/detalle?${params.toString()}` : "/api/gastos/detalle";
+}
+
+function normalizeGastoRows(raw: GastoRow[]): GastoRow[] {
+  return raw.map((r) => ({
+    ...r,
+    source: r.source ?? "",
+    importadoEn: r.importadoEn ?? null,
+    importBatchId: r.importBatchId ?? null,
+  }));
+}
+
 function GastosPageContent() {
   const searchParams = useSearchParams();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
-  const [rows, setRows] = useState<GastoRow[]>([]);
-  const [catalogo, setCatalogo] = useState<CatalogFamily[]>([]);
-  const [status, setStatus] = useState("Cargando detalle de gastos...");
+  const sourceView = (searchParams.get("source") ?? "").trim().toLowerCase();
+  const esVistaPagoServiciosBancoEstado =
+    sourceView === "excel_egresos_banco_estado_servicios";
+  const gastosCacheKey = buildGastosDetalleUrl(sourceView);
+  const initialGastosCache = getClientCache<GastoRow[]>(gastosCacheKey);
+
+  const [rows, setRows] = useState<GastoRow[]>(() =>
+    initialGastosCache ? normalizeGastoRows(initialGastosCache) : [],
+  );
+  const [catalogo, setCatalogo] = useState<CatalogFamily[]>(
+    () => getClientCache<CatalogFamily[]>(FAMILIAS_CACHE_KEY) ?? [],
+  );
+  const [status, setStatus] = useState(() =>
+    initialGastosCache?.length ? "" : "Cargando detalle de gastos...",
+  );
   const [toast, setToast] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveInProgress, setSaveInProgress] = useState(false);
@@ -504,57 +537,65 @@ function GastosPageContent() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaGastos, setPaginaGastos] = useState(1);
   const [mounted, setMounted] = useState(false);
-  const sourceView = (searchParams.get("source") ?? "").trim().toLowerCase();
-  const esVistaPagoServiciosBancoEstado =
-    sourceView === "excel_egresos_banco_estado_servicios";
 
   const mostrarAviso = useCallback((mensaje: string) => {
     setToast(mensaje);
     window.setTimeout(() => setToast(""), 5000);
   }, []);
 
-  const cargarCatalogo = useCallback(async () => {
+  const cargarCatalogo = useCallback(async (opts?: { force?: boolean }) => {
+    if (!opts?.force) {
+      const cached = getClientCache<CatalogFamily[]>(FAMILIAS_CACHE_KEY);
+      if (cached) {
+        setCatalogo(cached);
+        return;
+      }
+    }
     try {
-      const res = await fetch("/api/familias");
+      const res = await fetch(FAMILIAS_CACHE_KEY);
       const text = await res.text();
       const data = parseApiBody(text);
       if (!res.ok) throw new Error(data.error || "Catálogo");
       const families = Array.isArray(data.families)
         ? (data.families as CatalogFamily[])
         : [];
+      setClientCache(FAMILIAS_CACHE_KEY, families);
       setCatalogo(families);
     } catch {
       setCatalogo([]);
     }
   }, []);
 
-  const cargar = useCallback(() => {
-    setStatus("Cargando...");
-    const params = new URLSearchParams();
-    if (sourceView) params.set("source", sourceView);
-    const url = params.size ? `/api/gastos/detalle?${params.toString()}` : "/api/gastos/detalle";
-    fetch(url)
-      .then(async (res) => {
-        const text = await res.text();
-        const data = parseApiBody(text);
-        if (!res.ok) {
-          throw new Error(data.error || "No se pudo cargar detalle");
+  const cargar = useCallback(
+    (opts?: { force?: boolean }) => {
+      const url = gastosCacheKey;
+      if (!opts?.force) {
+        const cached = getClientCache<GastoRow[]>(url);
+        if (cached) {
+          setRows(normalizeGastoRows(cached));
+          setStatus("");
+          return;
         }
-        const raw = (data.rows ?? []) as GastoRow[];
-        setRows(
-          raw.map((r) => ({
-            ...r,
-            source: r.source ?? "",
-            importadoEn: r.importadoEn ?? null,
-            importBatchId: r.importBatchId ?? null,
-          })),
-        );
-        setStatus("");
-      })
-      .catch((e: Error) => {
-        setStatus(e.message);
-      });
-  }, [sourceView]);
+      }
+      setStatus("Cargando...");
+      fetch(url)
+        .then(async (res) => {
+          const text = await res.text();
+          const data = parseApiBody(text);
+          if (!res.ok) {
+            throw new Error(data.error || "No se pudo cargar detalle");
+          }
+          const raw = (data.rows ?? []) as GastoRow[];
+          setClientCache(url, raw);
+          setRows(normalizeGastoRows(raw));
+          setStatus("");
+        })
+        .catch((e: Error) => {
+          setStatus(e.message);
+        });
+    },
+    [gastosCacheKey],
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -660,15 +701,17 @@ function GastosPageContent() {
 
   useEffect(() => {
     if (!catalogo.length) return;
-    setRows((prev) =>
-      prev.map((r) => {
+    setRows((prev) => {
+      const next = prev.map((r) => {
         if (!r.concept_id) return r;
         const fam = familiaParaConcepto(r.concept_id, catalogo);
         if (!fam) return r;
         return r.familia === fam ? r : { ...r, familia: fam };
-      }),
-    );
-  }, [catalogo]);
+      });
+      setClientCache(gastosCacheKey, next);
+      return next;
+    });
+  }, [catalogo, gastosCacheKey]);
 
   const nombresFamiliaOpciones = useMemo(() => {
     const fromCat = catalogo.map((f) => f.name).filter(Boolean);
@@ -838,8 +881,8 @@ function GastosPageContent() {
       }
       if (!lastData) return false;
       const data = lastData;
-      setRows((prev) =>
-        prev.map((r) => {
+      setRows((prev) => {
+        const next = prev.map((r) => {
           if (!ids.includes(r.id)) return r;
           const fam =
             familiaParaConcepto(data.concept_id ?? null, catalogo) ?? r.familia;
@@ -850,8 +893,10 @@ function GastosPageContent() {
             familia: fam,
             necesitaConcepto: esConceptoVacioOPlaceholder(data.concepto ?? concepto),
           };
-        }),
-      );
+        });
+        setClientCache(gastosCacheKey, next);
+        return next;
+      });
       return true;
     } catch {
       mostrarAviso("Error de red al guardar");
@@ -891,8 +936,8 @@ function GastosPageContent() {
       }
       if (!lastData) return false;
       const data = lastData;
-      setRows((prev) =>
-        prev.map((r) => {
+      setRows((prev) => {
+        const next = prev.map((r) => {
           if (!ids.includes(r.id)) return r;
           const fam =
             familiaParaConcepto(data.concept_id ?? null, catalogo) ?? r.familia;
@@ -903,8 +948,10 @@ function GastosPageContent() {
             familia: fam,
             necesitaConcepto: esConceptoVacioOPlaceholder(data.concepto ?? ""),
           };
-        }),
-      );
+        });
+        setClientCache(gastosCacheKey, next);
+        return next;
+      });
       return true;
     } catch {
       mostrarAviso("Error de red al guardar");
@@ -1190,7 +1237,7 @@ function GastosPageContent() {
         );
       }
       setReconcileModal(null);
-      cargar();
+      cargar({ force: true });
     } catch {
       mostrarAviso("Error de red al registrar la vinculación");
     } finally {

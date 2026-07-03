@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthState } from "@/hooks/use-auth-state";
+import {
+  getClientCache,
+  setClientCache,
+} from "@/lib/client-fetch-cache";
 
 type PivotRowVenta = {
   formaPago: string;
@@ -202,6 +206,35 @@ function yearRange(anio: string): { desde: string; hasta: string } {
   return { desde: `${y}-01-01`, hasta: `${y}-12-31` };
 }
 
+function buildResumenPivotCacheKey(args: {
+  desde: string;
+  hasta: string;
+  sel: SucursalVentasSel;
+  soloSucursalesFijas: boolean;
+}): string {
+  const q = new URLSearchParams({ desde: args.desde, hasta: args.hasta });
+  if (args.sel.k === "por_sucursal") {
+    q.set("ventasPorSucursal", "1");
+  } else if (args.sel.k === "una" && args.sel.v.trim()) {
+    q.set("sucursal", args.sel.v.trim());
+  }
+  if (args.soloSucursalesFijas) {
+    q.set("soloSucursalesFijas", "1");
+  }
+  return `/api/resumen/pivot?${q.toString()}`;
+}
+
+function defaultResumenPivotCacheKey(): string {
+  const y = String(new Date().getFullYear());
+  const { desde, hasta } = yearRange(y);
+  return buildResumenPivotCacheKey({
+    desde,
+    hasta,
+    sel: { k: "todas" },
+    soloSucursalesFijas: false,
+  });
+}
+
 export default function ResumenPage() {
   const { ready, authenticated } = useAuthState();
   const [modo, setModo] = useState<FiltroModo>("anio");
@@ -218,9 +251,13 @@ export default function ResumenPage() {
   const [listaSucursales, setListaSucursales] = useState<string[]>([]);
   const [sucursalAbierta, setSucursalAbierta] = useState(false);
   const sucursalBlurT = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [data, setData] = useState<PivotResponse | null>(null);
+  const [data, setData] = useState<PivotResponse | null>(
+    () => getClientCache<PivotResponse>(defaultResumenPivotCacheKey()) ?? null,
+  );
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(
+    () => !getClientCache(defaultResumenPivotCacheKey()),
+  );
   const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
 
   const [familiaDetalleCtx, setFamiliaDetalleCtx] = useState<{
@@ -274,7 +311,7 @@ export default function ResumenPage() {
   }, [modo, anio, mes, rangoDesde, rangoHasta]);
 
   const cargar = useCallback(
-    async (overrideSel?: SucursalVentasSel) => {
+    async (overrideSel?: SucursalVentasSel, opts?: { force?: boolean }) => {
       if (!authenticated) return;
       const sel = overrideSel ?? sucursalSelRef.current;
       const { desde, hasta } = rangoEfectivo;
@@ -285,6 +322,21 @@ export default function ResumenPage() {
       if (desde > hasta) {
         setStatus("La fecha desde no puede ser posterior a hasta.");
         return;
+      }
+      const cacheKey = buildResumenPivotCacheKey({
+        desde,
+        hasta,
+        sel,
+        soloSucursalesFijas,
+      });
+      if (!opts?.force) {
+        const cached = getClientCache<PivotResponse>(cacheKey);
+        if (cached) {
+          setData(cached);
+          setLoading(false);
+          setStatus("");
+          return;
+        }
       }
       setLoading(true);
       setStatus("");
@@ -305,6 +357,7 @@ export default function ResumenPage() {
           setStatus(json.error || "Error al cargar resumen");
           return;
         }
+        setClientCache(cacheKey, json);
         setData(json);
       } catch {
         setData(null);

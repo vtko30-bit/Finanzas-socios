@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
+import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
 
 type ImportResult = {
   totalRows: number;
@@ -151,6 +152,7 @@ export default function ImportarPage() {
       }
       setStatus("Importación de gastos y egresos finalizada.");
       setSuccessMessage("La importación de gastos y egresos terminó correctamente.");
+      invalidateMainNavCaches();
       setShowSuccessModal(true);
     } catch (error) {
       setStatus(
@@ -245,6 +247,7 @@ export default function ImportarPage() {
 
       setStatus("Importación de Pago servicios BancoEstado finalizada.");
       setSuccessMessage("La importación de Pago servicios BancoEstado terminó correctamente.");
+      invalidateMainNavCaches();
       setShowSuccessModal(true);
     } catch (error) {
       setStatus(
@@ -311,6 +314,7 @@ export default function ImportarPage() {
         setStatus(`Importación de ventas finalizada. Revisa la vista Ventas.${formatoMsg}${dedupeMsg}`);
       }
       setSuccessMessage("La importación de ventas terminó correctamente.");
+      invalidateMainNavCaches();
       setShowSuccessModal(true);
     } catch (error) {
       setStatus(
@@ -372,6 +376,7 @@ export default function ImportarPage() {
         setStatus("Importación de otros ingresos finalizada.");
       }
       setSuccessMessage("La importación de otros ingresos terminó correctamente.");
+      invalidateMainNavCaches();
       setShowSuccessModal(true);
     } catch (error) {
       setStatus(
@@ -456,6 +461,7 @@ export default function ImportarPage() {
       setStatus(
         "Movimientos de ingreso y lotes de importación de ventas eliminados. Puedes importar de nuevo.",
       );
+      invalidateMainNavCaches();
     } catch {
       setStatus("Error de red al borrar ingresos");
     } finally {
@@ -494,6 +500,7 @@ export default function ImportarPage() {
       setStatus(
         `Listo: se eliminaron ${data.deletedTransactions ?? 0} movimientos y ${data.deletedImportBatches ?? 0} lotes de importación.`,
       );
+      invalidateMainNavCaches();
     } catch {
       setStatus("Error de red al borrar datos");
     } finally {
@@ -565,6 +572,7 @@ export default function ImportarPage() {
         `Revisión aplicada: se importaron ${Number(data.inserted ?? 0)} fila(s) adicionales; se omitieron ${Number(data.skipped ?? 0)}.`,
       );
       setSuccessMessage("La importación de Pago servicios BancoEstado quedó completa.");
+      invalidateMainNavCaches();
       setShowSuccessModal(true);
     } catch (error) {
       setStatus(

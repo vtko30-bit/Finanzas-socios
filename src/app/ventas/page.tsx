@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  getClientCache,
+  setClientCache,
+} from "@/lib/client-fetch-cache";
 
 const VENTAS_ROW_GRID =
   "grid w-full min-w-[720px] grid-cols-[minmax(0,7rem)_minmax(0,5.5rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-0";
@@ -62,6 +66,24 @@ type VentaRow = {
   medioPago: string;
   monto: number;
 };
+
+function buildVentasDetalleUrl(incluirFinanciamiento: boolean): string {
+  const params = new URLSearchParams();
+  if (incluirFinanciamiento) params.set("incluirFinanciamiento", "1");
+  return params.size ? `/api/ventas/detalle?${params.toString()}` : "/api/ventas/detalle";
+}
+
+function mapVentasDetalleRows(raw: Array<Record<string, unknown>>): VentaRow[] {
+  return raw.map((r) => ({
+    id: String(r.id),
+    idVenta: String(r.idVenta ?? ""),
+    externalRef: String(r.externalRef ?? ""),
+    sucursal: String(r.sucursal ?? ""),
+    fecha: String(r.fecha ?? ""),
+    medioPago: String(r.medioPago ?? ""),
+    monto: Number(r.monto) || 0,
+  }));
+}
 
 type FechaFiltroModo = "todo" | "dia" | "mes" | "anio" | "rango";
 
@@ -230,8 +252,14 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
 }
 
 export default function VentasPage() {
-  const [rows, setRows] = useState<VentaRow[]>([]);
-  const [status, setStatus] = useState("Cargando detalle de ventas...");
+  const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
+  const ventasCacheKey = buildVentasDetalleUrl(incluirFinanciamiento);
+  const initialVentasCache = getClientCache<VentaRow[]>(ventasCacheKey);
+
+  const [rows, setRows] = useState<VentaRow[]>(() => initialVentasCache ?? []);
+  const [status, setStatus] = useState(() =>
+    initialVentasCache?.length ? "" : "Cargando detalle de ventas...",
+  );
 
   const [modoFecha, setModoFecha] = useState<FechaFiltroModo>("todo");
   const [dia, setDia] = useState("");
@@ -246,38 +274,38 @@ export default function VentasPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaVentas, setPaginaVentas] = useState(1);
   const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
-  const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
   const filtroEventoActivo = esTextoFiltroEvento(filtroSucursal);
 
-  const cargar = useCallback(() => {
-    setStatus("Cargando...");
-    const params = new URLSearchParams();
-    if (incluirFinanciamiento) params.set("incluirFinanciamiento", "1");
-    const url = params.size ? `/api/ventas/detalle?${params.toString()}` : "/api/ventas/detalle";
-    fetch(url)
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "No se pudo cargar detalle");
+  const cargar = useCallback(
+    (opts?: { force?: boolean }) => {
+      const url = buildVentasDetalleUrl(incluirFinanciamiento);
+      if (!opts?.force) {
+        const cached = getClientCache<VentaRow[]>(url);
+        if (cached) {
+          setRows(cached);
+          setStatus("");
+          return;
         }
-        const raw = (data.rows ?? []) as Array<Record<string, unknown>>;
-        setRows(
-          raw.map((r) => ({
-            id: String(r.id),
-            idVenta: String(r.idVenta ?? ""),
-            externalRef: String(r.externalRef ?? ""),
-            sucursal: String(r.sucursal ?? ""),
-            fecha: String(r.fecha ?? ""),
-            medioPago: String(r.medioPago ?? ""),
-            monto: Number(r.monto) || 0,
-          })),
-        );
-        setStatus("");
-      })
-      .catch((e: Error) => {
-        setStatus(e.message);
-      });
-  }, [incluirFinanciamiento]);
+      }
+      setStatus("Cargando...");
+      fetch(url)
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "No se pudo cargar detalle");
+          }
+          const raw = (data.rows ?? []) as Array<Record<string, unknown>>;
+          const mapped = mapVentasDetalleRows(raw);
+          setClientCache(url, mapped);
+          setRows(mapped);
+          setStatus("");
+        })
+        .catch((e: Error) => {
+          setStatus(e.message);
+        });
+    },
+    [incluirFinanciamiento],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
