@@ -109,6 +109,144 @@ function sheetToRowsVentaLayout(ws: XLSX.WorkSheet): RawRow[] {
   return out;
 }
 
+function rowLooksLikeExpenseHeader(cells: string[]): boolean {
+  const nonEmpty = cells.filter(Boolean);
+  if (nonEmpty.length < 2) return false;
+  if (nonEmpty.length === 1 && nonEmpty[0].length > 18) return false;
+
+  const fechaHints = ["fecha", "periodo", "date", "dia", "fechapago", "fechaconsumo"];
+  const montoHints = [
+    "monto",
+    "importe",
+    "valor",
+    "cargos",
+    "cheques",
+    "anticipo",
+    "consumo",
+    "saldo",
+    "debe",
+    "debito",
+    "cargo",
+  ];
+
+  const matchesHint = (cell: string, hints: string[]) =>
+    hints.some((h) => cell === h || cell.startsWith(h) || cell.endsWith(h));
+
+  const hasFecha = nonEmpty.some((c) => matchesHint(c, fechaHints));
+  const hasMonto = nonEmpty.some((c) => matchesHint(c, montoHints));
+  return hasFecha && hasMonto;
+}
+
+/** Detecta fila de encabezados en hojas Detalle / Anticipos (título arriba, datos abajo). */
+function scoreExpenseHeaderRow(cells: string[]): number {
+  if (!rowLooksLikeExpenseHeader(cells)) return 0;
+
+  let score = 0;
+  const has = (hints: string[]) =>
+    cells.some((c) => hints.some((h) => c === h || c.startsWith(h) || c.endsWith(h)));
+
+  if (has(["fecha", "periodo", "date", "dia", "fechapago", "fechaconsumo"])) score += 5;
+  if (
+    has([
+      "monto",
+      "importe",
+      "valor",
+      "cargos",
+      "cheques",
+      "anticipo",
+      "consumo",
+      "pagado",
+      "saldo",
+      "debe",
+      "debito",
+      "cargo",
+    ])
+  ) {
+    score += 5;
+  }
+  if (has(["nombre", "empleado", "beneficiario", "persona", "trabajador", "alias"])) score += 2;
+  if (has(["concepto", "descripcion", "detalle", "glosa", "observacion"])) score += 1;
+  return score;
+}
+
+function findExpenseHeaderRowIndex(aoa: unknown[][]): number {
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let i = 0; i < Math.min(aoa.length, 60); i++) {
+    const cells = (aoa[i] ?? []).map((c) => normalizeKey(String(c)));
+    const score = scoreExpenseHeaderRow(cells);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function sheetToRowsExpenseLayout(ws: XLSX.WorkSheet): RawRow[] {
+  const fallbackDefault = () =>
+    XLSX.utils.sheet_to_json<RawRow>(ws, { defval: "", raw: true });
+
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    defval: "",
+    raw: true,
+  }) as unknown[][];
+  if (!aoa.length) return fallbackDefault();
+
+  const headerIdx = findExpenseHeaderRowIndex(aoa);
+  if (headerIdx < 0) return fallbackDefault();
+
+  const headerRow = (aoa[headerIdx] as unknown[]).map((h) =>
+    String(h ?? "").trim(),
+  );
+  const out: RawRow[] = [];
+  for (let r = headerIdx + 1; r < aoa.length; r++) {
+    const row = aoa[r] as unknown[];
+    const obj: RawRow = {};
+    headerRow.forEach((h, j) => {
+      if (h) obj[h] = row[j] ?? "";
+    });
+    const hasAny = Object.values(obj).some((v) => {
+      if (v === "" || v === null || v === undefined) return false;
+      if (typeof v === "number" && v !== 0) return true;
+      return String(v).trim() !== "";
+    });
+    if (hasAny) out.push(obj);
+  }
+
+  return out.length > 0 ? out : fallbackDefault();
+}
+
+const EXPENSE_DATE_ALIASES = [
+  "fecha",
+  "fecha documento",
+  "date",
+  "dia",
+  "periodo",
+  "fecha anticipo",
+  "fecha consumo",
+  "fechapago",
+];
+
+const EXPENSE_AMOUNT_ALIASES = [
+  "cheques / cargos",
+  "cheques/cargos",
+  "cheques cargos",
+  "cheques",
+  "cargos",
+  "monto",
+  "importe",
+  "valor",
+  "anticipo",
+  "consumo",
+  "pagado",
+  "saldo",
+  "debe",
+  "debito",
+  "cargo",
+];
+
 const normalizeKey = (key: string) =>
   key
     .toLowerCase()
@@ -189,6 +327,24 @@ const toISO = (value: unknown) => {
     const parsedDMY = new Date(Date.UTC(year, month - 1, day));
     if (!Number.isNaN(parsedDMY.getTime())) {
       return parsedDMY.toISOString().slice(0, 10);
+    }
+  }
+  // yyyy-mm (período mensual)
+  const ymMatch = text.match(/^(\d{4})-(\d{1,2})$/);
+  if (ymMatch) {
+    const y = Number(ymMatch[1]);
+    const mo = Number(ymMatch[2]);
+    if (mo >= 1 && mo <= 12) {
+      return `${y}-${String(mo).padStart(2, "0")}-01`;
+    }
+  }
+  // mm/yyyy
+  const myMatch = text.match(/^(\d{1,2})[\/-](\d{4})$/);
+  if (myMatch) {
+    const mo = Number(myMatch[1]);
+    const y = Number(myMatch[2]);
+    if (mo >= 1 && mo <= 12) {
+      return `${y}-${String(mo).padStart(2, "0")}-01`;
     }
   }
   const parsed = new Date(text);
@@ -620,16 +776,82 @@ export const parseConsolidatedExcel = (
   };
 };
 
+function isSummarySheetName(name: string): boolean {
+  const n = normalizeKey(name);
+  return (
+    n.includes("resumen") ||
+    n.includes("total") ||
+    n.includes("summary") ||
+    n.includes("totales")
+  );
+}
+
+/** Hojas de gastos en planillas bancarias y archivos auxiliares (anticipos, consumo personal). */
+function isEgresosCompatibleSheetName(name: string): boolean {
+  const n = normalizeKey(name);
+  return (
+    n.includes("egres") ||
+    n.includes("movimientoscompletos") ||
+    n.includes("anticip") ||
+    n.includes("consumopersonal") ||
+    (n.includes("consumo") && n.includes("personal"))
+  );
+}
+
+function isAnticiposConsumoPersonalFile(fileNameKey: string): boolean {
+  return (
+    fileNameKey.includes("anticip") ||
+    fileNameKey.includes("consumopersonal") ||
+    (fileNameKey.includes("consumo") && fileNameKey.includes("personal"))
+  );
+}
+
+function selectDetalleSheet(sheetNames: string[]): string[] {
+  const exact = sheetNames.filter((name) => normalizeKey(name) === "detalle");
+  if (exact.length > 0) return exact;
+  return sheetNames.filter((name) => {
+    const n = normalizeKey(name);
+    return n.includes("detalle") && !isSummarySheetName(name);
+  });
+}
+
+function usesExpenseDetalleLayout(sheetName: string, fileNameKey: string): boolean {
+  const sheetN = normalizeKey(sheetName);
+  return (
+    isAnticiposConsumoPersonalFile(fileNameKey) ||
+    sheetN === "detalle" ||
+    sheetN.includes("detalle")
+  );
+}
+
+function selectEgresosExpenseSheets(
+  sheetNames: string[],
+  fileNameKey: string,
+): string[] {
+  if (isAnticiposConsumoPersonalFile(fileNameKey)) {
+    const detalleSheets = selectDetalleSheet(sheetNames);
+    if (detalleSheets.length > 0) return detalleSheets;
+    return [];
+  }
+
+  const matched = sheetNames.filter(isEgresosCompatibleSheetName);
+  if (matched.length > 0) return matched;
+
+  return [];
+}
+
 /**
  * Importación de gastos/egresos desde planilla bancaria.
- * - Solo considera hojas cuyo nombre contiene "egres"
- * - Usa columna "Cheques / Cargos" como monto del gasto
+ * - Archivo Anticipos_Consumo_Personal: solo hoja **Detalle**
+ * - Otras planillas: Egresos, Movimientos_completos, Anticipos, Consumo personal
+ * - Monto desde Cheques / Cargos, o Monto / Importe en archivos auxiliares
  */
 export const parseExpensesEgresosExcel = (
   file: Buffer,
   opts?: { fileName?: string },
 ) => {
   const fileNameKey = normalizeKey(opts?.fileName ?? "");
+  const esArchivoAnticipos = isAnticiposConsumoPersonalFile(fileNameKey);
   const esArchivoRetirosMp =
     fileNameKey.includes("retiros") &&
     (fileNameKey.includes("mercadopago") || fileNameKey.includes("mercadolibre"));
@@ -637,6 +859,17 @@ export const parseExpensesEgresosExcel = (
   const normalizeOrigen = (origen: string, sheetName: string): string => {
     const n = normalizeKey(origen);
     const sheetN = normalizeKey(sheetName);
+
+    if (
+      esArchivoAnticipos ||
+      sheetN === "detalle" ||
+      sheetN.includes("detalle") ||
+      sheetN.includes("anticip") ||
+      sheetN.includes("consumopersonal") ||
+      (sheetN.includes("consumo") && sheetN.includes("personal"))
+    ) {
+      return origen.trim() || "Anticipos Consumo Personal";
+    }
 
     if (n.includes("retiros") && (n.includes("mercadopago") || n.includes("mercadolibre"))) {
       return origen.trim() || "Retiros_Mercado_Pago";
@@ -691,36 +924,28 @@ export const parseExpensesEgresosExcel = (
   };
 
   const wb = XLSX.read(file, { type: "buffer", cellDates: true });
-  const egresosSheets = wb.SheetNames.filter((name) => {
-    const normalized = normalizeKey(name);
-    return normalized.includes("egres") || normalized.includes("movimientoscompletos");
-  });
+  const egresosSheets = selectEgresosExpenseSheets(wb.SheetNames, fileNameKey);
 
   const rawRows: RawRow[] = [];
   egresosSheets.forEach((sheetName) => {
     const ws = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<RawRow>(ws, { defval: "", raw: true });
+    const rows = usesExpenseDetalleLayout(sheetName, fileNameKey)
+      ? sheetToRowsExpenseLayout(ws)
+      : XLSX.utils.sheet_to_json<RawRow>(ws, { defval: "", raw: true });
     rows.forEach((r) => rawRows.push({ ...r, __sheet: sheetName }));
   });
 
   if (!egresosSheets.length) {
+    const reason = esArchivoAnticipos
+      ? 'No se encontró la hoja "Detalle" en el archivo Anticipos_Consumo_Personal.'
+      : 'No se encontró una hoja compatible (Egresos, Movimientos_completos o Detalle en Anticipos) en el archivo.';
     return {
       totalRows: 0,
       validRows: 0,
       invalidRows: 1,
       valid: [] as NormalizedMovement[],
-      invalid: [
-        {
-          row_number: 1,
-          reason: 'No se encontró una hoja compatible ("Egresos" o "Movimientos_completos") en el archivo.',
-        },
-      ],
-      invalidSample: [
-        {
-          row_number: 1,
-          reason: 'No se encontró una hoja compatible ("Egresos" o "Movimientos_completos") en el archivo.',
-        },
-      ],
+      invalid: [{ row_number: 1, reason }],
+      invalidSample: [{ row_number: 1, reason }],
     };
   }
 
@@ -729,16 +954,8 @@ export const parseExpensesEgresosExcel = (
   const missingSourceIdRows: number[] = [];
 
   rawRows.forEach((row, index) => {
-    const date = toISO(getField(row, ["fecha", "fecha documento", "date", "dia"]));
-    const rawCargo = toAmount(
-      getField(row, [
-        "cheques / cargos",
-        "cheques/cargos",
-        "cheques cargos",
-        "cheques",
-        "cargos",
-      ]),
-    );
+    const date = toISO(getField(row, EXPENSE_DATE_ALIASES));
+    const rawCargo = toAmount(getField(row, EXPENSE_AMOUNT_ALIASES));
     const monto = Math.abs(rawCargo);
     const abonos = toAmount(
       getField(row, [
@@ -768,7 +985,7 @@ export const parseExpensesEgresosExcel = (
     if (monto <= 0) {
       invalid.push({
         row_number: index + 1,
-        reason: 'Monto inválido en "Cheques / Cargos"',
+        reason: 'Monto inválido en "Cheques / Cargos" (o Monto / Importe)',
       });
       return;
     }
@@ -783,8 +1000,19 @@ export const parseExpensesEgresosExcel = (
         ? `${origen} - ${sucursal}`
         : origen || sucursal || "Sin origen");
 
-    const sourceId = String(getField(row, ["id"]) || "").trim();
-    if (!sourceId) {
+    const sourceIdRaw = String(getField(row, ["id", "id movimiento", "idmovimiento"]) || "").trim();
+    const sourceId =
+      sourceIdRaw ||
+      (esArchivoAnticipos
+        ? [
+            "anticipo",
+            date,
+            String(monto),
+            String(getField(row, ["alias", "nombre destino", "nombre", "empleado"]) || "").trim(),
+            String(getField(row, ["descripcion", "detalle", "glosa", "observacion"]) || "").trim(),
+          ].join("|")
+        : "");
+    if (!sourceIdRaw) {
       missingSourceIdRows.push(index + 1);
     }
     const nroOperacion = String(
@@ -795,13 +1023,28 @@ export const parseExpensesEgresosExcel = (
       date,
       type: "expense" as const,
       amount: monto,
-      description: String(getField(row, ["descripcion", "detalle", "glosa"]) || ""),
+      description: String(
+        getField(row, ["descripcion", "detalle", "glosa", "observacion", "observación"]) ||
+          "",
+      ),
       account_name: accountName,
-      category_name: String(getField(row, ["concepto", "categoria"]) || "Sin categoria"),
+      category_name: String(
+        getField(row, ["concepto", "categoria", "rubro", "tipo"]) || "Sin categoria",
+      ),
       source_id: sourceId,
       external_ref: nroOperacion,
       payment_method: String(getField(row, ["n° cuenta", "nro cuenta", "numero cuenta"]) || ""),
-      counterparty: String(getField(row, ["alias", "nombre destino"]) || ""),
+      counterparty: String(
+        getField(row, [
+          "alias",
+          "nombre destino",
+          "nombre",
+          "beneficiario",
+          "empleado",
+          "persona",
+          "trabajador",
+        ]) || "",
+      ),
     });
 
     if (!parsed.success) {
@@ -831,6 +1074,11 @@ export const parseExpensesEgresosExcel = (
     });
   });
 
+  const detectedHeaders =
+    rawRows.length > 0
+      ? Object.keys(rawRows[0]).filter((k) => k !== "__sheet")
+      : [];
+
   return {
     totalRows: rawRows.length,
     validRows: valid.length,
@@ -840,6 +1088,8 @@ export const parseExpensesEgresosExcel = (
     valid,
     invalid,
     invalidSample: invalid.slice(0, 40),
+    sheetsUsed: egresosSheets,
+    detectedHeaders,
   };
 };
 

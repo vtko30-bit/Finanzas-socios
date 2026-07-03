@@ -19,6 +19,8 @@ type ImportResult = {
     skippedSummarySheets: string[];
   };
   invalidSample?: Array<{ row_number: number; reason: string }>;
+  sheetsUsed?: string[];
+  detectedHeaders?: string[];
   heldForDuplicateReview?: number;
   skippedByHashDuplicate?: number;
   skippedDuplicateRowInFile?: number;
@@ -124,7 +126,7 @@ export default function ImportarPage() {
         } else if (res.status === 400) {
           setStatus(
             mensajeApi(data) ||
-              'Archivo inválido. Verifica que exista la hoja "Egresos" y que tenga columnas como Fecha y Cheques / Cargos.',
+              'Archivo inválido. Anticipos_Consumo_Personal debe tener hoja "Detalle" con Fecha y Monto; otros archivos: hoja Egresos y Cheques / Cargos.',
           );
         } else {
           setStatus(mensajeApi(data) || "Error al importar");
@@ -136,7 +138,7 @@ export default function ImportarPage() {
       setResult(importData);
       if (importData.validRows === 0 && importData.invalidRows > 0) {
         setStatus(
-          "No se importó ninguna fila válida. Verifica que el archivo tenga hoja 'Egresos' y columnas como Fecha y Cheques / Cargos.",
+          "No se importó ninguna fila válida. Anticipos_Consumo_Personal: hoja Detalle con Fecha y Monto; otros: hoja Egresos con Fecha y Cheques / Cargos.",
         );
         return;
       }
@@ -190,7 +192,7 @@ export default function ImportarPage() {
         } else if (res.status === 400) {
           setStatus(
             mensajeApi(data) ||
-              'Archivo inválido. Verifica que exista la hoja "Egresos" y que tenga columnas como Fecha y Cheques / Cargos.',
+              'Archivo inválido. Anticipos_Consumo_Personal debe tener hoja "Detalle" con Fecha y Monto; otros archivos: hoja Egresos y Cheques / Cargos.',
           );
         } else {
           setStatus(mensajeApi(data) || "Error al importar Pago servicios BancoEstado");
@@ -805,6 +807,12 @@ export default function ImportarPage() {
             ) : null}
             {result.skippedDuplicateRowInFile != null && result.skippedDuplicateRowInFile > 0 ? (
               <li>Filas repetidas dentro del mismo archivo: {result.skippedDuplicateRowInFile}</li>
+            ) : null}
+            {result.sheetsUsed?.length ? (
+              <li>Hojas leídas: {result.sheetsUsed.join(", ")}</li>
+            ) : null}
+            {result.detectedHeaders?.length ? (
+              <li>Columnas detectadas: {result.detectedHeaders.join(", ")}</li>
             ) : null}
           </ul>
           {result.invalidRows > 0 && result.invalidSample?.length ? (
