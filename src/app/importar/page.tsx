@@ -21,6 +21,7 @@ type ImportResult = {
   invalidSample?: Array<{ row_number: number; reason: string }>;
   sheetsUsed?: string[];
   detectedHeaders?: string[];
+  availableSheets?: string[];
   heldForDuplicateReview?: number;
   skippedByHashDuplicate?: number;
   skippedDuplicateRowInFile?: number;
@@ -807,6 +808,9 @@ export default function ImportarPage() {
             ) : null}
             {result.skippedDuplicateRowInFile != null && result.skippedDuplicateRowInFile > 0 ? (
               <li>Filas repetidas dentro del mismo archivo: {result.skippedDuplicateRowInFile}</li>
+            ) : null}
+            {result.availableSheets?.length ? (
+              <li>Hojas en el archivo: {result.availableSheets.join(", ")}</li>
             ) : null}
             {result.sheetsUsed?.length ? (
               <li>Hojas leídas: {result.sheetsUsed.join(", ")}</li>
