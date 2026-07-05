@@ -23,7 +23,7 @@ const GASTOS_ROW_GRID =
 
 /** Solo móvil: Fecha, Nombre destino, Descripción, Monto (el resto en el modal al tocar). */
 const GASTOS_ROW_GRID_MOVIL =
-  "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,0.7fr)_minmax(0,1.3fr)_minmax(0,4.75rem)] items-center gap-1";
+  "grid w-full grid-cols-[minmax(0,4.25rem)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,4.5rem)] items-center gap-0.5";
 
 const GASTOS_POR_PAGINA = 40;
 
@@ -78,6 +78,13 @@ const formatClp = (n: number) =>
     currency: "CLP",
     maximumFractionDigits: 0,
   }).format(n || 0);
+
+/** Móvil: dd/mm desde ISO (YYYY-MM-DD) para ahorrar ancho sin scroll horizontal. */
+function fechaMovilCorta(iso: string): string {
+  const s = String(iso).trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return iso;
+  return `${s.slice(8, 10)}/${s.slice(5, 7)}`;
+}
 
 function esConceptoVacioOPlaceholder(texto: string) {
   const t = (texto || "").trim().toLowerCase();
@@ -1768,8 +1775,11 @@ function GastosPageContent() {
                     <div
                       className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1 text-xs leading-snug`}
                     >
-                      <div className="min-w-0 whitespace-nowrap text-slate-900">
-                        {row.fecha}
+                      <div
+                        className="min-w-0 whitespace-nowrap text-slate-900"
+                        title={row.fecha}
+                      >
+                        {fechaMovilCorta(row.fecha)}
                       </div>
                       <div className="flex min-w-0 items-center gap-1.5">
                         <input
