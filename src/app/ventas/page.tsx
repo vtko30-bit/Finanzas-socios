@@ -18,7 +18,7 @@ function fechaMovilCorta(iso: string): string {
 }
 
 const VENTAS_ROW_GRID_MOVIL =
-  "grid w-full grid-cols-[minmax(0,4.5rem)_minmax(0,1.05fr)_minmax(0,0.95fr)_minmax(0,4.5rem)] items-center gap-0.5";
+  "grid w-full grid-cols-[minmax(0,4.5rem)_minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,4.5rem)] items-center gap-0.5";
 
 const VENTAS_POR_PAGINA = 40;
 const EVENTO_PREFIX = "EVENTO_";
