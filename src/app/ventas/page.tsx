@@ -350,16 +350,6 @@ export default function VentasPage() {
     [filasFiltradas, sortKey, sortDir],
   );
 
-  const hayFiltroVentas = useMemo(
-    () =>
-      modoFecha !== "todo" ||
-      filtroFormaPago.trim() !== "" ||
-      filtroSucursal.trim() !== "" ||
-      soloSucursalesFijas ||
-      incluirFinanciamiento,
-    [modoFecha, filtroFormaPago, filtroSucursal, soloSucursalesFijas, incluirFinanciamiento],
-  );
-
   /** Suma del monto de todas las filas que cumplen el filtro (todas las páginas de la tabla). */
   const totalMontoFiltrado = useMemo(
     () => displayRows.reduce((acc, r) => acc + (Number(r.monto) || 0), 0),
@@ -585,22 +575,11 @@ export default function VentasPage() {
               <span className="sm:hidden">Financiam.</span>
               <span className="hidden sm:inline">Incluir financiamiento</span>
             </label>
-            <span className="ui-filter-stat sm:hidden">
-              {displayRows.length}/{rows.length}
-              {hayFiltroVentas ? (
-                <span className="font-semibold tabular-nums">
-                  {" "}
-                  · {formatClp(totalMontoFiltrado)}
-                </span>
-              ) : null}
+            <span className="ui-filter-stat-emphasis sm:hidden">
+              Total: {formatClp(totalMontoFiltrado)}
             </span>
-            <span className="ui-filter-stat hidden sm:inline">
-              Mostrando {displayRows.length} de {rows.length} ventas
-              {hayFiltroVentas ? (
-                <span className="ml-1.5 font-semibold tabular-nums">
-                  · Total filtrado: {formatClp(totalMontoFiltrado)}
-                </span>
-              ) : null}
+            <span className="ui-filter-stat-emphasis hidden sm:inline">
+              Total filtrado: {formatClp(totalMontoFiltrado)}
             </span>
             </div>
             <button
