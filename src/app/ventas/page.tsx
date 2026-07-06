@@ -10,9 +10,15 @@ import {
 const VENTAS_ROW_GRID =
   "grid w-full min-w-[720px] grid-cols-[minmax(0,7rem)_minmax(0,5.5rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-0";
 
-/** Móvil: Fecha, Sucursal, Medio de pago, Total (sin columna Id). */
+/** Móvil: Fecha, Sucursal, Medio, Total (sin columna Id). Fecha en dd/mm/aa. */
+function fechaMovilCorta(iso: string): string {
+  const s = String(iso).trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return iso;
+  return `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}`;
+}
+
 const VENTAS_ROW_GRID_MOVIL =
-  "grid w-full grid-cols-[minmax(0,5.25rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,4.75rem)] items-center gap-1";
+  "grid w-full grid-cols-[minmax(0,4.5rem)_minmax(0,1.05fr)_minmax(0,0.95fr)_minmax(0,4.5rem)] items-center gap-0.5";
 
 const VENTAS_POR_PAGINA = 40;
 const EVENTO_PREFIX = "EVENTO_";
@@ -604,7 +610,7 @@ export default function VentasPage() {
       ) : null}
 
       <section className="ui-card-panel min-w-0">
-        <div className="min-w-[720px]">
+        <div className="min-w-0 w-full sm:min-w-[720px]">
         <div className="ui-table-header">
           <div
             className={`hidden sm:grid ${VENTAS_ROW_GRID} px-2 py-2 text-left text-sm text-white`}
@@ -673,7 +679,7 @@ export default function VentasPage() {
             </div>
             <div className="min-w-0 px-0.5">
               <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
-                Medio de pago
+                Medio
                 <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
               </button>
             </div>
@@ -728,7 +734,7 @@ export default function VentasPage() {
                       <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
                     </div>
                     <div
-                      className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-3 py-2 text-xs`}
+                      className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-2 py-2 text-xs`}
                       title={
                         row.externalRef
                           ? `Id: ${row.idVenta} · Ref.: ${row.externalRef}`
@@ -737,8 +743,11 @@ export default function VentasPage() {
                             : undefined
                       }
                     >
-                      <div className="min-w-0 whitespace-nowrap text-slate-900">
-                        {row.fecha}
+                      <div
+                        className="min-w-0 whitespace-nowrap text-slate-900"
+                        title={row.fecha}
+                      >
+                        {fechaMovilCorta(row.fecha)}
                       </div>
                       <div className="min-w-0 truncate font-medium text-slate-900">
                         {row.sucursal || "—"}
