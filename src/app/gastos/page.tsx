@@ -539,6 +539,7 @@ function GastosPageContent() {
   const [filtroOrigen, setFiltroOrigen] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
+  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -793,6 +794,26 @@ function GastosPageContent() {
     [displayRows],
   );
 
+  const hayFiltrosGastosActivos = useMemo(
+    () =>
+      modoFecha !== "todo" ||
+      filtroNombreDestino.trim() !== "" ||
+      filtroDescripcion.trim() !== "" ||
+      filtroFamilia !== "" ||
+      filtroOrigen.trim() !== "" ||
+      filtroCategoria !== "" ||
+      soloSeleccionados,
+    [
+      modoFecha,
+      filtroNombreDestino,
+      filtroDescripcion,
+      filtroFamilia,
+      filtroOrigen,
+      filtroCategoria,
+      soloSeleccionados,
+    ],
+  );
+
   const totalPaginasGastos = useMemo(() => {
     if (displayRows.length === 0) return 0;
     return Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
@@ -857,6 +878,7 @@ function GastosPageContent() {
     setFiltroCategoria("");
     setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
+    setFiltrosMovilAbiertos(false);
   };
 
   const guardarConceptoLibre = async (ids: string[], concepto: string) => {
@@ -1280,14 +1302,69 @@ function GastosPageContent() {
 
       <section
         aria-label="Filtros"
-        className="ui-filter-bar"
+        className="ui-filter-bar p-2 sm:p-3"
       >
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-end gap-1.5">
-            <label className="flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600">
+        <div className="flex items-center gap-2 sm:hidden">
+          <button
+            type="button"
+            className="ui-btn-soft-xs shrink-0"
+            aria-expanded={filtrosMovilAbiertos}
+            onClick={() => setFiltrosMovilAbiertos((v) => !v)}
+          >
+            {filtrosMovilAbiertos ? "Ocultar filtros" : "Filtros"}
+            {hayFiltrosGastosActivos ? " ·" : ""}
+          </button>
+          <span className="min-w-0 flex-1 truncate text-xs tabular-nums text-slate-700">
+            {displayRows.length}/{rows.length}
+            <span className="font-semibold"> · {formatClp(totalGastosFiltrados)}</span>
+          </span>
+          {hayFiltrosGastosActivos ? (
+            <button
+              type="button"
+              className="ui-btn-soft-xs shrink-0"
+              onClick={limpiarFiltros}
+            >
+              Limpiar
+            </button>
+          ) : null}
+        </div>
+
+        {!filtrosMovilAbiertos && selectedGastoIds.size > 0 ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+            <label className="ui-filter-chip">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-sky-700"
+                checked={soloSeleccionados}
+                onChange={(e) => setSoloSeleccionados(e.target.checked)}
+              />
+              <span className="text-slate-900">
+                Sel. ({selectedGastoIds.size})
+              </span>
+            </label>
+            <button
+              type="button"
+              className={
+                uiBloqueadoGuardado
+                  ? "rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900 opacity-40 cursor-not-allowed"
+                  : "ui-btn-soft-xs"
+              }
+              disabled={uiBloqueadoGuardado}
+              onClick={() => abrirEdicionCategoriaSeleccion()}
+            >
+              Editar ({selectedGastoIds.size})
+            </button>
+          </div>
+        ) : null}
+
+        <div
+          className={`${filtrosMovilAbiertos ? "mt-2 flex flex-col gap-1.5" : "hidden"} sm:mt-0 sm:flex sm:flex-col sm:gap-1.5`}
+        >
+          <div className="grid grid-cols-2 items-end gap-1.5 sm:flex sm:flex-wrap">
+            <label className="col-span-2 flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600 sm:col-span-1">
               Fecha
               <select
-                className="ui-filter-control"
+                className="ui-filter-control w-full"
                 value={modoFecha}
                 onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
               >
@@ -1303,7 +1380,7 @@ function GastosPageContent() {
                 Día
                 <input
                   type="date"
-                  className="ui-filter-control"
+                  className="ui-filter-control w-full"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
@@ -1314,7 +1391,7 @@ function GastosPageContent() {
                 Mes
                 <input
                   type="month"
-                  className="ui-filter-control"
+                  className="ui-filter-control w-full"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
@@ -1328,19 +1405,19 @@ function GastosPageContent() {
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 ui-filter-control"
+                  className="w-full ui-filter-control sm:w-24"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "rango" ? (
-              <div className="flex flex-wrap items-end gap-1.5">
+              <>
                 <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Desde
                   <input
                     type="date"
-                    className="ui-filter-control"
+                    className="ui-filter-control w-full"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
@@ -1349,40 +1426,40 @@ function GastosPageContent() {
                   Hasta
                   <input
                     type="date"
-                    className="ui-filter-control"
+                    className="ui-filter-control w-full"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
                 </label>
-              </div>
+              </>
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-end gap-1.5">
-            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+          <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-end sm:gap-1.5">
+            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Origen
               <input
                 type="text"
-                className="ui-filter-control"
-                placeholder="Ej: Banco, Mercado Pago…"
+                className="ui-filter-control w-full"
+                placeholder="Banco, MP…"
                 value={filtroOrigen}
                 onChange={(e) => setFiltroOrigen(e.target.value)}
               />
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Nombre
               <input
                 type="text"
-                className="ui-filter-control"
+                className="ui-filter-control w-full"
                 placeholder="Buscar…"
                 value={filtroNombreDestino}
                 onChange={(e) => setFiltroNombreDestino(e.target.value)}
               />
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Familia
               <select
-                className="ui-filter-control"
+                className="ui-filter-control w-full"
                 value={filtroFamilia}
                 onChange={(e) => setFiltroFamilia(e.target.value)}
               >
@@ -1395,10 +1472,10 @@ function GastosPageContent() {
                 ))}
               </select>
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Categoría
               <select
-                className="ui-filter-control"
+                className="ui-filter-control w-full"
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
@@ -1413,11 +1490,11 @@ function GastosPageContent() {
                 ))}
               </select>
             </label>
-            <label className="flex min-w-[112px] flex-1 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
+            <label className="col-span-2 flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:col-span-1 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Descripción
               <input
                 type="text"
-                className="ui-filter-control"
+                className="ui-filter-control w-full"
                 placeholder="Buscar…"
                 value={filtroDescripcion}
                 onChange={(e) => setFiltroDescripcion(e.target.value)}
@@ -1425,7 +1502,7 @@ function GastosPageContent() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
               <label className="ui-filter-chip">
                 <input
@@ -1444,12 +1521,15 @@ function GastosPageContent() {
                   ) : null}
                 </span>
               </label>
-              <span className="ui-filter-stat">
+              <span className="ui-filter-stat sm:hidden">
+                {displayRows.length}/{rows.length} · {formatClp(totalGastosFiltrados)}
+              </span>
+              <span className="ui-filter-stat hidden sm:inline">
                 {soloSeleccionados
                   ? `Mostrando ${displayRows.length} seleccionados (de ${filasFiltradas.length} filtrados, ${rows.length} total)`
                   : `Mostrando ${displayRows.length} de ${rows.length} gastos`}
               </span>
-              <span className="ui-filter-stat-emphasis">
+              <span className="ui-filter-stat-emphasis hidden sm:inline">
                 Total filtrado: {formatClp(totalGastosFiltrados)}
               </span>
             </div>
