@@ -453,14 +453,14 @@ export default function VentasPage() {
 
       <section
         aria-label="Filtros"
-        className="ui-filter-bar"
+        className="ui-filter-bar p-2 sm:p-3"
       >
         <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-end gap-1.5">
-            <label className="flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600">
+          <div className="grid grid-cols-2 items-end gap-1.5 sm:flex sm:flex-wrap">
+            <label className="col-span-2 flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600 sm:col-span-1">
               Fecha
               <select
-                className="ui-filter-control"
+                className="ui-filter-control w-full"
                 value={modoFecha}
                 onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
               >
@@ -476,7 +476,7 @@ export default function VentasPage() {
                 Día
                 <input
                   type="date"
-                  className="ui-filter-control"
+                  className="ui-filter-control w-full"
                   value={dia}
                   onChange={(e) => setDia(e.target.value)}
                 />
@@ -487,7 +487,7 @@ export default function VentasPage() {
                 Mes
                 <input
                   type="month"
-                  className="ui-filter-control"
+                  className="ui-filter-control w-full"
                   value={mes}
                   onChange={(e) => setMes(e.target.value)}
                 />
@@ -501,19 +501,19 @@ export default function VentasPage() {
                   min={1990}
                   max={2100}
                   placeholder="Ej: 2024"
-                  className="w-24 ui-filter-control placeholder:text-slate-400"
+                  className="w-full ui-filter-control placeholder:text-slate-400 sm:w-24"
                   value={anio}
                   onChange={(e) => setAnio(e.target.value)}
                 />
               </label>
             ) : null}
             {modoFecha === "rango" ? (
-              <div className="flex flex-wrap items-end gap-1.5">
+              <>
                 <label className="flex flex-col gap-0.5 text-xs text-slate-600">
                   Desde
                   <input
                     type="date"
-                    className="ui-filter-control"
+                    className="ui-filter-control w-full"
                     value={rangoDesde}
                     onChange={(e) => setRangoDesde(e.target.value)}
                   />
@@ -522,22 +522,22 @@ export default function VentasPage() {
                   Hasta
                   <input
                     type="date"
-                    className="ui-filter-control"
+                    className="ui-filter-control w-full"
                     value={rangoHasta}
                     onChange={(e) => setRangoHasta(e.target.value)}
                   />
                 </label>
-              </div>
+              </>
             ) : null}
           </div>
 
-          <div className="grid w-full max-w-full grid-cols-1 gap-1.5 sm:max-w-[50%] sm:grid-cols-2">
+          <div className="grid w-full grid-cols-2 gap-1.5 sm:max-w-[50%]">
             <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600">
               Forma de pago
               <input
                 type="text"
                 className="w-full ui-filter-control placeholder:text-slate-400"
-                placeholder="Ej: Efectivo, Débito, transferencia…"
+                placeholder="Efectivo, débito…"
                 value={filtroFormaPago}
                 onChange={(e) => setFiltroFormaPago(e.target.value)}
               />
@@ -547,43 +547,54 @@ export default function VentasPage() {
               <input
                 type="text"
                 className="w-full ui-filter-control placeholder:text-slate-400"
-                placeholder="Ej: nombre de sucursal…"
+                placeholder="Nombre…"
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
               />
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
             <label className="ui-filter-chip">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-sky-700"
+                className="h-3.5 w-3.5 accent-sky-700 sm:h-4 sm:w-4"
                 checked={filtroEventoActivo}
                 onChange={toggleFiltroEventos}
               />
-              <span>Solo eventos</span>
+              <span>Eventos</span>
             </label>
             <label className="ui-filter-chip">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-sky-700"
+                className="h-3.5 w-3.5 accent-sky-700 sm:h-4 sm:w-4"
                 checked={soloSucursalesFijas}
                 onChange={toggleSucursalesFijas}
               />
-              <span>Solo sucursales fijas</span>
+              <span className="sm:hidden">Suc. fijas</span>
+              <span className="hidden sm:inline">Solo sucursales fijas</span>
             </label>
             <label className="ui-filter-chip">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-sky-700"
+                className="h-3.5 w-3.5 accent-sky-700 sm:h-4 sm:w-4"
                 checked={incluirFinanciamiento}
                 onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
               />
-              <span>Incluir financiamiento</span>
+              <span className="sm:hidden">Financiam.</span>
+              <span className="hidden sm:inline">Incluir financiamiento</span>
             </label>
-            <span className="ui-filter-stat">
+            <span className="ui-filter-stat sm:hidden">
+              {displayRows.length}/{rows.length}
+              {hayFiltroVentas ? (
+                <span className="font-semibold tabular-nums">
+                  {" "}
+                  · {formatClp(totalMontoFiltrado)}
+                </span>
+              ) : null}
+            </span>
+            <span className="ui-filter-stat hidden sm:inline">
               Mostrando {displayRows.length} de {rows.length} ventas
               {hayFiltroVentas ? (
                 <span className="ml-1.5 font-semibold tabular-nums">
@@ -594,7 +605,7 @@ export default function VentasPage() {
             </div>
             <button
               type="button"
-              className="ui-btn-soft-xs shrink-0"
+              className="ui-btn-soft-xs shrink-0 self-start sm:self-auto"
               onClick={limpiarFiltros}
             >
               Limpiar filtros
