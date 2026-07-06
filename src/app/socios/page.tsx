@@ -334,7 +334,7 @@ export default function SociosPage() {
             {!filtroUnMes ? (
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left sm:hidden"
+                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left"
                 onClick={() => toggleSocioExpanded(bloque.socio)}
                 aria-expanded={socioOpen}
               >
@@ -343,89 +343,81 @@ export default function SociosPage() {
                   {socioOpen ? "▲" : "▼"}
                 </span>
               </button>
-            ) : null}
-            <h2
-              className={
-                filtroUnMes
-                  ? "border-b border-slate-100 px-4 py-2.5 text-base font-semibold text-sky-950 sm:ui-table-header sm:border-0 sm:py-2"
-                  : "ui-table-header hidden px-4 py-2 text-base font-semibold text-sky-950 sm:block"
-              }
-            >
-              {bloque.socio}
-            </h2>
+            ) : (
+              <h2 className="border-b border-slate-100 px-4 py-2.5 text-base font-semibold text-sky-950">
+                {bloque.socio}
+              </h2>
+            )}
 
-            {/* Móvil — un mes: Categoría | Monto | Total */}
             {filtroUnMes && bloque.rowsCategoria.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-500 sm:hidden">
+              <p className="px-4 py-6 text-center text-sm text-slate-500">
                 Sin movimientos para {bloque.socio} en {anio} ({visibleMonthLabels[0]}).
               </p>
             ) : null}
+
             {filtroUnMes && bloque.rowsCategoria.length > 0 ? (
-              <div className="sm:hidden">
-                <table className="w-full border-separate border-spacing-0 text-xs">
-                  <thead>
-                    <tr className="ui-table-header">
-                      <th className={thCls}>Categoría</th>
-                      <th className={thNum}>Monto</th>
-                      <th className={thNum}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bloque.rowsCategoria.map((r) => {
-                      const mk = visibleMonthKeys[0];
-                      const montoMes = r.byMonth[mk] ?? 0;
-                      if (montoMes <= 0) return null;
-                      const rowKey = `${bloque.socio}::cat::${r.categoria.toLowerCase()}`;
-                      const open = Boolean(expanded[rowKey]);
-                      const itemsMes = r.items.filter(
-                        (it) => fechaIsoDia(it.fecha).slice(0, 7) === mk,
-                      );
-                      return (
-                        <Fragment key={rowKey}>
-                          <tr className="border-b border-slate-200/80">
-                            <td className={tdCls}>
-                              <button
-                                type="button"
-                                className="inline-flex w-full items-center justify-between gap-1 text-left font-medium text-sky-900 hover:underline"
-                                onClick={() => toggleExpanded(rowKey)}
-                                aria-expanded={open}
-                              >
-                                <span className="min-w-0 truncate">{r.categoria}</span>
-                                <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
-                                  {open ? "▲" : "▼"}
-                                </span>
-                              </button>
+              <table className="w-full border-separate border-spacing-0 text-xs">
+                <thead>
+                  <tr className="ui-table-header">
+                    <th className={thCls}>Categoría</th>
+                    <th className={thNum}>Monto</th>
+                    <th className={thNum}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bloque.rowsCategoria.map((r) => {
+                    const mk = visibleMonthKeys[0];
+                    const montoMes = r.byMonth[mk] ?? 0;
+                    if (montoMes <= 0) return null;
+                    const rowKey = `${bloque.socio}::cat::${r.categoria.toLowerCase()}`;
+                    const open = Boolean(expanded[rowKey]);
+                    const itemsMes = r.items.filter(
+                      (it) => fechaIsoDia(it.fecha).slice(0, 7) === mk,
+                    );
+                    return (
+                      <Fragment key={rowKey}>
+                        <tr className="border-b border-slate-200/80">
+                          <td className={tdCls}>
+                            <button
+                              type="button"
+                              className="inline-flex w-full items-center justify-between gap-1 text-left font-medium text-sky-900 hover:underline"
+                              onClick={() => toggleExpanded(rowKey)}
+                              aria-expanded={open}
+                            >
+                              <span className="min-w-0 truncate">{r.categoria}</span>
+                              <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
+                                {open ? "▲" : "▼"}
+                              </span>
+                            </button>
+                          </td>
+                          <td className={tdNum}>{formatClp(montoMes)}</td>
+                          <td className={`${tdNum} font-semibold`}>{formatClp(r.total)}</td>
+                        </tr>
+                        {open ? (
+                          <tr className="bg-white/80">
+                            <td colSpan={3} className="px-3 py-3">
+                              {renderItemList(itemsMes)}
                             </td>
-                            <td className={tdNum}>{formatClp(montoMes)}</td>
-                            <td className={`${tdNum} font-semibold`}>{formatClp(r.total)}</td>
                           </tr>
-                          {open ? (
-                            <tr className="bg-white/80">
-                              <td colSpan={3} className="px-3 py-3">
-                                {renderItemList(itemsMes)}
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                    <tr className="bg-slate-50">
-                      <td className={`${tdCls} font-medium`}>Total</td>
-                      <td className={`${tdNum} font-medium`}>
-                        {formatClp(monthTotalForSocio(bloque.rowsCategoria, visibleMonthKeys[0]))}
-                      </td>
-                      <td className={`${tdNum} font-semibold text-sky-800`}>
-                        {formatClp(bloque.total)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                  <tr className="bg-slate-50">
+                    <td className={`${tdCls} font-medium`}>Total</td>
+                    <td className={`${tdNum} font-medium`}>
+                      {formatClp(monthTotalForSocio(bloque.rowsCategoria, visibleMonthKeys[0]))}
+                    </td>
+                    <td className={`${tdNum} font-semibold text-sky-800`}>
+                      {formatClp(bloque.total)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             ) : null}
 
-            {/* Móvil — Todos: encabezados + totales por mes; categorías al expandir */}
             {!filtroUnMes ? (
-              <div className="overflow-x-auto sm:hidden">
+              <div className="overflow-x-auto">
                 {bloque.rowsCategoria.length === 0 ? (
                   <p className="px-4 py-6 text-center text-sm text-slate-500">
                     Sin movimientos para {bloque.socio} en {anio}.
@@ -500,80 +492,6 @@ export default function SociosPage() {
                 )}
               </div>
             ) : null}
-
-            {/* Escritorio — tabla categoría × meses */}
-            <div className="hidden overflow-x-auto sm:block">
-              {bloque.rowsCategoria.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-slate-500">
-                  Sin movimientos para {bloque.socio} en {anio}.
-                </p>
-              ) : (
-              <table className="w-full min-w-[980px] border-separate border-spacing-0 text-xs">
-                <thead>
-                  <tr className="ui-table-header">
-                    <th className={thCatSticky}>Categoría</th>
-                    {visibleMonthLabels.map((label, i) => (
-                      <th key={visibleMonthKeys[i]} className={thNum}>
-                        {label}
-                      </th>
-                    ))}
-                    <th className={thNum}>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bloque.rowsCategoria.map((r) => {
-                    const rowKey = `${bloque.socio}::${r.categoria.toLowerCase()}`;
-                    const open = Boolean(expanded[rowKey]);
-                    return (
-                      <Fragment key={rowKey}>
-                        <tr className="group border-b border-slate-200/80 hover:bg-white/70">
-                          <td className={`${tdCatSticky} group-hover:bg-slate-50`}>
-                            <button
-                              type="button"
-                              className="inline-flex w-full items-center justify-between gap-2 text-left text-sky-900 hover:underline sm:inline-flex sm:w-auto sm:justify-start"
-                              onClick={() => toggleExpanded(rowKey)}
-                              aria-expanded={open}
-                            >
-                              <span className="font-medium">{r.categoria}</span>
-                              <span className="shrink-0 text-[10px] text-slate-500 sm:hidden" aria-hidden>
-                                {open ? "▲" : "▼"}
-                              </span>
-                            </button>
-                          </td>
-                          {visibleMonthKeys.map((mk) => (
-                            <td key={mk} className={tdNum}>
-                              {formatClp(r.byMonth[mk] ?? 0)}
-                            </td>
-                          ))}
-                          <td className={`${tdNum} font-semibold text-slate-900`}>
-                            {formatClp(r.total)}
-                          </td>
-                        </tr>
-                        {open ? (
-                          <tr className="bg-white/80">
-                            <td colSpan={visibleMonthKeys.length + 2} className="px-4 py-3">
-                              {renderItemList(r.items)}
-                            </td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })}
-                  <tr className="bg-white/80">
-                    <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
-                    {visibleMonthKeys.map((mk) => (
-                      <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
-                        {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
-                      </td>
-                    ))}
-                    <td className={`${tdNum} font-semibold text-sky-800`}>
-                      {formatClp(bloque.total)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              )}
-            </div>
           </section>
           );
         })}
