@@ -70,9 +70,28 @@ function fechaIsoDia(fecha: string): string {
   const s = (fecha || "").trim();
   if (!s) return "";
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const dmyMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmyMatch) {
+    const day = Number(dmyMatch[1]);
+    const month = Number(dmyMatch[2]);
+    const year = Number(dmyMatch[3]);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (!Number.isNaN(dt.getTime())) return dt.toISOString().slice(0, 10);
+  }
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return "";
   return d.toISOString().slice(0, 10);
+}
+
+function monthKeyFromFecha(fecha: string): string {
+  const iso = fechaIsoDia(fecha);
+  return iso ? iso.slice(0, 7) : "";
+}
+
+function fechaMovilCorta(fecha: string): string {
+  const s = fechaIsoDia(fecha);
+  if (!s) return fecha;
+  return `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}`;
 }
 
 function etiquetaCatalogoParaId(
@@ -254,29 +273,46 @@ export default function SociosPage() {
     `${tdCls} sticky left-0 z-10 min-w-[6.75rem] max-w-[9rem] bg-white shadow-[4px_0_6px_-4px_rgba(15,23,42,0.08)]`;
   const tdCatStickyMuted = `${tdCatSticky} bg-slate-50`;
 
-  const renderItemList = (items: GastoRow[]) => (
-    <ul className="space-y-2">
-      {items.map((it) => (
-        <li
-          key={it.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-slate-500">{it.fecha}</p>
-            <p className="truncate text-sm font-medium text-slate-900">
-              {it.nombreDestino || "—"}
-            </p>
+  const renderItemRowsInPivot = (
+    items: GastoRow[],
+    monthKeysForRow: string[],
+    catCellClass: string,
+  ) =>
+    items.map((it) => {
+      const itemMonthKey = monthKeyFromFecha(it.fecha);
+      return (
+        <tr key={it.id} className="border-b border-slate-100 bg-slate-50/60">
+          <td className={`${catCellClass} pl-5`}>
+            <p className="text-[10px] text-slate-500">{fechaMovilCorta(it.fecha)}</p>
+            <p className="truncate font-medium text-slate-800">{it.nombreDestino || "—"}</p>
             {it.descripcion ? (
-              <p className="truncate text-xs text-slate-600">{it.descripcion}</p>
+              <p className="truncate text-[10px] text-slate-600">{it.descripcion}</p>
             ) : null}
-          </div>
-          <span className="text-sm font-medium tabular-nums text-slate-900">
-            {formatClp(it.monto)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
+          </td>
+          {monthKeysForRow.map((mk) => (
+            <td key={mk} className={tdNum}>
+              {mk === itemMonthKey ? formatClp(it.monto) : ""}
+            </td>
+          ))}
+          <td className={`${tdNum} text-slate-700`}>{formatClp(it.monto)}</td>
+        </tr>
+      );
+    });
+
+  const renderItemRowsUnMes = (items: GastoRow[]) =>
+    items.map((it) => (
+      <tr key={it.id} className="border-b border-slate-100 bg-slate-50/60">
+        <td className={`${tdCls} pl-5`}>
+          <p className="text-[10px] text-slate-500">{fechaMovilCorta(it.fecha)}</p>
+          <p className="truncate font-medium text-slate-800">{it.nombreDestino || "—"}</p>
+          {it.descripcion ? (
+            <p className="truncate text-[10px] text-slate-600">{it.descripcion}</p>
+          ) : null}
+        </td>
+        <td className={tdNum}>{formatClp(it.monto)}</td>
+        <td className={tdNum} />
+      </tr>
+    ));
 
   return (
     <main className="page-main page-main--2xl">
@@ -372,7 +408,7 @@ export default function SociosPage() {
                     const rowKey = `${bloque.socio}::cat::${r.categoria.toLowerCase()}`;
                     const open = Boolean(expanded[rowKey]);
                     const itemsMes = r.items.filter(
-                      (it) => fechaIsoDia(it.fecha).slice(0, 7) === mk,
+                      (it) => monthKeyFromFecha(it.fecha) === mk,
                     );
                     return (
                       <Fragment key={rowKey}>
@@ -393,13 +429,7 @@ export default function SociosPage() {
                           <td className={tdNum}>{formatClp(montoMes)}</td>
                           <td className={`${tdNum} font-semibold`}>{formatClp(r.total)}</td>
                         </tr>
-                        {open ? (
-                          <tr className="bg-white/80">
-                            <td colSpan={3} className="px-3 py-3">
-                              {renderItemList(itemsMes)}
-                            </td>
-                          </tr>
-                        ) : null}
+                        {open ? renderItemRowsUnMes(itemsMes) : null}
                       </Fragment>
                     );
                   })}
@@ -476,13 +506,9 @@ export default function SociosPage() {
                                     {formatClp(r.total)}
                                   </td>
                                 </tr>
-                                {open ? (
-                                  <tr className="bg-white/80">
-                                    <td colSpan={visibleMonthKeys.length + 2} className="px-3 py-3">
-                                      {renderItemList(r.items)}
-                                    </td>
-                                  </tr>
-                                ) : null}
+                                {open
+                                  ? renderItemRowsInPivot(r.items, visibleMonthKeys, tdCatSticky)
+                                  : null}
                               </Fragment>
                             );
                           })
