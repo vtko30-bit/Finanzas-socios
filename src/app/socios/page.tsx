@@ -436,6 +436,17 @@ export default function SociosPage() {
                       </tr>
                     </thead>
                     <tbody>
+                      <tr className="border-b border-slate-200 bg-slate-50/90">
+                        <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
+                        {visibleMonthKeys.map((mk) => (
+                          <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
+                            {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
+                          </td>
+                        ))}
+                        <td className={`${tdNum} font-semibold text-sky-800`}>
+                          {formatClp(bloque.total)}
+                        </td>
+                      </tr>
                       {socioOpen
                         ? bloque.rowsCategoria.map((r) => {
                             const rowKey = `${bloque.socio}::${r.categoria.toLowerCase()}`;
@@ -476,17 +487,6 @@ export default function SociosPage() {
                             );
                           })
                         : null}
-                      <tr className="border-t border-slate-200 bg-slate-50/90">
-                        <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
-                        {visibleMonthKeys.map((mk) => (
-                          <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
-                            {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
-                          </td>
-                        ))}
-                        <td className={`${tdNum} font-semibold text-sky-800`}>
-                          {formatClp(bloque.total)}
-                        </td>
-                      </tr>
                     </tbody>
                   </table>
                 )}
