@@ -93,6 +93,7 @@ export default function SociosPage() {
   const [anio, setAnio] = useState(() => String(new Date().getFullYear()));
   const [mes, setMes] = useState<string>("todos");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expandedSocio, setExpandedSocio] = useState<Record<string, boolean>>({});
 
   const cargar = useCallback(async () => {
     setStatus("Cargando...");
@@ -129,6 +130,11 @@ export default function SociosPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    setExpanded({});
+    setExpandedSocio({});
+  }, [anio, mes]);
 
   const monthKeys = useMemo(
     () => Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`),
@@ -217,10 +223,18 @@ export default function SociosPage() {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const toggleSocioExpanded = (socio: string) => {
+    setExpandedSocio((prev) => ({ ...prev, [socio]: !prev[socio] }));
+  };
+
   const thCls = "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white";
   const thNum = `${thCls} text-right`;
+  const thCatSticky = `${thCls} sticky left-0 z-20 min-w-[6.75rem] max-w-[9rem] bg-[#0056ff] shadow-[4px_0_6px_-4px_rgba(15,23,42,0.25)]`;
   const tdCls = "px-3 py-2 text-xs text-slate-900";
   const tdNum = `${tdCls} text-right tabular-nums`;
+  const tdCatSticky =
+    `${tdCls} sticky left-0 z-10 min-w-[6.75rem] max-w-[9rem] bg-white shadow-[4px_0_6px_-4px_rgba(15,23,42,0.08)]`;
+  const tdCatStickyMuted = `${tdCatSticky} bg-slate-50`;
 
   return (
     <main className="page-main page-main--2xl">
@@ -271,18 +285,35 @@ export default function SociosPage() {
       ) : null}
 
       <div className="flex flex-col gap-6">
-        {bloques.map((bloque) => (
+        {bloques.map((bloque) => {
+          const socioOpen = Boolean(expandedSocio[bloque.socio]);
+          return (
           <section
             key={bloque.socio}
-            className="ui-card-panel overflow-x-auto"
+            className="ui-card-panel min-w-0 overflow-x-auto"
           >
-            <h2 className="ui-table-header px-4 py-2 text-base font-semibold text-sky-950">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left sm:hidden"
+              onClick={() => toggleSocioExpanded(bloque.socio)}
+              aria-expanded={socioOpen}
+            >
+              <span className="text-base font-semibold text-sky-950">{bloque.socio}</span>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-sky-800">
+                {formatClp(bloque.total)}
+              </span>
+              <span className="shrink-0 text-xs text-slate-500" aria-hidden>
+                {socioOpen ? "▲" : "▼"}
+              </span>
+            </button>
+            <h2 className="ui-table-header hidden px-4 py-2 text-base font-semibold text-sky-950 sm:block">
               {bloque.socio}
             </h2>
-            <table className="w-full min-w-[980px] border-collapse text-xs">
+            <div className={socioOpen ? "block" : "hidden sm:block"}>
+            <table className="w-full min-w-[980px] border-separate border-spacing-0 text-xs">
               <thead>
                 <tr className="ui-table-header">
-                  <th className={thCls}>Categoría</th>
+                  <th className={thCatSticky}>Categoría</th>
                   {visibleMonthLabels.map((label, i) => (
                     <th key={visibleMonthKeys[i]} className={thNum}>
                       {label}
@@ -297,15 +328,18 @@ export default function SociosPage() {
                   const open = Boolean(expanded[rowKey]);
                   return (
                     <Fragment key={rowKey}>
-                      <tr key={rowKey} className="border-b border-slate-200/80 hover:bg-white/70">
-                        <td className={tdCls}>
+                      <tr key={rowKey} className="group border-b border-slate-200/80 hover:bg-white/70">
+                        <td className={`${tdCatSticky} group-hover:bg-slate-50`}>
                           <button
                             type="button"
-                            className="inline-flex items-center gap-2 text-left text-sky-900 hover:underline"
+                            className="inline-flex w-full items-center justify-between gap-2 text-left text-sky-900 hover:underline sm:inline-flex sm:w-auto sm:justify-start"
                             onClick={() => toggleExpanded(rowKey)}
                             aria-expanded={open}
                           >
                             <span className="font-medium">{r.categoria}</span>
+                            <span className="shrink-0 text-[10px] text-slate-500 sm:hidden" aria-hidden>
+                              {open ? "▲" : "▼"}
+                            </span>
                           </button>
                         </td>
                         {visibleMonthKeys.map((mk) => (
@@ -317,7 +351,7 @@ export default function SociosPage() {
                       </tr>
                       {open ? (
                         <tr key={`${rowKey}-detail`} className="bg-white/80">
-                          <td colSpan={visibleMonthKeys.length + 2} className="px-4 py-3">
+                          <td colSpan={visibleMonthKeys.length + 2} className="px-3 py-3 sm:px-4">
                             <ul className="space-y-2">
                               {r.items.map((it) => (
                                 <li
@@ -355,7 +389,7 @@ export default function SociosPage() {
                   </tr>
                 ) : (
                   <tr className="bg-white/80">
-                    <td className={`${tdCls} font-medium text-slate-900`}>Total</td>
+                    <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
                     {visibleMonthKeys.map((mk) => (
                       <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
                         {formatClp(
@@ -368,8 +402,10 @@ export default function SociosPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </section>
-        ))}
+          );
+        })}
       </div>
 
       {rowsSocios.length === 0 && !status ? (
