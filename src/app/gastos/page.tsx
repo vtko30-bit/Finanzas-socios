@@ -333,6 +333,105 @@ function sortRows(
   });
 }
 
+const SIN_FAMILIA_LABEL = "Sin familia";
+
+type GastoTableItem =
+  | { type: "row"; row: GastoRow }
+  | {
+      type: "familia-header";
+      familia: string;
+      total: number;
+      count: number;
+      continued?: boolean;
+    };
+
+function familiaLabel(row: GastoRow): string {
+  const fam = (row.familia || "").trim();
+  return fam || SIN_FAMILIA_LABEL;
+}
+
+function sortRowsWithFamiliaGroup(
+  list: GastoRow[],
+  sortKey: SortKey,
+  sortDir: "asc" | "desc",
+  agrupar: boolean,
+): GastoRow[] {
+  if (!agrupar) return sortRows(list, sortKey, sortDir);
+  const byFam = new Map<string, GastoRow[]>();
+  for (const r of list) {
+    const k = familiaLabel(r);
+    const cur = byFam.get(k) ?? [];
+    cur.push(r);
+    byFam.set(k, cur);
+  }
+  const familias = [...byFam.keys()].sort((a, b) => a.localeCompare(b, "es"));
+  const out: GastoRow[] = [];
+  for (const fam of familias) {
+    out.push(...sortRows(byFam.get(fam)!, sortKey, sortDir));
+  }
+  return out;
+}
+
+function buildGastoItemsForPage(
+  rows: GastoRow[],
+  page: number,
+  pageSize: number,
+  agrupar: boolean,
+  familiaStats: Map<string, { total: number; count: number }>,
+): { items: GastoTableItem[]; rowStart: number; rowEnd: number } {
+  const start = (page - 1) * pageSize;
+  const pageRows = rows.slice(start, start + pageSize);
+  const rowEnd = rows.length === 0 ? 0 : Math.min(start + pageRows.length, rows.length);
+
+  if (!agrupar) {
+    return {
+      items: pageRows.map((row) => ({ type: "row", row })),
+      rowStart: rows.length === 0 ? 0 : start + 1,
+      rowEnd,
+    };
+  }
+
+  const items: GastoTableItem[] = [];
+  let lastFam: string | null = null;
+
+  if (start > 0 && pageRows.length > 0) {
+    const prevFam = familiaLabel(rows[start - 1]);
+    const firstFam = familiaLabel(pageRows[0]);
+    if (prevFam === firstFam) {
+      const stats = familiaStats.get(firstFam) ?? { total: 0, count: 0 };
+      items.push({
+        type: "familia-header",
+        familia: firstFam,
+        total: stats.total,
+        count: stats.count,
+        continued: true,
+      });
+      lastFam = firstFam;
+    }
+  }
+
+  for (const row of pageRows) {
+    const fam = familiaLabel(row);
+    if (fam !== lastFam) {
+      const stats = familiaStats.get(fam) ?? { total: 0, count: 0 };
+      items.push({
+        type: "familia-header",
+        familia: fam,
+        total: stats.total,
+        count: stats.count,
+      });
+      lastFam = fam;
+    }
+    items.push({ type: "row", row });
+  }
+
+  return {
+    items,
+    rowStart: rows.length === 0 ? 0 : start + 1,
+    rowEnd,
+  };
+}
+
 const SIN_FAMILIA = "__sin_familia__";
 const SIN_CATEGORIA = "__sin_categoria__";
 
@@ -539,6 +638,7 @@ function GastosPageContent() {
   const [filtroOrigen, setFiltroOrigen] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
+  const [agruparPorFamilia, setAgruparPorFamilia] = useState(false);
   const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
@@ -785,9 +885,21 @@ function GastosPageContent() {
   }, [filasFiltradas, soloSeleccionados, selectedGastoIds]);
 
   const displayRows = useMemo(
-    () => sortRows(filasTrasSeleccion, sortKey, sortDir),
-    [filasTrasSeleccion, sortKey, sortDir],
+    () => sortRowsWithFamiliaGroup(filasTrasSeleccion, sortKey, sortDir, agruparPorFamilia),
+    [filasTrasSeleccion, sortKey, sortDir, agruparPorFamilia],
   );
+
+  const familiaStats = useMemo(() => {
+    const map = new Map<string, { total: number; count: number }>();
+    for (const r of displayRows) {
+      const fam = familiaLabel(r);
+      const cur = map.get(fam) ?? { total: 0, count: 0 };
+      cur.total += Number(r.monto) || 0;
+      cur.count += 1;
+      map.set(fam, cur);
+    }
+    return map;
+  }, [displayRows]);
 
   const totalGastosFiltrados = useMemo(
     () => displayRows.reduce((acc, row) => acc + (Number(row.monto) || 0), 0),
@@ -819,10 +931,17 @@ function GastosPageContent() {
     return Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
   }, [displayRows.length]);
 
-  const filasPaginaGastos = useMemo(() => {
-    const start = (paginaGastos - 1) * GASTOS_POR_PAGINA;
-    return displayRows.slice(start, start + GASTOS_POR_PAGINA);
-  }, [displayRows, paginaGastos]);
+  const paginaGastosRender = useMemo(
+    () =>
+      buildGastoItemsForPage(
+        displayRows,
+        paginaGastos,
+        GASTOS_POR_PAGINA,
+        agruparPorFamilia,
+        familiaStats,
+      ),
+    [displayRows, paginaGastos, agruparPorFamilia, familiaStats],
+  );
 
   useEffect(() => {
     if (soloSeleccionados && selectedGastoIds.size === 0) {
@@ -845,6 +964,7 @@ function GastosPageContent() {
     filtroOrigen,
     filtroCategoria,
     soloSeleccionados,
+    agruparPorFamilia,
   ]);
 
   useEffect(() => {
@@ -1504,6 +1624,15 @@ function GastosPageContent() {
 
           <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
+              <label className="ui-filter-chip sm:hidden">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-sky-700"
+                  checked={agruparPorFamilia}
+                  onChange={(e) => setAgruparPorFamilia(e.target.checked)}
+                />
+                <span>Agrupar familia</span>
+              </label>
               <label className="ui-filter-chip">
                 <input
                   type="checkbox"
@@ -1652,10 +1781,20 @@ function GastosPageContent() {
               </button>
             </div>
             <div className="px-1">
-              <button type="button" className={thBtn} onClick={() => toggleSort("familia")}>
-                Familia
-                <SortIcon active={sortKey === "familia"} dir={sortDir} />
-              </button>
+              <div className="flex min-w-0 items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-white/70 bg-white/15"
+                  checked={agruparPorFamilia}
+                  title="Agrupar filas por familia"
+                  aria-label="Agrupar por familia"
+                  onChange={(e) => setAgruparPorFamilia(e.target.checked)}
+                />
+                <button type="button" className={thBtn} onClick={() => toggleSort("familia")}>
+                  Familia
+                  <SortIcon active={sortKey === "familia"} dir={sortDir} />
+                </button>
+              </div>
             </div>
             <div className="px-1">
               <button type="button" className={thBtn} onClick={() => toggleSort("concepto")}>
@@ -1766,7 +1905,49 @@ function GastosPageContent() {
             </p>
           ) : (
             <div className="w-full">
-              {filasPaginaGastos.map((row) => {
+              {paginaGastosRender.items.map((item, idx) => {
+                if (item.type === "familia-header") {
+                  return (
+                    <div
+                      key={`fam-${item.familia}-${idx}`}
+                      className="border-t border-sky-200 bg-sky-50/90"
+                    >
+                      <div
+                        className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1.5 text-xs font-semibold leading-snug text-sky-950`}
+                      >
+                        <div className="col-span-6 flex min-w-0 items-center gap-2">
+                          <span className="truncate">{item.familia}</span>
+                          <span className="shrink-0 font-normal text-slate-600">
+                            ({item.count})
+                          </span>
+                          {item.continued ? (
+                            <span className="shrink-0 text-[10px] font-normal text-slate-500">
+                              · continúa
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-right tabular-nums">
+                          {formatClp(item.total)}
+                        </div>
+                      </div>
+                      <div
+                        className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1.5 text-xs font-semibold leading-snug text-sky-950`}
+                      >
+                        <div className="col-span-3 flex min-w-0 items-center gap-1.5">
+                          <span className="truncate">{item.familia}</span>
+                          <span className="shrink-0 font-normal text-slate-600">
+                            ({item.count})
+                          </span>
+                        </div>
+                        <div className="text-right tabular-nums">
+                          {formatClp(item.total)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const row = item.row;
                 const texto =
                   (row.concepto || "").trim() ||
                   (row.concept_id
@@ -1903,8 +2084,7 @@ function GastosPageContent() {
         {displayRows.length > 0 && totalPaginasGastos > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <span className="text-xs">
-              Filas {(paginaGastos - 1) * GASTOS_POR_PAGINA + 1}–
-              {Math.min(paginaGastos * GASTOS_POR_PAGINA, displayRows.length)} de{" "}
+              Filas {paginaGastosRender.rowStart}–{paginaGastosRender.rowEnd} de{" "}
               {displayRows.length}
             </span>
             <div className="flex flex-wrap items-center gap-2">
