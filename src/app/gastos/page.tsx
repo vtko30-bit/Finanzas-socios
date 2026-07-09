@@ -335,101 +335,49 @@ function sortRows(
 
 const SIN_FAMILIA_LABEL = "Sin familia";
 
-type GastoTableItem =
-  | { type: "row"; row: GastoRow }
-  | {
-      type: "familia-header";
-      familia: string;
-      total: number;
-      count: number;
-      continued?: boolean;
-    };
+type FamiliaSummaryRow = {
+  familia: string;
+  total: number;
+  count: number;
+};
 
 function familiaLabel(row: GastoRow): string {
   const fam = (row.familia || "").trim();
   return fam || SIN_FAMILIA_LABEL;
 }
 
-function sortRowsWithFamiliaGroup(
-  list: GastoRow[],
-  sortKey: SortKey,
-  sortDir: "asc" | "desc",
-  agrupar: boolean,
-): GastoRow[] {
-  if (!agrupar) return sortRows(list, sortKey, sortDir);
-  const byFam = new Map<string, GastoRow[]>();
-  for (const r of list) {
-    const k = familiaLabel(r);
-    const cur = byFam.get(k) ?? [];
-    cur.push(r);
-    byFam.set(k, cur);
+function buildFamiliaSummaries(rows: GastoRow[]): FamiliaSummaryRow[] {
+  const map = new Map<string, { total: number; count: number }>();
+  for (const r of rows) {
+    const fam = familiaLabel(r);
+    const cur = map.get(fam) ?? { total: 0, count: 0 };
+    cur.total += Number(r.monto) || 0;
+    cur.count += 1;
+    map.set(fam, cur);
   }
-  const familias = [...byFam.keys()].sort((a, b) => a.localeCompare(b, "es"));
-  const out: GastoRow[] = [];
-  for (const fam of familias) {
-    out.push(...sortRows(byFam.get(fam)!, sortKey, sortDir));
-  }
-  return out;
+  return [...map.entries()].map(([familia, stats]) => ({
+    familia,
+    total: stats.total,
+    count: stats.count,
+  }));
 }
 
-function buildGastoItemsForPage(
-  rows: GastoRow[],
-  page: number,
-  pageSize: number,
-  agrupar: boolean,
-  familiaStats: Map<string, { total: number; count: number }>,
-): { items: GastoTableItem[]; rowStart: number; rowEnd: number } {
-  const start = (page - 1) * pageSize;
-  const pageRows = rows.slice(start, start + pageSize);
-  const rowEnd = rows.length === 0 ? 0 : Math.min(start + pageRows.length, rows.length);
-
-  if (!agrupar) {
-    return {
-      items: pageRows.map((row) => ({ type: "row", row })),
-      rowStart: rows.length === 0 ? 0 : start + 1,
-      rowEnd,
-    };
-  }
-
-  const items: GastoTableItem[] = [];
-  let lastFam: string | null = null;
-
-  if (start > 0 && pageRows.length > 0) {
-    const prevFam = familiaLabel(rows[start - 1]);
-    const firstFam = familiaLabel(pageRows[0]);
-    if (prevFam === firstFam) {
-      const stats = familiaStats.get(firstFam) ?? { total: 0, count: 0 };
-      items.push({
-        type: "familia-header",
-        familia: firstFam,
-        total: stats.total,
-        count: stats.count,
-        continued: true,
-      });
-      lastFam = firstFam;
+function sortFamiliaSummaries(
+  list: FamiliaSummaryRow[],
+  sortKey: SortKey,
+  sortDir: "asc" | "desc",
+): FamiliaSummaryRow[] {
+  const mul = sortDir === "asc" ? 1 : -1;
+  return [...list].sort((a, b) => {
+    if (sortKey === "monto") {
+      const c = (a.total - b.total) * mul;
+      return c || a.familia.localeCompare(b.familia, "es");
     }
-  }
-
-  for (const row of pageRows) {
-    const fam = familiaLabel(row);
-    if (fam !== lastFam) {
-      const stats = familiaStats.get(fam) ?? { total: 0, count: 0 };
-      items.push({
-        type: "familia-header",
-        familia: fam,
-        total: stats.total,
-        count: stats.count,
-      });
-      lastFam = fam;
+    if (sortKey === "familia") {
+      return a.familia.localeCompare(b.familia, "es") * mul;
     }
-    items.push({ type: "row", row });
-  }
-
-  return {
-    items,
-    rowStart: rows.length === 0 ? 0 : start + 1,
-    rowEnd,
-  };
+    return a.familia.localeCompare(b.familia, "es");
+  });
 }
 
 const SIN_FAMILIA = "__sin_familia__";
@@ -885,25 +833,28 @@ function GastosPageContent() {
   }, [filasFiltradas, soloSeleccionados, selectedGastoIds]);
 
   const displayRows = useMemo(
-    () => sortRowsWithFamiliaGroup(filasTrasSeleccion, sortKey, sortDir, agruparPorFamilia),
+    () =>
+      agruparPorFamilia
+        ? []
+        : sortRows(filasTrasSeleccion, sortKey, sortDir),
     [filasTrasSeleccion, sortKey, sortDir, agruparPorFamilia],
   );
 
-  const familiaStats = useMemo(() => {
-    const map = new Map<string, { total: number; count: number }>();
-    for (const r of displayRows) {
-      const fam = familiaLabel(r);
-      const cur = map.get(fam) ?? { total: 0, count: 0 };
-      cur.total += Number(r.monto) || 0;
-      cur.count += 1;
-      map.set(fam, cur);
-    }
-    return map;
-  }, [displayRows]);
+  const familiaSummaryRows = useMemo(
+    () =>
+      agruparPorFamilia
+        ? sortFamiliaSummaries(buildFamiliaSummaries(filasTrasSeleccion), sortKey, sortDir)
+        : [],
+    [filasTrasSeleccion, sortKey, sortDir, agruparPorFamilia],
+  );
+
+  const filasVisiblesCount = agruparPorFamilia
+    ? familiaSummaryRows.length
+    : displayRows.length;
 
   const totalGastosFiltrados = useMemo(
-    () => displayRows.reduce((acc, row) => acc + (Number(row.monto) || 0), 0),
-    [displayRows],
+    () => filasTrasSeleccion.reduce((acc, row) => acc + (Number(row.monto) || 0), 0),
+    [filasTrasSeleccion],
   );
 
   const hayFiltrosGastosActivos = useMemo(
@@ -927,21 +878,21 @@ function GastosPageContent() {
   );
 
   const totalPaginasGastos = useMemo(() => {
-    if (displayRows.length === 0) return 0;
-    return Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
-  }, [displayRows.length]);
+    if (filasVisiblesCount === 0) return 0;
+    return Math.ceil(filasVisiblesCount / GASTOS_POR_PAGINA);
+  }, [filasVisiblesCount]);
 
-  const paginaGastosRender = useMemo(
-    () =>
-      buildGastoItemsForPage(
-        displayRows,
-        paginaGastos,
-        GASTOS_POR_PAGINA,
-        agruparPorFamilia,
-        familiaStats,
-      ),
-    [displayRows, paginaGastos, agruparPorFamilia, familiaStats],
-  );
+  const paginaGastosRender = useMemo(() => {
+    const list = agruparPorFamilia ? familiaSummaryRows : displayRows;
+    const start = (paginaGastos - 1) * GASTOS_POR_PAGINA;
+    const slice = list.slice(start, start + GASTOS_POR_PAGINA);
+    return {
+      familiaRows: agruparPorFamilia ? (slice as FamiliaSummaryRow[]) : [],
+      gastoRows: agruparPorFamilia ? [] : (slice as GastoRow[]),
+      rowStart: list.length === 0 ? 0 : start + 1,
+      rowEnd: list.length === 0 ? 0 : Math.min(start + slice.length, list.length),
+    };
+  }, [agruparPorFamilia, familiaSummaryRows, displayRows, paginaGastos]);
 
   useEffect(() => {
     if (soloSeleccionados && selectedGastoIds.size === 0) {
@@ -968,10 +919,10 @@ function GastosPageContent() {
   ]);
 
   useEffect(() => {
-    if (displayRows.length === 0) return;
-    const max = Math.ceil(displayRows.length / GASTOS_POR_PAGINA);
+    if (filasVisiblesCount === 0) return;
+    const max = Math.ceil(filasVisiblesCount / GASTOS_POR_PAGINA);
     setPaginaGastos((p) => Math.min(Math.max(1, p), max));
-  }, [displayRows.length]);
+  }, [filasVisiblesCount]);
 
   const toggleSort = (key: SortKey) => {
     setSortKey((prev) => {
@@ -1895,9 +1846,9 @@ function GastosPageContent() {
         <div
           className="max-h-[min(70vh,720px)] overflow-auto"
           role="grid"
-          aria-rowcount={displayRows.length}
+          aria-rowcount={filasVisiblesCount}
         >
-          {!displayRows.length && !status ? (
+          {filasVisiblesCount === 0 && !status ? (
             <p className="px-3 py-6 text-center text-sm text-slate-600">
               {rows.length === 0
                 ? "Sin gastos disponibles."
@@ -1905,49 +1856,40 @@ function GastosPageContent() {
             </p>
           ) : (
             <div className="w-full">
-              {paginaGastosRender.items.map((item, idx) => {
-                if (item.type === "familia-header") {
-                  return (
+              {agruparPorFamilia
+                ? paginaGastosRender.familiaRows.map((item) => (
                     <div
-                      key={`fam-${item.familia}-${idx}`}
-                      className="border-t border-sky-200 bg-sky-50/90"
+                      key={item.familia}
+                      className="border-t border-slate-200 bg-sky-50/40"
                     >
                       <div
-                        className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1.5 text-xs font-semibold leading-snug text-sky-950`}
+                        className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1.5 text-xs leading-snug`}
                       >
-                        <div className="col-span-6 flex min-w-0 items-center gap-2">
-                          <span className="truncate">{item.familia}</span>
-                          <span className="shrink-0 font-normal text-slate-600">
-                            ({item.count})
-                          </span>
-                          {item.continued ? (
-                            <span className="shrink-0 text-[10px] font-normal text-slate-500">
-                              · continúa
-                            </span>
-                          ) : null}
+                        <div className="col-span-3 min-w-0 text-slate-400">—</div>
+                        <div className="min-w-0 font-semibold text-sky-950">{item.familia}</div>
+                        <div className="col-span-2 min-w-0 text-slate-600">
+                          {item.count} mov.
                         </div>
-                        <div className="text-right tabular-nums">
+                        <div className="min-w-0 text-right font-semibold tabular-nums text-slate-900">
                           {formatClp(item.total)}
                         </div>
                       </div>
                       <div
-                        className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1.5 text-xs font-semibold leading-snug text-sky-950`}
+                        className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1.5 text-xs leading-snug`}
                       >
-                        <div className="col-span-3 flex min-w-0 items-center gap-1.5">
-                          <span className="truncate">{item.familia}</span>
-                          <span className="shrink-0 font-normal text-slate-600">
+                        <div className="col-span-3 min-w-0 font-semibold text-sky-950">
+                          {item.familia}
+                          <span className="ml-1 font-normal text-slate-600">
                             ({item.count})
                           </span>
                         </div>
-                        <div className="text-right tabular-nums">
+                        <div className="min-w-0 text-right font-semibold tabular-nums text-slate-900">
                           {formatClp(item.total)}
                         </div>
                       </div>
                     </div>
-                  );
-                }
-
-                const row = item.row;
+                  ))
+                : paginaGastosRender.gastoRows.map((row) => {
                 const texto =
                   (row.concepto || "").trim() ||
                   (row.concept_id
@@ -2081,11 +2023,11 @@ function GastosPageContent() {
             </div>
           )}
         </div>
-        {displayRows.length > 0 && totalPaginasGastos > 0 ? (
+        {filasVisiblesCount > 0 && totalPaginasGastos > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <span className="text-xs">
-              Filas {paginaGastosRender.rowStart}–{paginaGastosRender.rowEnd} de{" "}
-              {displayRows.length}
+              {agruparPorFamilia ? "Familias" : "Filas"} {paginaGastosRender.rowStart}–
+              {paginaGastosRender.rowEnd} de {filasVisiblesCount}
             </span>
             <div className="flex flex-wrap items-center gap-2">
               <button
