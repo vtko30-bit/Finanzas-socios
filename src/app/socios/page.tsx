@@ -384,9 +384,20 @@ export default function SociosPage() {
           const socioOpen = Boolean(expandedSocio[bloque.socio]);
           return (
           <section key={bloque.socio} className="ui-card-panel flex min-w-0 flex-col">
-            <h2 className="border-b border-slate-100 px-4 py-2.5 text-base font-semibold text-sky-950">
-              {bloque.socio}
-            </h2>
+            <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+              <h2 className="text-base font-semibold text-sky-950">{bloque.socio}</h2>
+              {!filtroUnMes && bloque.rowsCategoria.length > 0 ? (
+                <button
+                  type="button"
+                  className="group"
+                  onClick={() => toggleSocioExpanded(bloque.socio)}
+                  aria-expanded={socioOpen}
+                  aria-label={socioOpen ? "Ocultar detalle" : "Ver detalle"}
+                >
+                  <DetalleToggle abierto={socioOpen} />
+                </button>
+              ) : null}
+            </div>
 
             {filtroUnMes && bloque.rowsCategoria.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-slate-500">
@@ -419,12 +430,11 @@ export default function SociosPage() {
                           <td className={tdCls}>
                             <button
                               type="button"
-                              className="group inline-flex w-full items-center justify-between gap-1 text-left font-medium text-sky-900 hover:underline"
+                              className="text-left font-medium text-sky-900 hover:underline"
                               onClick={() => toggleExpanded(rowKey)}
                               aria-expanded={open}
                             >
                               <span className="min-w-0 truncate">{r.categoria}</span>
-                              <DetalleToggle abierto={open} />
                             </button>
                           </td>
                           <td className={tdNum}>{formatClp(montoMes)}</td>
@@ -490,12 +500,11 @@ export default function SociosPage() {
                                   <td className={`${tdCatSticky} group-hover:bg-slate-50`}>
                                     <button
                                       type="button"
-                                      className="group inline-flex w-full items-center justify-between gap-2 text-left text-sky-900 hover:underline"
+                                      className="text-left font-medium text-sky-900 hover:underline"
                                       onClick={() => toggleExpanded(rowKey)}
                                       aria-expanded={open}
                                     >
-                                      <span className="font-medium">{r.categoria}</span>
-                                      <DetalleToggle abierto={open} />
+                                      {r.categoria}
                                     </button>
                                   </td>
                                   {visibleMonthKeys.map((mk) => (
@@ -530,20 +539,6 @@ export default function SociosPage() {
                     </tbody>
                   </table>
                 )}
-              </div>
-            ) : null}
-
-            {!filtroUnMes && bloque.rowsCategoria.length > 0 ? (
-              <div className="flex justify-end border-t border-slate-100 px-4 py-2.5">
-                <button
-                  type="button"
-                  className="group"
-                  onClick={() => toggleSocioExpanded(bloque.socio)}
-                  aria-expanded={socioOpen}
-                  aria-label={socioOpen ? "Ocultar detalle" : "Ver detalle"}
-                >
-                  <DetalleToggle abierto={socioOpen} />
-                </button>
               </div>
             ) : null}
           </section>
