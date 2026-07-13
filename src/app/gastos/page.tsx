@@ -9,7 +9,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
@@ -1352,19 +1351,11 @@ function GastosPageContent() {
 
   return (
     <main className="page-main page-main--2xl">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-        <h1 className="page-title">
+      <h1 className="page-title">
           {esVistaPagoServiciosBancoEstado
-            ? "Detalle de gastos — Pago servicios BancoEstado"
-            : "Detalle de gastos"}
+            ? "Gastos — Pago servicios BancoEstado"
+            : "Gastos"}
         </h1>
-        <Link
-          href="/movimientos-excluidos"
-          className="text-sm font-medium text-[#0056ff] underline hover:text-[#0046d9]"
-        >
-          Movimientos excluidos del resumen
-        </Link>
-      </div>
       {!capsLoading && !canWrite ? (
         <p className="text-sm text-slate-500">
           Solo lectura: solo el administrador (owner) puede editar categorías o importar datos.
@@ -1431,82 +1422,81 @@ function GastosPageContent() {
         <div
           className={`${filtrosMovilAbiertos ? "mt-2 flex flex-col gap-1.5" : "hidden"} sm:mt-0 sm:flex sm:flex-col sm:gap-1.5`}
         >
-          <div className="grid grid-cols-2 items-end gap-1.5 sm:flex sm:flex-wrap">
-            <label className="col-span-2 flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600 sm:col-span-1">
-              Fecha
-              <select
-                className="ui-filter-control w-full"
-                value={modoFecha}
-                onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
-              >
-                <option value="todo">Todas las fechas</option>
-                <option value="dia">Día</option>
-                <option value="mes">Mes</option>
-                <option value="anio">Año</option>
-                <option value="rango">Rango</option>
-              </select>
-            </label>
-            {modoFecha === "dia" ? (
-              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                Día
-                <input
-                  type="date"
+          <div className="grid grid-cols-2 items-end gap-1.5 sm:flex sm:flex-wrap sm:items-end sm:gap-1.5">
+            <div className="col-span-2 flex flex-wrap items-end gap-1.5 sm:col-span-1 sm:shrink-0 sm:flex-nowrap">
+              <label className="flex min-w-[9.5rem] flex-col gap-0.5 text-xs text-slate-600">
+                Fecha
+                <select
                   className="ui-filter-control w-full"
-                  value={dia}
-                  onChange={(e) => setDia(e.target.value)}
-                />
+                  value={modoFecha}
+                  onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
+                >
+                  <option value="todo">Todas las fechas</option>
+                  <option value="dia">Día</option>
+                  <option value="mes">Mes</option>
+                  <option value="anio">Año</option>
+                  <option value="rango">Rango</option>
+                </select>
               </label>
-            ) : null}
-            {modoFecha === "mes" ? (
-              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                Mes
-                <input
-                  type="month"
-                  className="ui-filter-control w-full"
-                  value={mes}
-                  onChange={(e) => setMes(e.target.value)}
-                />
-              </label>
-            ) : null}
-            {modoFecha === "anio" ? (
-              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                Año
-                <input
-                  type="number"
-                  min={1990}
-                  max={2100}
-                  placeholder="Ej: 2024"
-                  className="w-full ui-filter-control sm:w-24"
-                  value={anio}
-                  onChange={(e) => setAnio(e.target.value)}
-                />
-              </label>
-            ) : null}
-            {modoFecha === "rango" ? (
-              <>
-                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                  Desde
+              {modoFecha === "dia" ? (
+                <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                  Día
                   <input
                     type="date"
                     className="ui-filter-control w-full"
-                    value={rangoDesde}
-                    onChange={(e) => setRangoDesde(e.target.value)}
+                    value={dia}
+                    onChange={(e) => setDia(e.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                  Hasta
+              ) : null}
+              {modoFecha === "mes" ? (
+                <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                  Mes
                   <input
-                    type="date"
+                    type="month"
                     className="ui-filter-control w-full"
-                    value={rangoHasta}
-                    onChange={(e) => setRangoHasta(e.target.value)}
+                    value={mes}
+                    onChange={(e) => setMes(e.target.value)}
                   />
                 </label>
-              </>
-            ) : null}
-          </div>
-
-          <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-end sm:gap-1.5">
+              ) : null}
+              {modoFecha === "anio" ? (
+                <label className="flex w-24 shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                  Año
+                  <input
+                    type="number"
+                    min={1990}
+                    max={2100}
+                    placeholder="Ej: 2024"
+                    className="ui-filter-control w-full"
+                    value={anio}
+                    onChange={(e) => setAnio(e.target.value)}
+                  />
+                </label>
+              ) : null}
+              {modoFecha === "rango" ? (
+                <>
+                  <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                    Desde
+                    <input
+                      type="date"
+                      className="ui-filter-control w-full"
+                      value={rangoDesde}
+                      onChange={(e) => setRangoDesde(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                    Hasta
+                    <input
+                      type="date"
+                      className="ui-filter-control w-full"
+                      value={rangoHasta}
+                      onChange={(e) => setRangoHasta(e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+            </div>
             <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Origen
               <input
