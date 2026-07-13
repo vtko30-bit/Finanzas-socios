@@ -384,35 +384,45 @@ const SIN_CATEGORIA = "__sin_categoria__";
 
 type GastosMultiSelectOption = { value: string; label: string };
 
+/** `null` = todas (sin filtro); Set vacío = ninguna; Set parcial = filtro explícito. */
+type FiltroMultiSeleccion = Set<string> | null;
+
 function valoresOpciones(opciones: GastosMultiSelectOption[]): string[] {
   return opciones.map((o) => o.value);
 }
 
 function toggleSeleccionMulti(
   value: string,
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
   opciones: string[],
-): Set<string> {
-  if (opciones.length === 0) return new Set();
-  if (seleccion.size === 0) {
+): FiltroMultiSeleccion {
+  if (opciones.length === 0) return null;
+  if (seleccion === null) {
     return new Set(opciones.filter((o) => o !== value));
   }
   const next = new Set(seleccion);
   if (next.has(value)) next.delete(value);
   else next.add(value);
-  if (next.size === 0 || next.size === opciones.length) return new Set();
+  if (next.size === 0) return new Set();
+  if (next.size === opciones.length) return null;
   return next;
 }
 
-function opcionMultiMarcada(value: string, seleccion: Set<string>): boolean {
-  return seleccion.size === 0 || seleccion.has(value);
+function opcionMultiMarcada(
+  value: string,
+  seleccion: FiltroMultiSeleccion,
+  totalOpciones: number,
+): boolean {
+  if (seleccion === null || seleccion.size === totalOpciones) return true;
+  if (seleccion.size === 0) return false;
+  return seleccion.has(value);
 }
 
 function etiquetaSeleccion(
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
   opciones: GastosMultiSelectOption[],
 ): string | null {
-  if (seleccion.size !== 1) return null;
+  if (seleccion === null || seleccion.size !== 1) return null;
   const v = [...seleccion][0];
   return opciones.find((o) => o.value === v)?.label ?? v;
 }
@@ -421,8 +431,8 @@ type GastosMultiSelectProps = {
   id: string;
   label: string;
   opciones: GastosMultiSelectOption[];
-  seleccion: Set<string>;
-  onChange: (next: Set<string>) => void;
+  seleccion: FiltroMultiSeleccion;
+  onChange: (next: FiltroMultiSeleccion) => void;
   placeholder: string;
   className?: string;
 };
@@ -442,14 +452,19 @@ function GastosMultiSelect({
 
   const textoCampo = useMemo(() => {
     if (opciones.length === 0) return "Sin opciones";
-    if (seleccion.size === 0 || seleccion.size === opciones.length) return placeholder;
+    if (seleccion === null || seleccion.size === opciones.length) return placeholder;
+    if (seleccion.size === 0) return "Ninguna";
     const una = etiquetaSeleccion(seleccion, opciones);
     if (una) return una;
     return `${seleccion.size} seleccionadas`;
   }, [seleccion, opciones, placeholder]);
 
-  const todasMarcadas = seleccion.size === 0 || seleccion.size === opciones.length;
-  const algunasMarcadas = seleccion.size > 0 && seleccion.size < opciones.length;
+  const todasMarcadas =
+    seleccion === null || seleccion.size === opciones.length;
+  const algunasMarcadas =
+    seleccion !== null &&
+    seleccion.size > 0 &&
+    seleccion.size < opciones.length;
 
   const abrir = () => {
     if (blurT.current) clearTimeout(blurT.current);
@@ -495,7 +510,7 @@ function GastosMultiSelect({
                 ref={(el) => {
                   if (el) el.indeterminate = algunasMarcadas;
                 }}
-                onChange={() => onChange(new Set())}
+                onChange={() => onChange(todasMarcadas ? new Set() : null)}
               />
               <span className="text-xs font-medium">Todas</span>
             </label>
@@ -506,7 +521,7 @@ function GastosMultiSelect({
                 <input
                   type="checkbox"
                   className="h-3.5 w-3.5 accent-sky-700"
-                  checked={opcionMultiMarcada(opt.value, seleccion)}
+                  checked={opcionMultiMarcada(opt.value, seleccion, opciones.length)}
                   onChange={() =>
                     onChange(toggleSeleccionMulti(opt.value, seleccion, valores))
                   }
@@ -521,10 +536,17 @@ function GastosMultiSelect({
   );
 }
 
-function podarSeleccion(prev: Set<string>, validas: Set<string>): Set<string> {
+function podarSeleccion(
+  prev: FiltroMultiSeleccion,
+  validas: Set<string>,
+): FiltroMultiSeleccion {
+  if (prev === null) return null;
   if (prev.size === 0) return prev;
   const next = new Set([...prev].filter((v) => validas.has(v)));
-  return next.size === prev.size ? prev : next;
+  if (next.size === prev.size) return prev;
+  if (next.size === 0) return new Set();
+  if (next.size === validas.size) return null;
+  return next;
 }
 
 function filtrarGastos(
@@ -538,9 +560,9 @@ function filtrarGastos(
     rangoHasta: string;
     nombreDestino: string;
     descripcion: string;
-    familias: Set<string>;
-    origenes: Set<string>;
-    categorias: Set<string>;
+    familias: FiltroMultiSeleccion;
+    origenes: FiltroMultiSeleccion;
+    categorias: FiltroMultiSeleccion;
     catalogo: CatalogFamily[];
   },
 ): GastoRow[] {
@@ -560,23 +582,26 @@ function filtrarGastos(
     );
   }
 
-  if (opts.origenes.size > 0) {
-    out = out.filter((r) => opts.origenes.has((r.origen || "").trim()));
+  if (opts.origenes !== null) {
+    if (opts.origenes.size === 0) return [];
+    out = out.filter((r) => opts.origenes!.has((r.origen || "").trim()));
   }
 
-  if (opts.familias.size > 0) {
+  if (opts.familias !== null) {
+    if (opts.familias.size === 0) return [];
     out = out.filter((r) => {
       const f = (r.familia || "").trim();
-      if (!f) return opts.familias.has(SIN_FAMILIA);
-      return opts.familias.has(f);
+      if (!f) return opts.familias!.has(SIN_FAMILIA);
+      return opts.familias!.has(f);
     });
   }
 
-  if (opts.categorias.size > 0) {
+  if (opts.categorias !== null) {
+    if (opts.categorias.size === 0) return [];
     out = out.filter((r) => {
       const c = categoriaDisplayLabel(r, opts.catalogo).trim();
-      if (!c) return opts.categorias.has(SIN_CATEGORIA);
-      return opts.categorias.has(c);
+      if (!c) return opts.categorias!.has(SIN_CATEGORIA);
+      return opts.categorias!.has(c);
     });
   }
 
@@ -722,9 +747,9 @@ function GastosPageContent() {
   const [rangoHasta, setRangoHasta] = useState("");
   const [filtroNombreDestino, setFiltroNombreDestino] = useState("");
   const [filtroDescripcion, setFiltroDescripcion] = useState("");
-  const [filtroFamilias, setFiltroFamilias] = useState<Set<string>>(() => new Set());
-  const [filtroOrigenes, setFiltroOrigenes] = useState<Set<string>>(() => new Set());
-  const [filtroCategorias, setFiltroCategorias] = useState<Set<string>>(() => new Set());
+  const [filtroFamilias, setFiltroFamilias] = useState<FiltroMultiSeleccion>(null);
+  const [filtroOrigenes, setFiltroOrigenes] = useState<FiltroMultiSeleccion>(null);
+  const [filtroCategorias, setFiltroCategorias] = useState<FiltroMultiSeleccion>(null);
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
   const [agruparPorFamilia, setAgruparPorFamilia] = useState(false);
   const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
@@ -1055,9 +1080,9 @@ function GastosPageContent() {
       modoFecha !== "todo" ||
       filtroNombreDestino.trim() !== "" ||
       filtroDescripcion.trim() !== "" ||
-      filtroFamilias.size > 0 ||
-      filtroOrigenes.size > 0 ||
-      filtroCategorias.size > 0 ||
+      filtroFamilias !== null ||
+      filtroOrigenes !== null ||
+      filtroCategorias !== null ||
       soloSeleccionados,
     [
       modoFecha,
@@ -1137,9 +1162,9 @@ function GastosPageContent() {
     setRangoHasta("");
     setFiltroNombreDestino("");
     setFiltroDescripcion("");
-    setFiltroFamilias(new Set());
-    setFiltroOrigenes(new Set());
-    setFiltroCategorias(new Set());
+    setFiltroFamilias(null);
+    setFiltroOrigenes(null);
+    setFiltroCategorias(null);
     setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
     setFiltrosMovilAbiertos(false);
