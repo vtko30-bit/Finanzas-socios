@@ -85,7 +85,7 @@ body {
   }
 
   .ui-filter-control {
-    @apply rounded border border-slate-300 bg-white px-2 py-px text-xs text-slate-900;
+    @apply box-border h-8 shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900;
   }
 
   .ui-filter-chip {
