@@ -155,7 +155,44 @@ function mergePivotGastosRows(rows: PivotRowGasto[]): PivotRowGasto[] {
   return [...map.values()].sort((a, b) => a.familia.localeCompare(b.familia, "es"));
 }
 
-type FiltroModo = "anio" | "mes" | "rango";
+type FiltroModo = "diario" | "semanal" | "mensual" | "anual" | "rango";
+
+function formatIsoDateLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function todayIsoDateLocal(): string {
+  return formatIsoDateLocal(new Date());
+}
+
+function toIsoWeekString(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+function weekRangeFromInput(weekInput: string): { desde: string; hasta: string } | null {
+  const match = /^(\d{4})-W(\d{1,2})$/.exec(weekInput.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(week) || week < 1 || week > 53) return null;
+
+  const jan4 = new Date(year, 0, 4);
+  const jan4Day = jan4.getDay() || 7;
+  const week1Monday = new Date(year, 0, 4 - jan4Day + 1);
+  const monday = new Date(week1Monday);
+  monday.setDate(week1Monday.getDate() + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return { desde: formatIsoDateLocal(monday), hasta: formatIsoDateLocal(sunday) };
+}
 
 function totalesPorMesVentasDesdeRows(
   rows: PivotRowVenta[],
@@ -370,8 +407,10 @@ function ResumenMultiSelect({
 
 export default function ResumenPage() {
   const { ready, authenticated } = useAuthState();
-  const [modo, setModo] = useState<FiltroModo>("anio");
+  const [modo, setModo] = useState<FiltroModo>("anual");
   const [anio, setAnio] = useState(() => String(new Date().getFullYear()));
+  const [dia, setDia] = useState(todayIsoDateLocal);
+  const [semana, setSemana] = useState(() => toIsoWeekString(new Date()));
   const [mes, setMes] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -483,15 +522,22 @@ export default function ResumenPage() {
   }, [data, familiasSeleccionadas, formasPagoSeleccionadas, sucursalesSeleccionadas, listaSucursales]);
 
   const rangoEfectivo = useMemo(() => {
-    if (modo === "anio") return yearRange(anio);
-    if (modo === "mes") {
+    if (modo === "anual") return yearRange(anio);
+    if (modo === "mensual") {
       return { desde: firstDayOfMonth(mes), hasta: lastDayOfMonth(mes) };
     }
-    if (rangoDesde && rangoHasta) {
+    if (modo === "diario" && dia) {
+      return { desde: dia, hasta: dia };
+    }
+    if (modo === "semanal" && semana) {
+      const wr = weekRangeFromInput(semana);
+      if (wr) return wr;
+    }
+    if (modo === "rango" && rangoDesde && rangoHasta) {
       return { desde: rangoDesde, hasta: rangoHasta };
     }
     return yearRange(anio);
-  }, [modo, anio, mes, rangoDesde, rangoHasta]);
+  }, [modo, anio, mes, dia, semana, rangoDesde, rangoHasta]);
 
   const cargar = useCallback(
     async (opts?: { force?: boolean }) => {
@@ -665,7 +711,7 @@ export default function ResumenPage() {
 
   useEffect(() => {
     cerrarFamiliaDetalle();
-  }, [modo, anio, mes, rangoDesde, rangoHasta, cerrarFamiliaDetalle]);
+  }, [modo, anio, mes, dia, semana, rangoDesde, rangoHasta, cerrarFamiliaDetalle]);
 
   useEffect(() => {
     setFamiliasSeleccionadas((prev) => {
@@ -953,15 +999,41 @@ export default function ResumenPage() {
                   </span>
                   <div className="flex flex-nowrap items-center gap-1.5">
                     <select
-                      className="box-border h-8 w-[9rem] shrink-0 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#2277ff] focus:ring-2 focus:ring-[#2277ff]/20"
+                      className="box-border h-8 w-[11rem] shrink-0 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#2277ff] focus:ring-2 focus:ring-[#2277ff]/20"
                       value={modo}
                       onChange={(e) => setModo(e.target.value as FiltroModo)}
                     >
-                      <option value="anio">Por año</option>
-                      <option value="mes">Por mes</option>
+                      <option value="diario">Diario</option>
+                      <option value="semanal">Semanal</option>
+                      <option value="mensual">Mensual</option>
+                      <option value="anual">Anual</option>
                       <option value="rango">Rango de fechas</option>
                     </select>
-                    {modo === "anio" ? (
+                    {modo === "diario" ? (
+                      <input
+                        type="date"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        value={dia}
+                        onChange={(e) => setDia(e.target.value)}
+                      />
+                    ) : null}
+                    {modo === "semanal" ? (
+                      <input
+                        type="week"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        value={semana}
+                        onChange={(e) => setSemana(e.target.value)}
+                      />
+                    ) : null}
+                    {modo === "mensual" ? (
+                      <input
+                        type="month"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        value={mes}
+                        onChange={(e) => setMes(e.target.value)}
+                      />
+                    ) : null}
+                    {modo === "anual" ? (
                       <input
                         type="number"
                         min={1990}
@@ -969,14 +1041,6 @@ export default function ResumenPage() {
                         className="box-border h-8 w-28 shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                         value={anio}
                         onChange={(e) => setAnio(e.target.value)}
-                      />
-                    ) : null}
-                    {modo === "mes" ? (
-                      <input
-                        type="month"
-                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
-                        value={mes}
-                        onChange={(e) => setMes(e.target.value)}
                       />
                     ) : null}
                     {modo === "rango" ? (
@@ -1028,9 +1092,6 @@ export default function ResumenPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="ui-filter-stat">
-                  Rango activo: {rangoEfectivo.desde} → {rangoEfectivo.hasta}
-                </span>
                 {filtroSucursalActivo ? (
                   <button
                     type="button"
