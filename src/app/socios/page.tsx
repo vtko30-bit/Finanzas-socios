@@ -124,9 +124,17 @@ function monthTotalForSocio(rowsCategoria: CategoriaPivot[], monthKey: string): 
 
 function DetalleToggle({ abierto }: { abierto: boolean }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 group-hover:border-sky-200 group-hover:bg-sky-50 group-hover:text-sky-800">
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100 ${
+        abierto
+          ? "border-sky-300 bg-sky-100 text-sky-900"
+          : "border-sky-200 bg-sky-50 text-sky-800"
+      }`}
+    >
       Detalle
-      <span aria-hidden>{abierto ? "▲" : "▼"}</span>
+      <span className="text-[11px] text-sky-600" aria-hidden>
+        {abierto ? "▲" : "▼"}
+      </span>
     </span>
   );
 }
