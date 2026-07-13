@@ -158,6 +158,55 @@ function findFamilyByName(
   return null;
 }
 
+function actualizarCatalogoConcepto(
+  prev: CatalogFamily[],
+  concept: { id: string; label: string; family_id: string },
+): CatalogFamily[] {
+  const sinConcepto = prev.map((f) => ({
+    ...f,
+    concepts: f.concepts.filter((c) => c.id !== concept.id),
+  }));
+  return sinConcepto.map((f) => {
+    if (f.id !== concept.family_id) return f;
+    const idx = f.concepts.findIndex((c) => c.id === concept.id);
+    if (idx >= 0) {
+      const concepts = [...f.concepts];
+      concepts[idx] = { id: concept.id, label: concept.label };
+      return { ...f, concepts };
+    }
+    return {
+      ...f,
+      concepts: [...f.concepts, { id: concept.id, label: concept.label }],
+    };
+  });
+}
+
+function agregarFamiliaAlCatalogo(
+  prev: CatalogFamily[],
+  family: { id: string; name: string },
+  concept?: { id: string; label: string },
+): CatalogFamily[] {
+  if (prev.some((f) => f.id === family.id)) {
+    if (!concept) return prev;
+    return actualizarCatalogoConcepto(prev, {
+      id: concept.id,
+      label: concept.label,
+      family_id: family.id,
+    });
+  }
+  return [
+    ...prev,
+    {
+      id: family.id,
+      name: family.name,
+      sort_order: prev.length,
+      concepts: concept ? [{ id: concept.id, label: concept.label }] : [],
+    },
+  ];
+}
+
+type GuardarConceptoOpts = { silent?: boolean; catalogoSnapshot?: CatalogFamily[] };
+
 /** Combobox con lista visible al enfocar (el <datalist> nativo no abre bien en todos los navegadores). */
 function ComboboxLista({
   id,
@@ -905,11 +954,11 @@ function GastosPageContent() {
     }
   }, [reconcileModal?.transactionId]);
 
-  /** Catálogo fresco al abrir el modal (solo al cambiar el gasto, no al editar el select). */
+  /** Catálogo fresco al abrir el modal solo si aún no está cargado. */
   useEffect(() => {
-    if (!editModal?.gastoIds?.length) return;
+    if (!editModal?.gastoIds?.length || catalogo.length > 0) return;
     cargarCatalogo();
-  }, [editModal?.gastoIds, cargarCatalogo]);
+  }, [editModal?.gastoIds, cargarCatalogo, catalogo.length]);
 
   useEffect(() => {
     if (!detailRow) return;
@@ -1170,46 +1219,53 @@ function GastosPageContent() {
     setFiltrosMovilAbiertos(false);
   };
 
-  const guardarConceptoLibre = async (ids: string[], concepto: string) => {
+  const guardarConceptoLibre = async (
+    ids: string[],
+    concepto: string,
+    opts?: GuardarConceptoOpts,
+  ) => {
     if (!ids.length) return true;
     const single = ids.length === 1;
-    if (single) setSavingId(ids[0]);
-    else setSaveInProgress(true);
+    if (!opts?.silent) {
+      if (single) setSavingId(ids[0]);
+      else setSaveInProgress(true);
+    }
     try {
-      let lastData: {
-        concepto?: string;
-        concept_id?: string | null;
-      } | null = null;
-      for (const id of ids) {
-        const res = await fetch(`/api/gastos/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ concept_id: null, concepto }),
-        });
-        const data = (await res.json()) as {
-          concepto?: string;
-          concept_id?: string | null;
-          error?: string;
-        };
-        if (!res.ok) {
-          mostrarAviso(data.error || "No se pudo guardar");
-          return false;
-        }
-        lastData = data;
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const res = await fetch(`/api/gastos/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ concept_id: null, concepto }),
+          });
+          const data = (await res.json()) as {
+            concepto?: string;
+            concept_id?: string | null;
+            error?: string;
+          };
+          return { ok: res.ok, data, id };
+        }),
+      );
+      const failed = results.find((r) => !r.ok);
+      if (failed) {
+        mostrarAviso(failed.data.error || "No se pudo guardar");
+        return false;
       }
-      if (!lastData) return false;
-      const data = lastData;
+      const lastData = results[results.length - 1]!.data;
+      const cat = opts?.catalogoSnapshot ?? catalogo;
       setRows((prev) => {
         const next = prev.map((r) => {
           if (!ids.includes(r.id)) return r;
           const fam =
-            familiaParaConcepto(data.concept_id ?? null, catalogo) ?? r.familia;
+            familiaParaConcepto(lastData.concept_id ?? null, cat) ?? r.familia;
           return {
             ...r,
-            concepto: data.concepto ?? concepto,
-            concept_id: data.concept_id ?? null,
+            concepto: lastData.concepto ?? concepto,
+            concept_id: lastData.concept_id ?? null,
             familia: fam,
-            necesitaConcepto: esConceptoVacioOPlaceholder(data.concepto ?? concepto),
+            necesitaConcepto: esConceptoVacioOPlaceholder(
+              lastData.concepto ?? concepto,
+            ),
           };
         });
         setClientCache(gastosCacheKey, next);
@@ -1220,51 +1276,58 @@ function GastosPageContent() {
       mostrarAviso("Error de red al guardar");
       return false;
     } finally {
-      setSavingId(null);
-      setSaveInProgress(false);
+      if (!opts?.silent) {
+        setSavingId(null);
+        setSaveInProgress(false);
+      }
     }
   };
 
-  const guardarConceptoCatalogo = async (ids: string[], conceptId: string) => {
+  const guardarConceptoCatalogo = async (
+    ids: string[],
+    conceptId: string,
+    opts?: GuardarConceptoOpts,
+  ) => {
     if (!ids.length) return true;
     const single = ids.length === 1;
-    if (single) setSavingId(ids[0]);
-    else setSaveInProgress(true);
+    if (!opts?.silent) {
+      if (single) setSavingId(ids[0]);
+      else setSaveInProgress(true);
+    }
     try {
-      let lastData: {
-        concepto?: string;
-        concept_id?: string | null;
-      } | null = null;
-      for (const id of ids) {
-        const res = await fetch(`/api/gastos/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ concept_id: conceptId }),
-        });
-        const data = (await res.json()) as {
-          concepto?: string;
-          concept_id?: string | null;
-          error?: string;
-        };
-        if (!res.ok) {
-          mostrarAviso(data.error || "No se pudo guardar");
-          return false;
-        }
-        lastData = data;
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const res = await fetch(`/api/gastos/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ concept_id: conceptId }),
+          });
+          const data = (await res.json()) as {
+            concepto?: string;
+            concept_id?: string | null;
+            error?: string;
+          };
+          return { ok: res.ok, data, id };
+        }),
+      );
+      const failed = results.find((r) => !r.ok);
+      if (failed) {
+        mostrarAviso(failed.data.error || "No se pudo guardar");
+        return false;
       }
-      if (!lastData) return false;
-      const data = lastData;
+      const lastData = results[results.length - 1]!.data;
+      const cat = opts?.catalogoSnapshot ?? catalogo;
       setRows((prev) => {
         const next = prev.map((r) => {
           if (!ids.includes(r.id)) return r;
           const fam =
-            familiaParaConcepto(data.concept_id ?? null, catalogo) ?? r.familia;
+            familiaParaConcepto(lastData.concept_id ?? null, cat) ?? r.familia;
           return {
             ...r,
-            concepto: data.concepto ?? "",
-            concept_id: data.concept_id ?? null,
+            concepto: lastData.concepto ?? "",
+            concept_id: lastData.concept_id ?? null,
             familia: fam,
-            necesitaConcepto: esConceptoVacioOPlaceholder(data.concepto ?? ""),
+            necesitaConcepto: esConceptoVacioOPlaceholder(lastData.concepto ?? ""),
           };
         });
         setClientCache(gastosCacheKey, next);
@@ -1275,8 +1338,10 @@ function GastosPageContent() {
       mostrarAviso("Error de red al guardar");
       return false;
     } finally {
-      setSavingId(null);
-      setSaveInProgress(false);
+      if (!opts?.silent) {
+        setSavingId(null);
+        setSaveInProgress(false);
+      }
     }
   };
 
@@ -1290,135 +1355,171 @@ function GastosPageContent() {
       return;
     }
 
-    const fetchFamilies = async (): Promise<CatalogFamily[]> => {
-      const res = await fetch("/api/familias");
-      const data = await res.json();
-      if (!res.ok) return [];
-      return (data.families ?? []) as CatalogFamily[];
-    };
+    setSaveInProgress(true);
+    const guardarOpts: GuardarConceptoOpts = { silent: true };
 
-    let families = await fetchFamilies();
-    const existingConcept = findConceptInCatalog(catTrim, families);
+    try {
+      const fetchFamilies = async (): Promise<CatalogFamily[]> => {
+        if (catalogo.length > 0) return catalogo;
+        const res = await fetch("/api/familias");
+        const data = await res.json();
+        if (!res.ok) return [];
+        return (data.families ?? []) as CatalogFamily[];
+      };
 
-    if (existingConcept) {
-      let targetFamilyId = existingConcept.familyId;
-      if (famTrim) {
-        const matched = findFamilyByName(famTrim, families)?.id;
-        if (matched) {
-          targetFamilyId = matched;
-        } else {
-          const resFam = await fetch("/api/familias", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: famTrim }),
-          });
-          const dataFam = await resFam.json();
-          if (resFam.ok) {
-            targetFamilyId = dataFam.family.id as string;
-          } else if (resFam.status === 409) {
-            families = await fetchFamilies();
-            const retryFamilyId = findFamilyByName(famTrim, families)?.id;
-            if (!retryFamilyId) {
-              mostrarAviso("No se pudo resolver la familia.");
+      let families = await fetchFamilies();
+      const existingConcept = findConceptInCatalog(catTrim, families);
+
+      if (existingConcept) {
+        let targetFamilyId = existingConcept.familyId;
+        if (famTrim) {
+          const matched = findFamilyByName(famTrim, families)?.id;
+          if (matched) {
+            targetFamilyId = matched;
+          } else {
+            const resFam = await fetch("/api/familias", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: famTrim }),
+            });
+            const dataFam = await resFam.json();
+            if (resFam.ok) {
+              targetFamilyId = dataFam.family.id as string;
+              families = agregarFamiliaAlCatalogo(families, dataFam.family);
+            } else if (resFam.status === 409) {
+              families = await fetchFamilies();
+              const retryFamilyId = findFamilyByName(famTrim, families)?.id;
+              if (!retryFamilyId) {
+                mostrarAviso("No se pudo resolver la familia.");
+                return;
+              }
+              targetFamilyId = retryFamilyId;
+            } else {
+              mostrarAviso(dataFam.error || "No se pudo crear la familia");
               return;
             }
-            targetFamilyId = retryFamilyId;
-          } else {
-            mostrarAviso(dataFam.error || "No se pudo crear la familia");
-            return;
           }
         }
+
+        if (targetFamilyId === existingConcept.familyId) {
+          const ok = await guardarConceptoCatalogo(
+            editModal.gastoIds,
+            existingConcept.id,
+            guardarOpts,
+          );
+          if (ok) {
+            setEditModal(null);
+            setSelectedGastoIds(new Set());
+          }
+          return;
+        }
+
+        const resUpsert = await fetch("/api/conceptos-catalogo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            family_id: targetFamilyId,
+            label: existingConcept.label,
+            vincular_gastos_sin_catalogo: false,
+          }),
+        });
+        const dataUpsert = await resUpsert.json();
+        if (!resUpsert.ok) {
+          mostrarAviso(
+            dataUpsert.error || "No se pudo actualizar la categoría",
+          );
+          return;
+        }
+        const conceptUpsert = dataUpsert.concept as {
+          id: string;
+          label: string;
+          family_id: string;
+        };
+        const nextCatalogo = actualizarCatalogoConcepto(families, conceptUpsert);
+        setCatalogo(nextCatalogo);
+        setClientCache(FAMILIAS_CACHE_KEY, nextCatalogo);
+        const ok = await guardarConceptoCatalogo(
+          editModal.gastoIds,
+          existingConcept.id,
+          { ...guardarOpts, catalogoSnapshot: nextCatalogo },
+        );
+        if (ok) {
+          setEditModal(null);
+          setSelectedGastoIds(new Set());
+        }
+        return;
       }
-      const resUpsert = await fetch("/api/conceptos-catalogo", {
+
+      if (!famTrim) {
+        const ok = await guardarConceptoLibre(
+          editModal.gastoIds,
+          catTrim,
+          guardarOpts,
+        );
+        if (ok) {
+          setEditModal(null);
+          setSelectedGastoIds(new Set());
+        }
+        return;
+      }
+
+      let familyId: string | undefined = findFamilyByName(famTrim, families)?.id;
+      if (!familyId) {
+        const resFam = await fetch("/api/familias", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: famTrim }),
+        });
+        const dataFam = await resFam.json();
+        if (resFam.ok) {
+          familyId = dataFam.family.id as string;
+          families = agregarFamiliaAlCatalogo(families, dataFam.family);
+        } else if (resFam.status === 409) {
+          families = catalogo.length > 0 ? catalogo : await fetchFamilies();
+          familyId = findFamilyByName(famTrim, families)?.id;
+        } else {
+          mostrarAviso(dataFam.error || "No se pudo crear la familia");
+          return;
+        }
+      }
+      if (!familyId) {
+        mostrarAviso("No se pudo resolver la familia.");
+        return;
+      }
+
+      const resCreate = await fetch("/api/conceptos-catalogo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          family_id: targetFamilyId,
-          label: existingConcept.label,
-          vincular_gastos_sin_catalogo: true,
+          family_id: familyId,
+          label: catTrim,
+          vincular_gastos_sin_catalogo: false,
         }),
       });
-      const dataUpsert = await resUpsert.json();
-      if (!resUpsert.ok) {
-        mostrarAviso(
-          dataUpsert.error || "No se pudo actualizar/vincular la categoría",
-        );
+      const dataCreate = await resCreate.json();
+      if (!resCreate.ok) {
+        mostrarAviso(dataCreate.error || "No se pudo crear la categoría");
         return;
       }
-      const vinculados = Number(dataUpsert.gastos_vinculados ?? 0);
-      if (vinculados > 0) {
-        mostrarAviso(
-          `Se vincularon ${vinculados} gasto(s) a la categoría "${existingConcept.label}".`,
-        );
-      }
-      await cargarCatalogo();
+      const newConcept = dataCreate.concept as {
+        id: string;
+        label: string;
+        family_id: string;
+      };
+      const nextCatalogo = actualizarCatalogoConcepto(families, newConcept);
+      setCatalogo(nextCatalogo);
+      setClientCache(FAMILIAS_CACHE_KEY, nextCatalogo);
       const ok = await guardarConceptoCatalogo(
         editModal.gastoIds,
-        existingConcept.id,
+        newConcept.id,
+        { ...guardarOpts, catalogoSnapshot: nextCatalogo },
       );
       if (ok) {
         setEditModal(null);
         setSelectedGastoIds(new Set());
       }
-      return;
-    }
-
-    if (!famTrim) {
-      const ok = await guardarConceptoLibre(editModal.gastoIds, catTrim);
-      if (ok) {
-        setEditModal(null);
-        setSelectedGastoIds(new Set());
-      }
-      return;
-    }
-
-    let familyId: string | undefined = findFamilyByName(famTrim, families)?.id;
-    if (!familyId) {
-      const resFam = await fetch("/api/familias", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: famTrim }),
-      });
-      const dataFam = await resFam.json();
-      if (resFam.ok) {
-        familyId = dataFam.family.id as string;
-      } else if (resFam.status === 409) {
-        families = await fetchFamilies();
-        familyId = findFamilyByName(famTrim, families)?.id;
-      } else {
-        mostrarAviso(dataFam.error || "No se pudo crear la familia");
-        return;
-      }
-    }
-    if (!familyId) {
-      mostrarAviso("No se pudo resolver la familia.");
-      return;
-    }
-
-    const resCreate = await fetch("/api/conceptos-catalogo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        family_id: familyId,
-        label: catTrim,
-        vincular_gastos_sin_catalogo: true,
-      }),
-    });
-    const dataCreate = await resCreate.json();
-    if (!resCreate.ok) {
-      mostrarAviso(dataCreate.error || "No se pudo crear la categoría");
-      return;
-    }
-    const vinculados = Number(dataCreate.gastos_vinculados ?? 0);
-    if (vinculados > 0) {
-      mostrarAviso(`Se vincularon ${vinculados} gasto(s) a la categoría "${catTrim}".`);
-    }
-    const newConceptId = dataCreate.concept.id as string;
-    await cargarCatalogo();
-    const ok = await guardarConceptoCatalogo(editModal.gastoIds, newConceptId);
-    if (ok) {
-      setEditModal(null);
-      setSelectedGastoIds(new Set());
+    } finally {
+      setSaveInProgress(false);
     }
   };
 
