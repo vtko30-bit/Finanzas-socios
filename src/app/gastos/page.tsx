@@ -1577,7 +1577,7 @@ function GastosPageContent() {
           {hayFiltrosGastosActivos ? (
             <button
               type="button"
-              className="ui-btn-soft-xs shrink-0"
+              className="ui-btn-soft-2xs shrink-0"
               onClick={limpiarFiltros}
             >
               Limpiar
@@ -1602,8 +1602,8 @@ function GastosPageContent() {
               type="button"
               className={
                 uiBloqueadoGuardado
-                  ? "rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900 opacity-40 cursor-not-allowed"
-                  : "ui-btn-soft-xs"
+                  ? "inline-flex items-center rounded border border-slate-900/20 bg-white/90 px-1.5 py-px text-[10px] leading-tight text-slate-900 opacity-40 cursor-not-allowed"
+                  : "ui-btn-soft-2xs"
               }
               disabled={uiBloqueadoGuardado}
               onClick={() => abrirEdicionCategoriaSeleccion()}
@@ -1783,7 +1783,7 @@ function GastosPageContent() {
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="ui-btn-soft-xs"
+                className="ui-btn-soft-2xs"
                 onClick={limpiarFiltros}
               >
                 Limpiar filtros
@@ -1792,8 +1792,8 @@ function GastosPageContent() {
                 type="button"
                 className={
                   selectedGastoIds.size === 0 || uiBloqueadoGuardado
-                    ? "rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs text-slate-900 opacity-40 cursor-not-allowed"
-                    : "ui-btn-soft-xs"
+                    ? "inline-flex items-center rounded border border-slate-900/20 bg-white/90 px-1.5 py-px text-[10px] leading-tight text-slate-900 opacity-40 cursor-not-allowed"
+                    : "ui-btn-soft-2xs"
                 }
                 disabled={
                   selectedGastoIds.size === 0 || uiBloqueadoGuardado

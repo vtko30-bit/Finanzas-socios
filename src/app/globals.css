@@ -133,6 +133,11 @@ body {
     color: #0f172a;
   }
 
+  .ui-btn-soft-2xs {
+    @apply inline-flex items-center rounded border border-cyan-500/25 bg-cyan-500/10 px-1.5 py-px text-[10px] font-medium leading-tight transition hover:border-cyan-500/35 hover:bg-cyan-500/15;
+    color: #0f172a;
+  }
+
   .ui-alert-warning {
     @apply rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950;
   }
