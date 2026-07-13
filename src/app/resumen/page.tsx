@@ -104,14 +104,18 @@ function agruparMovimientosPorNombre(
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
+/** `null` = todas (sin filtro); Set vacío = ninguna; Set parcial = filtro explícito. */
+type FiltroMultiSeleccion = Set<string> | null;
+
 function filtrarBloquesPorSucursal<T extends { sucursal: string }>(
   bloques: T[],
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
   opciones: string[],
 ): T[] {
-  if (opciones.length === 0 || seleccion.size === 0 || seleccion.size === opciones.length) {
+  if (opciones.length === 0 || seleccion === null || seleccion.size === opciones.length) {
     return bloques;
   }
+  if (seleccion.size === 0) return [];
   return bloques.filter((b) => seleccion.has(b.sucursal));
 }
 
@@ -273,46 +277,68 @@ function defaultResumenPivotCacheKey(): string {
 
 function filtrarVentasPorFormaPago(
   rows: PivotRowVenta[],
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
 ): PivotRowVenta[] {
-  if (seleccion.size === 0) return rows;
+  if (seleccion === null) return rows;
+  if (seleccion.size === 0) return [];
   return rows.filter((r) => seleccion.has(r.formaPago));
 }
 
 function filtrarGastosPorFamilia(
   rows: PivotRowGasto[],
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
 ): PivotRowGasto[] {
-  if (seleccion.size === 0) return rows;
+  if (seleccion === null) return rows;
+  if (seleccion.size === 0) return [];
   return rows.filter((r) => seleccion.has(r.familia));
 }
 
 function toggleSeleccionMulti(
   value: string,
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
   opciones: string[],
-): Set<string> {
-  if (opciones.length === 0) return new Set();
-  if (seleccion.size === 0) {
+): FiltroMultiSeleccion {
+  if (opciones.length === 0) return null;
+  if (seleccion === null) {
     return new Set(opciones.filter((o) => o !== value));
   }
   const next = new Set(seleccion);
   if (next.has(value)) next.delete(value);
   else next.add(value);
-  if (next.size === 0 || next.size === opciones.length) return new Set();
+  if (next.size === 0) return new Set();
+  if (next.size === opciones.length) return null;
   return next;
 }
 
-function opcionMultiMarcada(value: string, seleccion: Set<string>): boolean {
-  return seleccion.size === 0 || seleccion.has(value);
+function opcionMultiMarcada(
+  value: string,
+  seleccion: FiltroMultiSeleccion,
+  totalOpciones: number,
+): boolean {
+  if (seleccion === null || seleccion.size === totalOpciones) return true;
+  if (seleccion.size === 0) return false;
+  return seleccion.has(value);
+}
+
+function podarSeleccion(
+  prev: FiltroMultiSeleccion,
+  validas: Set<string>,
+): FiltroMultiSeleccion {
+  if (prev === null) return null;
+  if (prev.size === 0) return prev;
+  const next = new Set([...prev].filter((v) => validas.has(v)));
+  if (next.size === prev.size) return prev;
+  if (next.size === 0) return new Set();
+  if (next.size === validas.size) return null;
+  return next;
 }
 
 type ResumenMultiSelectProps = {
   id: string;
   label: string;
   opciones: string[];
-  seleccion: Set<string>;
-  onChange: (next: Set<string>) => void;
+  seleccion: FiltroMultiSeleccion;
+  onChange: (next: FiltroMultiSeleccion) => void;
   placeholder: string;
 };
 
@@ -329,13 +355,18 @@ function ResumenMultiSelect({
 
   const textoCampo = useMemo(() => {
     if (opciones.length === 0) return "Sin opciones";
-    if (seleccion.size === 0 || seleccion.size === opciones.length) return placeholder;
+    if (seleccion === null || seleccion.size === opciones.length) return placeholder;
+    if (seleccion.size === 0) return "Ninguna";
     if (seleccion.size === 1) return [...seleccion][0];
     return `${seleccion.size} seleccionadas`;
   }, [seleccion, opciones, placeholder]);
 
-  const todasMarcadas = seleccion.size === 0 || seleccion.size === opciones.length;
-  const algunasMarcadas = seleccion.size > 0 && seleccion.size < opciones.length;
+  const todasMarcadas =
+    seleccion === null || seleccion.size === opciones.length;
+  const algunasMarcadas =
+    seleccion !== null &&
+    seleccion.size > 0 &&
+    seleccion.size < opciones.length;
 
   const abrir = () => {
     if (blurT.current) clearTimeout(blurT.current);
@@ -381,7 +412,7 @@ function ResumenMultiSelect({
                 ref={(el) => {
                   if (el) el.indeterminate = algunasMarcadas;
                 }}
-                onChange={() => onChange(new Set())}
+                onChange={() => onChange(todasMarcadas ? new Set() : null)}
               />
               <span className="text-xs font-medium">Todas</span>
             </label>
@@ -392,7 +423,7 @@ function ResumenMultiSelect({
                 <input
                   type="checkbox"
                   className="h-3.5 w-3.5 accent-sky-700"
-                  checked={opcionMultiMarcada(opt, seleccion)}
+                  checked={opcionMultiMarcada(opt, seleccion, opciones.length)}
                   onChange={() => onChange(toggleSeleccionMulti(opt, seleccion, opciones))}
                 />
                 <span className="min-w-0 truncate text-xs">{opt}</span>
@@ -422,15 +453,12 @@ export default function ResumenPage() {
     () => getClientCache<PivotResponse>(defaultResumenPivotCacheKey()) ?? null,
   );
   const [status, setStatus] = useState("");
-  const [familiasSeleccionadas, setFamiliasSeleccionadas] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [formasPagoSeleccionadas, setFormasPagoSeleccionadas] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [familiasSeleccionadas, setFamiliasSeleccionadas] =
+    useState<FiltroMultiSeleccion>(null);
+  const [formasPagoSeleccionadas, setFormasPagoSeleccionadas] =
+    useState<FiltroMultiSeleccion>(null);
+  const [sucursalesSeleccionadas, setSucursalesSeleccionadas] =
+    useState<FiltroMultiSeleccion>(null);
 
   const [familiaDetalleCtx, setFamiliaDetalleCtx] = useState<{
     familia: string;
@@ -497,7 +525,8 @@ export default function ResumenPage() {
       listaSucursales,
     );
 
-    const desgloseVentasPorSucursal = sucursalesSeleccionadas.size >= 2;
+    const desgloseVentasPorSucursal =
+      sucursalesSeleccionadas !== null && sucursalesSeleccionadas.size >= 2;
 
     return {
       ...data,
@@ -620,7 +649,7 @@ export default function ResumenPage() {
         });
         if (origenBloque) {
           q.set("origen_cuenta_bloque", origenBloque);
-        } else if (sucursalesSeleccionadas.size === 1) {
+        } else if (sucursalesSeleccionadas?.size === 1) {
           q.set("sucursal", [...sucursalesSeleccionadas][0]);
         }
         const res = await fetch(`/api/resumen/gastos-familia-detalle?${q}`);
@@ -675,7 +704,7 @@ export default function ResumenPage() {
         });
         if (familiaDetalleCtx.origenBloque) {
           q.set("origen_cuenta_bloque", familiaDetalleCtx.origenBloque);
-        } else if (sucursalesSeleccionadas.size === 1) {
+        } else if (sucursalesSeleccionadas?.size === 1) {
           q.set("sucursal", [...sucursalesSeleccionadas][0]);
         }
         const res = await fetch(
@@ -714,27 +743,18 @@ export default function ResumenPage() {
   }, [modo, anio, mes, dia, semana, rangoDesde, rangoHasta, cerrarFamiliaDetalle]);
 
   useEffect(() => {
-    setFamiliasSeleccionadas((prev) => {
-      if (prev.size === 0) return prev;
-      const validas = new Set(opcionesFamilia);
-      const next = new Set([...prev].filter((f) => validas.has(f)));
-      return next.size === prev.size ? prev : next;
-    });
-    setFormasPagoSeleccionadas((prev) => {
-      if (prev.size === 0) return prev;
-      const validas = new Set(opcionesFormaPago);
-      const next = new Set([...prev].filter((f) => validas.has(f)));
-      return next.size === prev.size ? prev : next;
-    });
+    setFamiliasSeleccionadas((prev) =>
+      podarSeleccion(prev, new Set(opcionesFamilia)),
+    );
+    setFormasPagoSeleccionadas((prev) =>
+      podarSeleccion(prev, new Set(opcionesFormaPago)),
+    );
   }, [opcionesFamilia, opcionesFormaPago]);
 
   useEffect(() => {
-    setSucursalesSeleccionadas((prev) => {
-      if (prev.size === 0) return prev;
-      const validas = new Set(listaSucursales);
-      const next = new Set([...prev].filter((s) => validas.has(s)));
-      return next.size === prev.size ? prev : next;
-    });
+    setSucursalesSeleccionadas((prev) =>
+      podarSeleccion(prev, new Set(listaSucursales)),
+    );
   }, [listaSucursales]);
 
   useEffect(() => {
@@ -946,11 +966,11 @@ export default function ResumenPage() {
     };
   }, [data, ingresoCreditosAgregado, resultadoIngresosMenosEgresos]);
 
-  const filtroFamiliaActivo = familiasSeleccionadas.size > 0;
-  const filtroFormaPagoActivo = formasPagoSeleccionadas.size > 0;
-  const filtroSucursalActivo = sucursalesSeleccionadas.size > 0;
+  const filtroFamiliaActivo = familiasSeleccionadas !== null;
+  const filtroFormaPagoActivo = formasPagoSeleccionadas !== null;
+  const filtroSucursalActivo = sucursalesSeleccionadas !== null;
   const sucursalUnicaLabel =
-    sucursalesSeleccionadas.size === 1 ? [...sucursalesSeleccionadas][0] : null;
+    sucursalesSeleccionadas?.size === 1 ? [...sucursalesSeleccionadas][0] : null;
 
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
@@ -1096,7 +1116,7 @@ export default function ResumenPage() {
                   <button
                     type="button"
                     className="ui-btn-soft-xs"
-                    onClick={() => setSucursalesSeleccionadas(new Set())}
+                    onClick={() => setSucursalesSeleccionadas(null)}
                   >
                     Quitar filtro sucursal
                   </button>
@@ -1105,7 +1125,7 @@ export default function ResumenPage() {
                   <button
                     type="button"
                     className="ui-btn-soft-xs"
-                    onClick={() => setFamiliasSeleccionadas(new Set())}
+                    onClick={() => setFamiliasSeleccionadas(null)}
                   >
                     Quitar filtro familia
                   </button>
@@ -1114,7 +1134,7 @@ export default function ResumenPage() {
                   <button
                     type="button"
                     className="ui-btn-soft-xs"
-                    onClick={() => setFormasPagoSeleccionadas(new Set())}
+                    onClick={() => setFormasPagoSeleccionadas(null)}
                   >
                     Quitar filtro forma de pago
                   </button>
