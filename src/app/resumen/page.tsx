@@ -954,13 +954,13 @@ export default function ResumenPage() {
           <section aria-label="Filtros" className="ui-filter-bar">
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5">
-                <div className="relative min-w-[200px] max-w-xs flex-1">
+                <div className="relative shrink-0">
                   <span className="mb-0.5 block text-xs font-medium text-slate-600">
                     Período
                   </span>
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-nowrap items-center gap-1.5">
                     <select
-                      className="box-border h-8 min-w-[9rem] flex-1 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#2277ff] focus:ring-2 focus:ring-[#2277ff]/20 sm:max-w-[11rem] sm:flex-none"
+                      className="box-border h-8 w-[9rem] shrink-0 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#2277ff] focus:ring-2 focus:ring-[#2277ff]/20"
                       value={modo}
                       onChange={(e) => setModo(e.target.value as FiltroModo)}
                     >
@@ -973,7 +973,7 @@ export default function ResumenPage() {
                         type="number"
                         min={1990}
                         max={2100}
-                        className="box-border h-8 w-28 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-28 shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                         value={anio}
                         onChange={(e) => setAnio(e.target.value)}
                       />
@@ -981,7 +981,7 @@ export default function ResumenPage() {
                     {modo === "mes" ? (
                       <input
                         type="month"
-                        className="box-border h-8 min-w-[9rem] rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                         value={mes}
                         onChange={(e) => setMes(e.target.value)}
                       />
@@ -990,14 +990,14 @@ export default function ResumenPage() {
                       <>
                         <input
                           type="date"
-                          className="box-border h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
+                          className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                           value={rangoDesde}
                           onChange={(e) => setRangoDesde(e.target.value)}
                         />
                         <span className="shrink-0 text-xs text-slate-500">a</span>
                         <input
                           type="date"
-                          className="box-border h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500 sm:min-w-[9rem] sm:flex-none"
+                          className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
                           value={rangoHasta}
                           onChange={(e) => setRangoHasta(e.target.value)}
                         />
