@@ -383,22 +383,10 @@ export default function SociosPage() {
         {bloques.map((bloque) => {
           const socioOpen = Boolean(expandedSocio[bloque.socio]);
           return (
-          <section key={bloque.socio} className="ui-card-panel min-w-0">
-            {!filtroUnMes ? (
-              <button
-                type="button"
-                className="group flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left"
-                onClick={() => toggleSocioExpanded(bloque.socio)}
-                aria-expanded={socioOpen}
-              >
-                <span className="text-base font-semibold text-sky-950">{bloque.socio}</span>
-                <DetalleToggle abierto={socioOpen} />
-              </button>
-            ) : (
-              <h2 className="border-b border-slate-100 px-4 py-2.5 text-base font-semibold text-sky-950">
-                {bloque.socio}
-              </h2>
-            )}
+          <section key={bloque.socio} className="ui-card-panel flex min-w-0 flex-col">
+            <h2 className="border-b border-slate-100 px-4 py-2.5 text-base font-semibold text-sky-950">
+              {bloque.socio}
+            </h2>
 
             {filtroUnMes && bloque.rowsCategoria.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-slate-500">
@@ -542,6 +530,20 @@ export default function SociosPage() {
                     </tbody>
                   </table>
                 )}
+              </div>
+            ) : null}
+
+            {!filtroUnMes && bloque.rowsCategoria.length > 0 ? (
+              <div className="flex justify-end border-t border-slate-100 px-4 py-2.5">
+                <button
+                  type="button"
+                  className="group"
+                  onClick={() => toggleSocioExpanded(bloque.socio)}
+                  aria-expanded={socioOpen}
+                  aria-label={socioOpen ? "Ocultar detalle" : "Ver detalle"}
+                >
+                  <DetalleToggle abierto={socioOpen} />
+                </button>
               </div>
             ) : null}
           </section>
