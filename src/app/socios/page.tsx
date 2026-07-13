@@ -122,6 +122,15 @@ function monthTotalForSocio(rowsCategoria: CategoriaPivot[], monthKey: string): 
   return rowsCategoria.reduce((sum, r) => sum + (r.byMonth[monthKey] ?? 0), 0);
 }
 
+function DetalleToggle({ abierto }: { abierto: boolean }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 group-hover:border-sky-200 group-hover:bg-sky-50 group-hover:text-sky-800">
+      Detalle
+      <span aria-hidden>{abierto ? "▲" : "▼"}</span>
+    </span>
+  );
+}
+
 export default function SociosPage() {
   const [rows, setRows] = useState<GastoRow[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogFamily[]>([]);
@@ -370,14 +379,12 @@ export default function SociosPage() {
             {!filtroUnMes ? (
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left"
+                className="group flex w-full items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left"
                 onClick={() => toggleSocioExpanded(bloque.socio)}
                 aria-expanded={socioOpen}
               >
                 <span className="text-base font-semibold text-sky-950">{bloque.socio}</span>
-                <span className="shrink-0 text-xs text-slate-500" aria-hidden>
-                  {socioOpen ? "▲" : "▼"}
-                </span>
+                <DetalleToggle abierto={socioOpen} />
               </button>
             ) : (
               <h2 className="border-b border-slate-100 px-4 py-2.5 text-base font-semibold text-sky-950">
@@ -416,14 +423,12 @@ export default function SociosPage() {
                           <td className={tdCls}>
                             <button
                               type="button"
-                              className="inline-flex w-full items-center justify-between gap-1 text-left font-medium text-sky-900 hover:underline"
+                              className="group inline-flex w-full items-center justify-between gap-1 text-left font-medium text-sky-900 hover:underline"
                               onClick={() => toggleExpanded(rowKey)}
                               aria-expanded={open}
                             >
                               <span className="min-w-0 truncate">{r.categoria}</span>
-                              <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
-                                {open ? "▲" : "▼"}
-                              </span>
+                              <DetalleToggle abierto={open} />
                             </button>
                           </td>
                           <td className={tdNum}>{formatClp(montoMes)}</td>
@@ -466,17 +471,19 @@ export default function SociosPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="border-b border-slate-200 bg-slate-50/90">
-                        <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
-                        {visibleMonthKeys.map((mk) => (
-                          <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
-                            {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
+                      {!socioOpen ? (
+                        <tr className="border-b border-slate-200 bg-slate-50/90">
+                          <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
+                          {visibleMonthKeys.map((mk) => (
+                            <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
+                              {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-semibold text-sky-800`}>
+                            {formatClp(bloque.total)}
                           </td>
-                        ))}
-                        <td className={`${tdNum} font-semibold text-sky-800`}>
-                          {formatClp(bloque.total)}
-                        </td>
-                      </tr>
+                        </tr>
+                      ) : null}
                       {socioOpen
                         ? bloque.rowsCategoria.map((r) => {
                             const rowKey = `${bloque.socio}::${r.categoria.toLowerCase()}`;
@@ -487,14 +494,12 @@ export default function SociosPage() {
                                   <td className={`${tdCatSticky} group-hover:bg-slate-50`}>
                                     <button
                                       type="button"
-                                      className="inline-flex w-full items-center justify-between gap-2 text-left text-sky-900 hover:underline"
+                                      className="group inline-flex w-full items-center justify-between gap-2 text-left text-sky-900 hover:underline"
                                       onClick={() => toggleExpanded(rowKey)}
                                       aria-expanded={open}
                                     >
                                       <span className="font-medium">{r.categoria}</span>
-                                      <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
-                                        {open ? "▲" : "▼"}
-                                      </span>
+                                      <DetalleToggle abierto={open} />
                                     </button>
                                   </td>
                                   {visibleMonthKeys.map((mk) => (
@@ -513,6 +518,19 @@ export default function SociosPage() {
                             );
                           })
                         : null}
+                      {socioOpen ? (
+                        <tr className="border-t border-slate-200 bg-slate-50/90">
+                          <td className={`${tdCatStickyMuted} font-medium text-slate-900`}>Total</td>
+                          {visibleMonthKeys.map((mk) => (
+                            <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
+                              {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
+                            </td>
+                          ))}
+                          <td className={`${tdNum} font-semibold text-sky-800`}>
+                            {formatClp(bloque.total)}
+                          </td>
+                        </tr>
+                      ) : null}
                     </tbody>
                   </table>
                 )}
