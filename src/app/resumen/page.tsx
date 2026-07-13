@@ -977,9 +977,9 @@ export default function ResumenPage() {
   );
 
   return (
-    <main className="page-main page-main--2xl">
+    <main className="page-main page-main--2xl gap-2 pt-3 sm:pt-4">
       <header>
-        <h1 className="page-title">Resumen mensual</h1>
+        <h1 className="page-title text-[1.05rem] sm:text-[1.3rem]">Resumen</h1>
       </header>
 
       {!ready ? (
