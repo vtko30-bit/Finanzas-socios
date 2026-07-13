@@ -382,6 +382,151 @@ function sortFamiliaSummaries(
 const SIN_FAMILIA = "__sin_familia__";
 const SIN_CATEGORIA = "__sin_categoria__";
 
+type GastosMultiSelectOption = { value: string; label: string };
+
+function valoresOpciones(opciones: GastosMultiSelectOption[]): string[] {
+  return opciones.map((o) => o.value);
+}
+
+function toggleSeleccionMulti(
+  value: string,
+  seleccion: Set<string>,
+  opciones: string[],
+): Set<string> {
+  if (opciones.length === 0) return new Set();
+  if (seleccion.size === 0) {
+    return new Set(opciones.filter((o) => o !== value));
+  }
+  const next = new Set(seleccion);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  if (next.size === 0 || next.size === opciones.length) return new Set();
+  return next;
+}
+
+function opcionMultiMarcada(value: string, seleccion: Set<string>): boolean {
+  return seleccion.size === 0 || seleccion.has(value);
+}
+
+function etiquetaSeleccion(
+  seleccion: Set<string>,
+  opciones: GastosMultiSelectOption[],
+): string | null {
+  if (seleccion.size !== 1) return null;
+  const v = [...seleccion][0];
+  return opciones.find((o) => o.value === v)?.label ?? v;
+}
+
+type GastosMultiSelectProps = {
+  id: string;
+  label: string;
+  opciones: GastosMultiSelectOption[];
+  seleccion: Set<string>;
+  onChange: (next: Set<string>) => void;
+  placeholder: string;
+  className?: string;
+};
+
+function GastosMultiSelect({
+  id,
+  label,
+  opciones,
+  seleccion,
+  onChange,
+  placeholder,
+  className = "",
+}: GastosMultiSelectProps) {
+  const [abierto, setAbierto] = useState(false);
+  const blurT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const valores = useMemo(() => valoresOpciones(opciones), [opciones]);
+
+  const textoCampo = useMemo(() => {
+    if (opciones.length === 0) return "Sin opciones";
+    if (seleccion.size === 0 || seleccion.size === opciones.length) return placeholder;
+    const una = etiquetaSeleccion(seleccion, opciones);
+    if (una) return una;
+    return `${seleccion.size} seleccionadas`;
+  }, [seleccion, opciones, placeholder]);
+
+  const todasMarcadas = seleccion.size === 0 || seleccion.size === opciones.length;
+  const algunasMarcadas = seleccion.size > 0 && seleccion.size < opciones.length;
+
+  const abrir = () => {
+    if (blurT.current) clearTimeout(blurT.current);
+    setAbierto(true);
+  };
+
+  const cerrarLuego = () => {
+    blurT.current = setTimeout(() => setAbierto(false), 150);
+  };
+
+  return (
+    <div className={`relative min-w-0 flex flex-col gap-0.5 ${className}`.trim()}>
+      <span className="text-xs text-slate-600">{label}</span>
+      <button
+        type="button"
+        id={id}
+        aria-expanded={abierto}
+        aria-controls={`${id}-lista`}
+        disabled={opciones.length === 0}
+        className="ui-filter-control box-border flex w-full items-center justify-between gap-2 text-left outline-none focus:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={() => (abierto ? setAbierto(false) : abrir())}
+        onBlur={cerrarLuego}
+      >
+        <span className="min-w-0 truncate">{textoCampo}</span>
+        <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
+          {abierto ? "▲" : "▼"}
+        </span>
+      </button>
+      {abierto && opciones.length > 0 ? (
+        <ul
+          id={`${id}-lista`}
+          role="listbox"
+          aria-multiselectable
+          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <li className="border-b border-slate-100 px-3 py-2">
+            <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-sky-700"
+                checked={todasMarcadas}
+                ref={(el) => {
+                  if (el) el.indeterminate = algunasMarcadas;
+                }}
+                onChange={() => onChange(new Set())}
+              />
+              <span className="text-xs font-medium">Todas</span>
+            </label>
+          </li>
+          {opciones.map((opt) => (
+            <li key={opt.value} className="px-3 py-1.5 hover:bg-slate-50">
+              <label className="flex cursor-pointer items-center gap-2 text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-sky-700"
+                  checked={opcionMultiMarcada(opt.value, seleccion)}
+                  onChange={() =>
+                    onChange(toggleSeleccionMulti(opt.value, seleccion, valores))
+                  }
+                />
+                <span className="min-w-0 truncate text-xs">{opt.label}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function podarSeleccion(prev: Set<string>, validas: Set<string>): Set<string> {
+  if (prev.size === 0) return prev;
+  const next = new Set([...prev].filter((v) => validas.has(v)));
+  return next.size === prev.size ? prev : next;
+}
+
 function filtrarGastos(
   rows: GastoRow[],
   opts: {
@@ -393,9 +538,9 @@ function filtrarGastos(
     rangoHasta: string;
     nombreDestino: string;
     descripcion: string;
-    familia: string;
-    origen: string;
-    categoria: string;
+    familias: Set<string>;
+    origenes: Set<string>;
+    categorias: Set<string>;
     catalogo: CatalogFamily[];
   },
 ): GastoRow[] {
@@ -415,28 +560,24 @@ function filtrarGastos(
     );
   }
 
-  const og = opts.origen.trim().toLowerCase();
-  if (og) {
-    out = out.filter((r) => (r.origen || "").toLowerCase().includes(og));
+  if (opts.origenes.size > 0) {
+    out = out.filter((r) => opts.origenes.has((r.origen || "").trim()));
   }
 
-  if (opts.familia && opts.familia !== "") {
-    if (opts.familia === SIN_FAMILIA) {
-      out = out.filter((r) => !r.familia || !String(r.familia).trim());
-    } else {
-      out = out.filter((r) => (r.familia || "") === opts.familia);
-    }
+  if (opts.familias.size > 0) {
+    out = out.filter((r) => {
+      const f = (r.familia || "").trim();
+      if (!f) return opts.familias.has(SIN_FAMILIA);
+      return opts.familias.has(f);
+    });
   }
 
-  const cat = opts.categoria.trim();
-  if (cat) {
-    if (cat === SIN_CATEGORIA) {
-      out = out.filter((r) => !categoriaDisplayLabel(r, opts.catalogo).trim());
-    } else {
-      out = out.filter(
-        (r) => categoriaDisplayLabel(r, opts.catalogo) === cat,
-      );
-    }
+  if (opts.categorias.size > 0) {
+    out = out.filter((r) => {
+      const c = categoriaDisplayLabel(r, opts.catalogo).trim();
+      if (!c) return opts.categorias.has(SIN_CATEGORIA);
+      return opts.categorias.has(c);
+    });
   }
 
   if (opts.modoFecha === "todo") {
@@ -581,9 +722,9 @@ function GastosPageContent() {
   const [rangoHasta, setRangoHasta] = useState("");
   const [filtroNombreDestino, setFiltroNombreDestino] = useState("");
   const [filtroDescripcion, setFiltroDescripcion] = useState("");
-  const [filtroFamilia, setFiltroFamilia] = useState("");
-  const [filtroOrigen, setFiltroOrigen] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroFamilias, setFiltroFamilias] = useState<Set<string>>(() => new Set());
+  const [filtroOrigenes, setFiltroOrigenes] = useState<Set<string>>(() => new Set());
+  const [filtroCategorias, setFiltroCategorias] = useState<Set<string>>(() => new Set());
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
   const [agruparPorFamilia, setAgruparPorFamilia] = useState(false);
   const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
@@ -793,6 +934,59 @@ function GastosPageContent() {
     [rows, catalogo],
   );
 
+  const hayGastosSinFamilia = useMemo(
+    () => rows.some((r) => !r.familia || !String(r.familia).trim()),
+    [rows],
+  );
+
+  const opcionesOrigen = useMemo((): GastosMultiSelectOption[] => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const v = (r.origen || "").trim();
+      if (v) set.add(v);
+    }
+    return [...set]
+      .sort((a, b) => a.localeCompare(b, "es"))
+      .map((v) => ({ value: v, label: v }));
+  }, [rows]);
+
+  const opcionesFamilia = useMemo((): GastosMultiSelectOption[] => {
+    const opts: GastosMultiSelectOption[] = [];
+    if (hayGastosSinFamilia) {
+      opts.push({ value: SIN_FAMILIA, label: "Sin familia" });
+    }
+    for (const n of nombresFamiliaOpciones) {
+      opts.push({ value: n, label: n });
+    }
+    return opts;
+  }, [nombresFamiliaOpciones, hayGastosSinFamilia]);
+
+  const opcionesCategoria = useMemo((): GastosMultiSelectOption[] => {
+    const opts: GastosMultiSelectOption[] = [];
+    if (hayGastosSinCategoria) {
+      opts.push({ value: SIN_CATEGORIA, label: "Sin categoría" });
+    }
+    for (const n of nombresCategoriaOpciones) {
+      opts.push({ value: n, label: n });
+    }
+    return opts;
+  }, [nombresCategoriaOpciones, hayGastosSinCategoria]);
+
+  useEffect(() => {
+    const validas = new Set(valoresOpciones(opcionesOrigen));
+    setFiltroOrigenes((prev) => podarSeleccion(prev, validas));
+  }, [opcionesOrigen]);
+
+  useEffect(() => {
+    const validas = new Set(valoresOpciones(opcionesFamilia));
+    setFiltroFamilias((prev) => podarSeleccion(prev, validas));
+  }, [opcionesFamilia]);
+
+  useEffect(() => {
+    const validas = new Set(valoresOpciones(opcionesCategoria));
+    setFiltroCategorias((prev) => podarSeleccion(prev, validas));
+  }, [opcionesCategoria]);
+
   const filasFiltradas = useMemo(
     () =>
       filtrarGastos(rows, {
@@ -804,9 +998,9 @@ function GastosPageContent() {
         rangoHasta,
         nombreDestino: filtroNombreDestino,
         descripcion: filtroDescripcion,
-        familia: filtroFamilia,
-        origen: filtroOrigen,
-        categoria: filtroCategoria,
+        familias: filtroFamilias,
+        origenes: filtroOrigenes,
+        categorias: filtroCategorias,
         catalogo,
       }),
     [
@@ -819,9 +1013,9 @@ function GastosPageContent() {
       rangoHasta,
       filtroNombreDestino,
       filtroDescripcion,
-      filtroFamilia,
-      filtroOrigen,
-      filtroCategoria,
+      filtroFamilias,
+      filtroOrigenes,
+      filtroCategorias,
       catalogo,
     ],
   );
@@ -861,17 +1055,17 @@ function GastosPageContent() {
       modoFecha !== "todo" ||
       filtroNombreDestino.trim() !== "" ||
       filtroDescripcion.trim() !== "" ||
-      filtroFamilia !== "" ||
-      filtroOrigen.trim() !== "" ||
-      filtroCategoria !== "" ||
+      filtroFamilias.size > 0 ||
+      filtroOrigenes.size > 0 ||
+      filtroCategorias.size > 0 ||
       soloSeleccionados,
     [
       modoFecha,
       filtroNombreDestino,
       filtroDescripcion,
-      filtroFamilia,
-      filtroOrigen,
-      filtroCategoria,
+      filtroFamilias,
+      filtroOrigenes,
+      filtroCategorias,
       soloSeleccionados,
     ],
   );
@@ -910,9 +1104,9 @@ function GastosPageContent() {
     rangoHasta,
     filtroNombreDestino,
     filtroDescripcion,
-    filtroFamilia,
-    filtroOrigen,
-    filtroCategoria,
+    filtroFamilias,
+    filtroOrigenes,
+    filtroCategorias,
     soloSeleccionados,
     agruparPorFamilia,
   ]);
@@ -943,9 +1137,9 @@ function GastosPageContent() {
     setRangoHasta("");
     setFiltroNombreDestino("");
     setFiltroDescripcion("");
-    setFiltroFamilia("");
-    setFiltroOrigen("");
-    setFiltroCategoria("");
+    setFiltroFamilias(new Set());
+    setFiltroOrigenes(new Set());
+    setFiltroCategorias(new Set());
     setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
     setFiltrosMovilAbiertos(false);
@@ -1350,7 +1544,7 @@ function GastosPageContent() {
   );
 
   return (
-    <main className="page-main page-main--2xl">
+    <main className="page-main page-main--2xl gap-2 pt-3 sm:pt-4">
       <h1 className="page-title">
           {esVistaPagoServiciosBancoEstado
             ? "Gastos — Pago servicios BancoEstado"
@@ -1497,16 +1691,15 @@ function GastosPageContent() {
                 </>
               ) : null}
             </div>
-            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
-              Origen
-              <input
-                type="text"
-                className="ui-filter-control w-full"
-                placeholder="Banco, MP…"
-                value={filtroOrigen}
-                onChange={(e) => setFiltroOrigen(e.target.value)}
-              />
-            </label>
+            <GastosMultiSelect
+              id="gastos-filtro-origen"
+              label="Origen"
+              opciones={opcionesOrigen}
+              seleccion={filtroOrigenes}
+              onChange={setFiltroOrigenes}
+              placeholder="Todos"
+              className="sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]"
+            />
             <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Nombre
               <input
@@ -1517,40 +1710,24 @@ function GastosPageContent() {
                 onChange={(e) => setFiltroNombreDestino(e.target.value)}
               />
             </label>
-            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
-              Familia
-              <select
-                className="ui-filter-control w-full"
-                value={filtroFamilia}
-                onChange={(e) => setFiltroFamilia(e.target.value)}
-              >
-                <option value="">Todas</option>
-                <option value={SIN_FAMILIA}>Sin familia</option>
-                {nombresFamiliaOpciones.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
-              Categoría
-              <select
-                className="ui-filter-control w-full"
-                value={filtroCategoria}
-                onChange={(e) => setFiltroCategoria(e.target.value)}
-              >
-                <option value="">Todas</option>
-                {hayGastosSinCategoria ? (
-                  <option value={SIN_CATEGORIA}>Sin categoría</option>
-                ) : null}
-                {nombresCategoriaOpciones.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <GastosMultiSelect
+              id="gastos-filtro-familia"
+              label="Familia"
+              opciones={opcionesFamilia}
+              seleccion={filtroFamilias}
+              onChange={setFiltroFamilias}
+              placeholder="Todas"
+              className="sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]"
+            />
+            <GastosMultiSelect
+              id="gastos-filtro-categoria"
+              label="Categoría"
+              opciones={opcionesCategoria}
+              seleccion={filtroCategorias}
+              onChange={setFiltroCategorias}
+              placeholder="Todas"
+              className="sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]"
+            />
             <label className="col-span-2 flex min-w-0 flex-col gap-0.5 text-xs text-slate-600 sm:col-span-1 sm:min-w-[98px] sm:flex-[1_1_31.5%] lg:min-w-[84px] lg:flex-[1_1_15.4%]">
               Descripción
               <input
