@@ -104,48 +104,58 @@ function agruparMovimientosPorNombre(
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
-/** Selección del filtro de sucursal / origen (ventas y gastos). */
-type SucursalVentasSel =
-  | { k: "todas" }
-  | { k: "por_sucursal" }
-  | { k: "una"; v: string };
-
-const LABEL_POR_SUCURSAL = "Por sucursal";
-const EVENTO_PREFIX = "EVENTO_";
-const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
-const EVENTO_PREFIX_RE = /^\s*evento(?:[_\-\s]|$)/i;
-
-function normalizarTextoEvento(v: string): string {
-  return v
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/^[^a-z0-9]+/, "")
-    .trim();
+function filtrarBloquesPorSucursal<T extends { sucursal: string }>(
+  bloques: T[],
+  seleccion: Set<string>,
+  opciones: string[],
+): T[] {
+  if (opciones.length === 0 || seleccion.size === 0 || seleccion.size === opciones.length) {
+    return bloques;
+  }
+  return bloques.filter((b) => seleccion.has(b.sucursal));
 }
 
-function esTextoFiltroEvento(v: string): boolean {
-  const trimmed = (v || "").trim();
-  if (trimmed.toLowerCase() === "eventos") return true;
-  const t = normalizarTextoEvento(trimmed);
-  if (!t) return false;
-  return (
-    EVENTO_PREFIX_RE.test(t) ||
-    EVENTO_PREFIXES.some((p) => t === p) ||
-    t.includes("evento_") ||
-    t.includes("evento-") ||
-    t.includes("evento ") ||
-    t.includes("evento")
-  );
+function mergePivotVentasRows(rows: PivotRowVenta[]): PivotRowVenta[] {
+  const map = new Map<string, PivotRowVenta>();
+  for (const r of rows) {
+    const prev = map.get(r.formaPago);
+    if (!prev) {
+      map.set(r.formaPago, {
+        formaPago: r.formaPago,
+        byMonth: { ...r.byMonth },
+        total: r.total,
+      });
+    } else {
+      prev.total += r.total;
+      for (const [mk, v] of Object.entries(r.byMonth)) {
+        prev.byMonth[mk] = (prev.byMonth[mk] ?? 0) + v;
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => a.formaPago.localeCompare(b.formaPago, "es"));
+}
+
+function mergePivotGastosRows(rows: PivotRowGasto[]): PivotRowGasto[] {
+  const map = new Map<string, PivotRowGasto>();
+  for (const r of rows) {
+    const prev = map.get(r.familia);
+    if (!prev) {
+      map.set(r.familia, {
+        familia: r.familia,
+        byMonth: { ...r.byMonth },
+        total: r.total,
+      });
+    } else {
+      prev.total += r.total;
+      for (const [mk, v] of Object.entries(r.byMonth)) {
+        prev.byMonth[mk] = (prev.byMonth[mk] ?? 0) + v;
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => a.familia.localeCompare(b.familia, "es"));
 }
 
 type FiltroModo = "anio" | "mes" | "rango";
-
-function textoMostradoSucursal(sel: SucursalVentasSel): string {
-  if (sel.k === "por_sucursal") return LABEL_POR_SUCURSAL;
-  if (sel.k === "una") return sel.v;
-  return "";
-}
 
 function totalesPorMesVentasDesdeRows(
   rows: PivotRowVenta[],
@@ -209,30 +219,19 @@ function yearRange(anio: string): { desde: string; hasta: string } {
 function buildResumenPivotCacheKey(args: {
   desde: string;
   hasta: string;
-  sel: SucursalVentasSel;
-  soloSucursalesFijas: boolean;
 }): string {
-  const q = new URLSearchParams({ desde: args.desde, hasta: args.hasta });
-  if (args.sel.k === "por_sucursal") {
-    q.set("ventasPorSucursal", "1");
-  } else if (args.sel.k === "una" && args.sel.v.trim()) {
-    q.set("sucursal", args.sel.v.trim());
-  }
-  if (args.soloSucursalesFijas) {
-    q.set("soloSucursalesFijas", "1");
-  }
+  const q = new URLSearchParams({
+    desde: args.desde,
+    hasta: args.hasta,
+    ventasPorSucursal: "1",
+  });
   return `/api/resumen/pivot?${q.toString()}`;
 }
 
 function defaultResumenPivotCacheKey(): string {
   const y = String(new Date().getFullYear());
   const { desde, hasta } = yearRange(y);
-  return buildResumenPivotCacheKey({
-    desde,
-    hasta,
-    sel: { k: "todas" },
-    soloSucursalesFijas: false,
-  });
+  return buildResumenPivotCacheKey({ desde, hasta });
 }
 
 function filtrarVentasPorFormaPago(
@@ -379,12 +378,7 @@ export default function ResumenPage() {
   });
   const [rangoDesde, setRangoDesde] = useState("");
   const [rangoHasta, setRangoHasta] = useState("");
-  const [sucursalSel, setSucursalSel] = useState<SucursalVentasSel>({ k: "todas" });
-  const sucursalSelRef = useRef<SucursalVentasSel>(sucursalSel);
-  sucursalSelRef.current = sucursalSel;
   const [listaSucursales, setListaSucursales] = useState<string[]>([]);
-  const [sucursalAbierta, setSucursalAbierta] = useState(false);
-  const sucursalBlurT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [data, setData] = useState<PivotResponse | null>(
     () => getClientCache<PivotResponse>(defaultResumenPivotCacheKey()) ?? null,
   );
@@ -392,11 +386,13 @@ export default function ResumenPage() {
   const [loading, setLoading] = useState(
     () => !getClientCache(defaultResumenPivotCacheKey()),
   );
-  const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
   const [familiasSeleccionadas, setFamiliasSeleccionadas] = useState<Set<string>>(
     () => new Set(),
   );
   const [formasPagoSeleccionadas, setFormasPagoSeleccionadas] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -424,21 +420,6 @@ export default function ResumenPage() {
     categoriaMovCacheRef.current = categoriaMovCache;
   }, [categoriaMovCache]);
 
-  const textoSucursalCampo = textoMostradoSucursal(sucursalSel);
-  const filtroEventoActivo =
-    sucursalSel.k === "una" &&
-    esTextoFiltroEvento(sucursalSel.v);
-
-  const queryListaSucursal = useMemo(() => {
-    if (sucursalSel.k === "una") return sucursalSel.v.trim().toLowerCase();
-    return "";
-  }, [sucursalSel]);
-
-  const sucursalesFiltradas = useMemo(() => {
-    if (!queryListaSucursal) return listaSucursales;
-    return listaSucursales.filter((s) => s.toLowerCase().includes(queryListaSucursal));
-  }, [listaSucursales, queryListaSucursal]);
-
   const opcionesFamilia = useMemo(() => {
     if (!data) return [];
     const set = new Set<string>();
@@ -462,22 +443,37 @@ export default function ResumenPage() {
 
   const dataFiltrada = useMemo((): PivotResponse | null => {
     if (!data) return null;
-    return {
-      ...data,
-      ventas: {
-        rows: filtrarVentasPorFormaPago(data.ventas.rows, formasPagoSeleccionadas),
-      },
-      ventasPorSucursalLista: (data.ventasPorSucursalLista ?? []).map((b) => ({
+
+    const ventasBloques = filtrarBloquesPorSucursal(
+      (data.ventasPorSucursalLista ?? []).map((b) => ({
         ...b,
         rows: filtrarVentasPorFormaPago(b.rows, formasPagoSeleccionadas),
       })),
-      gastos: {
-        rows: filtrarGastosPorFamilia(data.gastos.rows, familiasSeleccionadas),
-      },
-      gastosPorSucursalLista: (data.gastosPorSucursalLista ?? []).map((b) => ({
+      sucursalesSeleccionadas,
+      listaSucursales,
+    );
+    const gastosBloques = filtrarBloquesPorSucursal(
+      (data.gastosPorSucursalLista ?? []).map((b) => ({
         ...b,
         rows: filtrarGastosPorFamilia(b.rows, familiasSeleccionadas),
       })),
+      sucursalesSeleccionadas,
+      listaSucursales,
+    );
+
+    const desgloseVentasPorSucursal = sucursalesSeleccionadas.size >= 2;
+
+    return {
+      ...data,
+      desgloseVentasPorSucursal,
+      ventasPorSucursalLista: ventasBloques,
+      gastosPorSucursalLista: gastosBloques,
+      ventas: {
+        rows: mergePivotVentasRows(ventasBloques.flatMap((b) => b.rows)),
+      },
+      gastos: {
+        rows: mergePivotGastosRows(gastosBloques.flatMap((b) => b.rows)),
+      },
       gastosSocios: data.gastosSocios
         ? {
             rows: filtrarGastosPorFamilia(
@@ -487,7 +483,7 @@ export default function ResumenPage() {
           }
         : data.gastosSocios,
     };
-  }, [data, familiasSeleccionadas, formasPagoSeleccionadas]);
+  }, [data, familiasSeleccionadas, formasPagoSeleccionadas, sucursalesSeleccionadas, listaSucursales]);
 
   const rangoEfectivo = useMemo(() => {
     if (modo === "anio") return yearRange(anio);
@@ -501,9 +497,8 @@ export default function ResumenPage() {
   }, [modo, anio, mes, rangoDesde, rangoHasta]);
 
   const cargar = useCallback(
-    async (overrideSel?: SucursalVentasSel, opts?: { force?: boolean }) => {
+    async (opts?: { force?: boolean }) => {
       if (!authenticated) return;
-      const sel = overrideSel ?? sucursalSelRef.current;
       const { desde, hasta } = rangoEfectivo;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) {
         setStatus("Define un rango de fechas válido.");
@@ -513,12 +508,7 @@ export default function ResumenPage() {
         setStatus("La fecha desde no puede ser posterior a hasta.");
         return;
       }
-      const cacheKey = buildResumenPivotCacheKey({
-        desde,
-        hasta,
-        sel,
-        soloSucursalesFijas,
-      });
+      const cacheKey = buildResumenPivotCacheKey({ desde, hasta });
       if (!opts?.force) {
         const cached = getClientCache<PivotResponse>(cacheKey);
         if (cached) {
@@ -531,15 +521,11 @@ export default function ResumenPage() {
       setLoading(true);
       setStatus("");
       try {
-        const q = new URLSearchParams({ desde, hasta });
-        if (sel.k === "por_sucursal") {
-          q.set("ventasPorSucursal", "1");
-        } else if (sel.k === "una" && sel.v.trim()) {
-          q.set("sucursal", sel.v.trim());
-        }
-        if (soloSucursalesFijas) {
-          q.set("soloSucursalesFijas", "1");
-        }
+        const q = new URLSearchParams({
+          desde,
+          hasta,
+          ventasPorSucursal: "1",
+        });
         const res = await fetch(`/api/resumen/pivot?${q}`);
         const json = (await res.json()) as PivotResponse & { error?: string };
         if (!res.ok) {
@@ -556,7 +542,7 @@ export default function ResumenPage() {
         setLoading(false);
       }
     },
-    [authenticated, rangoEfectivo, soloSucursalesFijas],
+    [authenticated, rangoEfectivo],
   );
 
   useEffect(() => {
@@ -593,11 +579,11 @@ export default function ResumenPage() {
           familia,
           alcance,
         });
-        if (sucursalSel.k === "una" && sucursalSel.v.trim()) {
-          q.set("sucursal", sucursalSel.v.trim());
+        if (origenBloque) {
+          q.set("origen_cuenta_bloque", origenBloque);
+        } else if (sucursalesSeleccionadas.size === 1) {
+          q.set("sucursal", [...sucursalesSeleccionadas][0]);
         }
-        if (soloSucursalesFijas) q.set("soloSucursalesFijas", "1");
-        if (origenBloque) q.set("origen_cuenta_bloque", origenBloque);
         const res = await fetch(`/api/resumen/gastos-familia-detalle?${q}`);
         const json = (await res.json()) as GastosFamiliaDetalleResponse & { error?: string };
         if (!res.ok) {
@@ -611,7 +597,7 @@ export default function ResumenPage() {
         setFamiliaDetalleLoading(false);
       }
     },
-    [rangoEfectivo, sucursalSel, soloSucursalesFijas],
+    [rangoEfectivo, sucursalesSeleccionadas],
   );
 
   useEffect(() => {
@@ -648,12 +634,10 @@ export default function ResumenPage() {
           alcance: familiaDetalleCtx.alcance,
           categoria,
         });
-        if (sucursalSel.k === "una" && sucursalSel.v.trim()) {
-          q.set("sucursal", sucursalSel.v.trim());
-        }
-        if (soloSucursalesFijas) q.set("soloSucursalesFijas", "1");
         if (familiaDetalleCtx.origenBloque) {
           q.set("origen_cuenta_bloque", familiaDetalleCtx.origenBloque);
+        } else if (sucursalesSeleccionadas.size === 1) {
+          q.set("sucursal", [...sucursalesSeleccionadas][0]);
         }
         const res = await fetch(
           `/api/resumen/gastos-familia-categoria-movimientos?${q.toString()}`,
@@ -674,7 +658,7 @@ export default function ResumenPage() {
         setCategoriaMovLoading(null);
       }
     },
-    [familiaDetalleCtx, rangoEfectivo, sucursalSel, soloSucursalesFijas],
+    [familiaDetalleCtx, rangoEfectivo, sucursalesSeleccionadas],
   );
 
   useEffect(() => {
@@ -688,7 +672,7 @@ export default function ResumenPage() {
 
   useEffect(() => {
     cerrarFamiliaDetalle();
-  }, [modo, anio, mes, rangoDesde, rangoHasta, sucursalSel, soloSucursalesFijas, cerrarFamiliaDetalle]);
+  }, [modo, anio, mes, rangoDesde, rangoHasta, cerrarFamiliaDetalle]);
 
   useEffect(() => {
     setFamiliasSeleccionadas((prev) => {
@@ -706,8 +690,17 @@ export default function ResumenPage() {
   }, [opcionesFamilia, opcionesFormaPago]);
 
   useEffect(() => {
+    setSucursalesSeleccionadas((prev) => {
+      if (prev.size === 0) return prev;
+      const validas = new Set(listaSucursales);
+      const next = new Set([...prev].filter((s) => validas.has(s)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [listaSucursales]);
+
+  useEffect(() => {
     cerrarFamiliaDetalle();
-  }, [familiasSeleccionadas, formasPagoSeleccionadas, cerrarFamiliaDetalle]);
+  }, [familiasSeleccionadas, formasPagoSeleccionadas, sucursalesSeleccionadas, cerrarFamiliaDetalle]);
 
   const familiaDetalleTotalesPorMes = useMemo(() => {
     if (!familiaDetalleData?.monthKeys.length) return {};
@@ -737,51 +730,6 @@ export default function ResumenPage() {
       })
       .catch(() => setListaSucursales([]));
   }, [ready, authenticated]);
-
-  const abrirSucursal = () => {
-    if (sucursalBlurT.current) {
-      clearTimeout(sucursalBlurT.current);
-      sucursalBlurT.current = null;
-    }
-    setSucursalAbierta(true);
-  };
-
-  const cerrarSucursalLuego = () => {
-    sucursalBlurT.current = setTimeout(() => setSucursalAbierta(false), 120);
-  };
-
-  const elegirSucursalLista = (sel: SucursalVentasSel) => {
-    setSucursalSel(sel);
-    setSucursalAbierta(false);
-    if (sucursalBlurT.current) {
-      clearTimeout(sucursalBlurT.current);
-      sucursalBlurT.current = null;
-    }
-    void cargar(sel);
-  };
-
-  const toggleFiltroEventos = () => {
-    const sel: SucursalVentasSel = filtroEventoActivo
-      ? { k: "todas" }
-      : { k: "una", v: EVENTO_PREFIX };
-    if (!filtroEventoActivo) setSoloSucursalesFijas(false);
-    setSucursalSel(sel);
-    setSucursalAbierta(false);
-    void cargar(sel);
-  };
-
-  const toggleSucursalesFijas = () => {
-    const next = !soloSucursalesFijas;
-    if (next && filtroEventoActivo) {
-      setSucursalSel({ k: "todas" });
-      setSucursalAbierta(false);
-      setSoloSucursalesFijas(true);
-      void cargar({ k: "todas" });
-      return;
-    }
-    setSoloSucursalesFijas(next);
-    void cargar();
-  };
 
   const totalesPorMesVentas = useMemo(() => {
     if (!dataFiltrada?.monthKeys.length) return {};
@@ -961,6 +909,9 @@ export default function ResumenPage() {
 
   const filtroFamiliaActivo = familiasSeleccionadas.size > 0;
   const filtroFormaPagoActivo = formasPagoSeleccionadas.size > 0;
+  const filtroSucursalActivo = sucursalesSeleccionadas.size > 0;
+  const sucursalUnicaLabel =
+    sucursalesSeleccionadas.size === 1 ? [...sucursalesSeleccionadas][0] : null;
 
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
@@ -1055,81 +1006,14 @@ export default function ResumenPage() {
                   </div>
                 </div>
 
-                <div className="relative min-w-[200px] max-w-xs flex-1">
-                  <span className="mb-0.5 block text-xs font-medium text-slate-600">
-                    Sucursal / origen
-                  </span>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    role="combobox"
-                    aria-expanded={sucursalAbierta}
-                    aria-controls="resumen-sucursal-lista"
-                    className="box-border h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
-                    placeholder="Todas — escribe o elige"
-                    value={textoSucursalCampo}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (!raw.trim()) setSucursalSel({ k: "todas" });
-                      else setSucursalSel({ k: "una", v: raw });
-                      abrirSucursal();
-                    }}
-                    onFocus={abrirSucursal}
-                    onBlur={cerrarSucursalLuego}
-                  />
-                  {sucursalAbierta ? (
-                    <ul
-                      id="resumen-sucursal-lista"
-                      role="listbox"
-                      className="absolute left-0 right-0 z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
-                    >
-                      <li
-                        role="option"
-                        aria-selected={sucursalSel.k === "todas"}
-                        className="cursor-pointer px-3 py-2 text-slate-600 hover:bg-slate-200"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          elegirSucursalLista({ k: "todas" });
-                        }}
-                      >
-                        Todas las sucursales
-                      </li>
-                      <li
-                        role="option"
-                        aria-selected={sucursalSel.k === "por_sucursal"}
-                        className="cursor-pointer px-3 py-2 text-slate-700 hover:bg-slate-200"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          elegirSucursalLista({ k: "por_sucursal" });
-                        }}
-                      >
-                        {LABEL_POR_SUCURSAL}
-                      </li>
-                      {sucursalesFiltradas.length === 0 ? (
-                        <li className="px-3 py-2 text-slate-500">
-                          {listaSucursales.length === 0
-                            ? "Sin sucursales en ingresos importados"
-                            : "Ninguna coincide con lo escrito"}
-                        </li>
-                      ) : (
-                        sucursalesFiltradas.map((s) => (
-                          <li
-                            key={s}
-                            role="option"
-                            aria-selected={sucursalSel.k === "una" && sucursalSel.v === s}
-                            className="cursor-pointer px-3 py-2 text-slate-800 hover:bg-slate-200"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              elegirSucursalLista({ k: "una", v: s });
-                            }}
-                          >
-                            {s}
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  ) : null}
-                </div>
+                <ResumenMultiSelect
+                  id="resumen-filtro-sucursal"
+                  label="Sucursal / origen"
+                  opciones={listaSucursales}
+                  seleccion={sucursalesSeleccionadas}
+                  onChange={setSucursalesSeleccionadas}
+                  placeholder="Todas las sucursales"
+                />
 
                 <ResumenMultiSelect
                   id="resumen-filtro-familia"
@@ -1151,24 +1035,6 @@ export default function ResumenPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                <label className="ui-filter-chip">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-sky-700"
-                    checked={filtroEventoActivo}
-                    onChange={toggleFiltroEventos}
-                  />
-                  Solo eventos
-                </label>
-                <label className="ui-filter-chip">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-sky-700"
-                    checked={soloSucursalesFijas}
-                    onChange={toggleSucursalesFijas}
-                  />
-                  Solo sucursales fijas
-                </label>
                 <button
                   type="button"
                   disabled={loading}
@@ -1180,6 +1046,15 @@ export default function ResumenPage() {
                 <span className="ui-filter-stat">
                   Rango activo: {rangoEfectivo.desde} → {rangoEfectivo.hasta}
                 </span>
+                {filtroSucursalActivo ? (
+                  <button
+                    type="button"
+                    className="ui-btn-soft-xs"
+                    onClick={() => setSucursalesSeleccionadas(new Set())}
+                  >
+                    Quitar filtro sucursal
+                  </button>
+                ) : null}
                 {filtroFamiliaActivo ? (
                   <button
                     type="button"
@@ -1210,14 +1085,17 @@ export default function ResumenPage() {
 
           {data && dataFiltrada && data.monthKeys.length > 0 ? (
             <>
-              {data.desgloseVentasPorSucursal === true ? (
+              {dataFiltrada.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
                   <h2 className="text-lg font-semibold text-slate-900">
                     Resumen de ventas por sucursal
                   </h2>
                   {(dataFiltrada.ventasPorSucursalLista ?? []).length === 0 ? (
                     <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
-                      Sin ventas en este período.
+                      Sin ventas en este período
+                      {filtroSucursalActivo ? " con ese filtro de sucursal" : ""}
+                      {filtroFormaPagoActivo ? " con ese filtro de forma de pago" : ""}
+                      .
                     </p>
                   ) : (
                     (dataFiltrada.ventasPorSucursalLista ?? []).map((bloque) => {
@@ -1293,8 +1171,8 @@ export default function ResumenPage() {
               ) : (
                 <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
-                    {sucursalSel.k === "una" && sucursalSel.v.trim()
-                      ? `Resumen de ventas ${sucursalSel.v.trim()}`
+                    {sucursalUnicaLabel
+                      ? `Resumen de ventas ${sucursalUnicaLabel}`
                       : "Resumen de ventas"}
                   </h2>
                   <table
@@ -1347,9 +1225,7 @@ export default function ResumenPage() {
                             className="px-4 py-6 text-center text-slate-500"
                           >
                             Sin ventas en este período
-                            {sucursalSel.k === "una" && sucursalSel.v.trim()
-                              ? " con ese filtro de sucursal"
-                              : ""}
+                            {filtroSucursalActivo ? " con ese filtro de sucursal" : ""}
                             {filtroFormaPagoActivo ? " con ese filtro de forma de pago" : ""}
                             .
                           </td>
@@ -1372,7 +1248,7 @@ export default function ResumenPage() {
                 </section>
               )}
 
-              {data.desgloseVentasPorSucursal === true ? (
+              {dataFiltrada.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
                   <h2 className="text-lg font-semibold text-slate-900">
                     Resumen de gastos por sucursal
@@ -1380,6 +1256,7 @@ export default function ResumenPage() {
                   {(dataFiltrada.gastosPorSucursalLista ?? []).length === 0 ? (
                     <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
                             Sin gastos en este período
+                            {filtroSucursalActivo ? " con ese filtro de sucursal" : ""}
                             {filtroFamiliaActivo ? " con ese filtro de familia" : ""}
                             .
                     </p>
@@ -1472,8 +1349,8 @@ export default function ResumenPage() {
               ) : (
                 <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
-                    {sucursalSel.k === "una" && sucursalSel.v.trim()
-                      ? `Resumen de gastos ${sucursalSel.v.trim()}`
+                    {sucursalUnicaLabel
+                      ? `Resumen de gastos ${sucursalUnicaLabel}`
                       : "Resumen de gastos"}
                   </h2>
                   <table
@@ -1526,9 +1403,7 @@ export default function ResumenPage() {
                             className="px-4 py-6 text-center text-slate-500"
                           >
                             Sin gastos en este período
-                            {sucursalSel.k === "una" && sucursalSel.v.trim()
-                              ? " con ese filtro de sucursal"
-                              : ""}
+                            {filtroSucursalActivo ? " con ese filtro de sucursal" : ""}
                             {filtroFamiliaActivo ? " con ese filtro de familia" : ""}
                             .
                           </td>
