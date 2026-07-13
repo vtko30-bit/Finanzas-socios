@@ -1,8 +1,8 @@
 -- Preview de egresos duplicados por Id Origen (transactions.source_id).
--- Sustituye ORG_ID por el uuid de tu organización.
 --
--- Criterio de negocio: mismo organization_id + type=expense + source_id no vacío.
--- (Como en tu ejemplo: Id Origen 135691070683 aparece en 2 lotes.)
+-- No hace falta ORG_ID: agrupa por organización automáticamente.
+-- Si quieres filtrar una sola org, descomenta la línea del where y usa tu uuid:
+--   select id, name from public.organizations;
 --
 -- Conservación propuesta (rn = 1):
 --   1) con concept_id (categoría asignada)
@@ -12,6 +12,7 @@
 
 with base as (
   select
+    t.organization_id,
     t.id,
     t.date,
     t.amount,
@@ -40,13 +41,14 @@ with base as (
         t.id asc
     ) as rn
   from public.transactions t
-  where t.organization_id = 'ORG_ID'::uuid
-    and t.type = 'expense'
+  where t.type = 'expense'
     and nullif(trim(t.source_id), '') is not null
+    -- and t.organization_id = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'::uuid
 )
 select
   rn,
   n,
+  organization_id,
   id,
   date,
   amount,
@@ -62,4 +64,4 @@ select
   created_at
 from base
 where n > 1
-order by source_id, rn, created_at;
+order by organization_id, source_id, rn, created_at;

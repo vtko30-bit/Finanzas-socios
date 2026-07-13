@@ -1,10 +1,10 @@
 -- Limpieza de egresos duplicados por Id Origen (transactions.source_id).
--- 1) Sustituye ORG_ID.
--- 2) Ejecuta primero egresos-dup-por-id-origen-preview.sql y revisa.
--- 3) Corre este script en una transacción; confirma antes del COMMIT.
+-- 1) Ejecuta primero egresos-dup-por-id-origen-preview.sql y revisa.
+-- 2) Corre este script; verifica el backup y el count; luego COMMIT.
 --
 -- Conserva rn = 1 (preferencia: con categoría / vínculo crédito / más antigua).
 -- Borra rn > 1 (típicamente la reimportación sin clasificar).
+-- No requiere ORG_ID (actúa en todas las orgs; descomenta el filtro si quieres una sola).
 
 begin;
 
@@ -29,9 +29,9 @@ with ranked as (
       partition by t.organization_id, upper(trim(t.source_id))
     ) as n
   from public.transactions t
-  where t.organization_id = 'ORG_ID'::uuid
-    and t.type = 'expense'
+  where t.type = 'expense'
     and nullif(trim(t.source_id), '') is not null
+    -- and t.organization_id = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'::uuid
 ),
 to_delete as (
   select id from ranked where n > 1 and rn > 1
@@ -62,9 +62,9 @@ with ranked as (
       partition by t.organization_id, upper(trim(t.source_id))
     ) as n
   from public.transactions t
-  where t.organization_id = 'ORG_ID'::uuid
-    and t.type = 'expense'
+  where t.type = 'expense'
     and nullif(trim(t.source_id), '') is not null
+    -- and t.organization_id = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'::uuid
 )
 delete from public.transactions t
 using ranked r
@@ -72,12 +72,12 @@ where t.id = r.id
   and r.n > 1
   and r.rn > 1;
 
--- Verifica conteo borrado / restante antes de commit:
+-- Verifica antes de commit:
 -- select count(*) from public.transactions_backup_dup_source_id_egresos;
--- select source_id, count(*) from public.transactions
--- where organization_id = 'ORG_ID'::uuid and type = 'expense'
---   and nullif(trim(source_id), '') is not null
--- group by 1 having count(*) > 1;
+-- select organization_id, source_id, count(*)
+-- from public.transactions
+-- where type = 'expense' and nullif(trim(source_id), '') is not null
+-- group by 1, 2 having count(*) > 1;
 
 -- commit;
 -- rollback;
