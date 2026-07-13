@@ -22,6 +22,10 @@ import {
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 import {
+  fetchExistingSourceIdKeysForOrg,
+  normalizeSourceIdKey,
+} from "@/lib/import-existing-source-ids";
+import {
   fetchTransferenciasDuplicateKeysForOrg,
   fetchTransferenciasFingerprintsForOrg,
 } from "@/lib/transferencias-be-fingerprints-db";
@@ -163,10 +167,44 @@ export async function POST(request: Request) {
       );
     }
 
-    const newMovements = parsed.valid.filter((m) => !existing.has(m.dedupe_hash));
+    const sourceIdsInFile = parsed.valid
+      .map((m) => String(m.source_id ?? "").trim())
+      .filter(Boolean);
+    let existingSourceIds: Set<string>;
+    try {
+      existingSourceIds = await fetchExistingSourceIdKeysForOrg(
+        supabase,
+        orgId,
+        sourceIdsInFile,
+        "expense",
+      );
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error:
+            e instanceof Error
+              ? e.message
+              : "Error al consultar Id Origen existentes",
+        },
+        { status: 500 },
+      );
+    }
+
+    const newMovements = parsed.valid.filter((m) => {
+      if (existing.has(m.dedupe_hash)) return false;
+      const sid = normalizeSourceIdKey(String(m.source_id ?? ""));
+      if (sid && existingSourceIds.has(sid)) return false;
+      return true;
+    });
     const seenInFile = new Set<string>();
+    const seenSourceIdsInFile = new Set<string>();
     const uniqueByHash = newMovements.filter((m) => {
       if (seenInFile.has(m.dedupe_hash)) return false;
+      const sid = normalizeSourceIdKey(String(m.source_id ?? ""));
+      if (sid) {
+        if (seenSourceIdsInFile.has(sid)) return false;
+        seenSourceIdsInFile.add(sid);
+      }
       seenInFile.add(m.dedupe_hash);
       return true;
     });
