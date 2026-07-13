@@ -383,9 +383,6 @@ export default function ResumenPage() {
     () => getClientCache<PivotResponse>(defaultResumenPivotCacheKey()) ?? null,
   );
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(
-    () => !getClientCache(defaultResumenPivotCacheKey()),
-  );
   const [familiasSeleccionadas, setFamiliasSeleccionadas] = useState<Set<string>>(
     () => new Set(),
   );
@@ -513,12 +510,10 @@ export default function ResumenPage() {
         const cached = getClientCache<PivotResponse>(cacheKey);
         if (cached) {
           setData(cached);
-          setLoading(false);
           setStatus("");
           return;
         }
       }
-      setLoading(true);
       setStatus("");
       try {
         const q = new URLSearchParams({
@@ -538,8 +533,6 @@ export default function ResumenPage() {
       } catch {
         setData(null);
         setStatus("Error de red");
-      } finally {
-        setLoading(false);
       }
     },
     [authenticated, rangoEfectivo],
@@ -1035,14 +1028,6 @@ export default function ResumenPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={loading}
-                  className="ui-btn-soft-xs disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={() => void cargar()}
-                >
-                  {loading ? "Cargando…" : "Actualizar"}
-                </button>
                 <span className="ui-filter-stat">
                   Rango activo: {rangoEfectivo.desde} → {rangoEfectivo.hasta}
                 </span>
