@@ -235,6 +235,140 @@ function defaultResumenPivotCacheKey(): string {
   });
 }
 
+function filtrarVentasPorFormaPago(
+  rows: PivotRowVenta[],
+  seleccion: Set<string>,
+): PivotRowVenta[] {
+  if (seleccion.size === 0) return rows;
+  return rows.filter((r) => seleccion.has(r.formaPago));
+}
+
+function filtrarGastosPorFamilia(
+  rows: PivotRowGasto[],
+  seleccion: Set<string>,
+): PivotRowGasto[] {
+  if (seleccion.size === 0) return rows;
+  return rows.filter((r) => seleccion.has(r.familia));
+}
+
+function toggleSeleccionMulti(
+  value: string,
+  seleccion: Set<string>,
+  opciones: string[],
+): Set<string> {
+  if (opciones.length === 0) return new Set();
+  if (seleccion.size === 0) {
+    return new Set(opciones.filter((o) => o !== value));
+  }
+  const next = new Set(seleccion);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  if (next.size === 0 || next.size === opciones.length) return new Set();
+  return next;
+}
+
+function opcionMultiMarcada(value: string, seleccion: Set<string>): boolean {
+  return seleccion.size === 0 || seleccion.has(value);
+}
+
+type ResumenMultiSelectProps = {
+  id: string;
+  label: string;
+  opciones: string[];
+  seleccion: Set<string>;
+  onChange: (next: Set<string>) => void;
+  placeholder: string;
+};
+
+function ResumenMultiSelect({
+  id,
+  label,
+  opciones,
+  seleccion,
+  onChange,
+  placeholder,
+}: ResumenMultiSelectProps) {
+  const [abierto, setAbierto] = useState(false);
+  const blurT = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const textoCampo = useMemo(() => {
+    if (opciones.length === 0) return "Sin opciones";
+    if (seleccion.size === 0 || seleccion.size === opciones.length) return placeholder;
+    if (seleccion.size === 1) return [...seleccion][0];
+    return `${seleccion.size} seleccionadas`;
+  }, [seleccion, opciones, placeholder]);
+
+  const todasMarcadas = seleccion.size === 0 || seleccion.size === opciones.length;
+  const algunasMarcadas = seleccion.size > 0 && seleccion.size < opciones.length;
+
+  const abrir = () => {
+    if (blurT.current) clearTimeout(blurT.current);
+    setAbierto(true);
+  };
+
+  const cerrarLuego = () => {
+    blurT.current = setTimeout(() => setAbierto(false), 150);
+  };
+
+  return (
+    <div className="relative min-w-[200px] max-w-xs flex-1">
+      <span className="mb-0.5 block text-xs font-medium text-slate-600">{label}</span>
+      <button
+        type="button"
+        id={id}
+        aria-expanded={abierto}
+        aria-controls={`${id}-lista`}
+        disabled={opciones.length === 0}
+        className="box-border flex h-8 w-full items-center justify-between gap-2 rounded border border-slate-300 bg-white px-2 text-left text-xs leading-normal text-slate-900 outline-none focus:border-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+        onClick={() => (abierto ? setAbierto(false) : abrir())}
+        onBlur={cerrarLuego}
+      >
+        <span className="min-w-0 truncate">{textoCampo}</span>
+        <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
+          {abierto ? "▲" : "▼"}
+        </span>
+      </button>
+      {abierto && opciones.length > 0 ? (
+        <ul
+          id={`${id}-lista`}
+          role="listbox"
+          aria-multiselectable
+          className="absolute left-0 right-0 z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <li className="border-b border-slate-100 px-3 py-2">
+            <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-sky-700"
+                checked={todasMarcadas}
+                ref={(el) => {
+                  if (el) el.indeterminate = algunasMarcadas;
+                }}
+                onChange={() => onChange(new Set())}
+              />
+              <span className="text-xs font-medium">Todas</span>
+            </label>
+          </li>
+          {opciones.map((opt) => (
+            <li key={opt} className="px-3 py-1.5 hover:bg-slate-50">
+              <label className="flex cursor-pointer items-center gap-2 text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-sky-700"
+                  checked={opcionMultiMarcada(opt, seleccion)}
+                  onChange={() => onChange(toggleSeleccionMulti(opt, seleccion, opciones))}
+                />
+                <span className="min-w-0 truncate text-xs">{opt}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ResumenPage() {
   const { ready, authenticated } = useAuthState();
   const [modo, setModo] = useState<FiltroModo>("anio");
@@ -259,6 +393,12 @@ export default function ResumenPage() {
     () => !getClientCache(defaultResumenPivotCacheKey()),
   );
   const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
+  const [familiasSeleccionadas, setFamiliasSeleccionadas] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [formasPagoSeleccionadas, setFormasPagoSeleccionadas] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const [familiaDetalleCtx, setFamiliaDetalleCtx] = useState<{
     familia: string;
@@ -298,6 +438,56 @@ export default function ResumenPage() {
     if (!queryListaSucursal) return listaSucursales;
     return listaSucursales.filter((s) => s.toLowerCase().includes(queryListaSucursal));
   }, [listaSucursales, queryListaSucursal]);
+
+  const opcionesFamilia = useMemo(() => {
+    if (!data) return [];
+    const set = new Set<string>();
+    for (const r of data.gastos.rows) set.add(r.familia);
+    for (const b of data.gastosPorSucursalLista ?? []) {
+      for (const r of b.rows) set.add(r.familia);
+    }
+    for (const r of data.gastosSocios?.rows ?? []) set.add(r.familia);
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [data]);
+
+  const opcionesFormaPago = useMemo(() => {
+    if (!data) return [];
+    const set = new Set<string>();
+    for (const r of data.ventas.rows) set.add(r.formaPago);
+    for (const b of data.ventasPorSucursalLista ?? []) {
+      for (const r of b.rows) set.add(r.formaPago);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [data]);
+
+  const dataFiltrada = useMemo((): PivotResponse | null => {
+    if (!data) return null;
+    return {
+      ...data,
+      ventas: {
+        rows: filtrarVentasPorFormaPago(data.ventas.rows, formasPagoSeleccionadas),
+      },
+      ventasPorSucursalLista: (data.ventasPorSucursalLista ?? []).map((b) => ({
+        ...b,
+        rows: filtrarVentasPorFormaPago(b.rows, formasPagoSeleccionadas),
+      })),
+      gastos: {
+        rows: filtrarGastosPorFamilia(data.gastos.rows, familiasSeleccionadas),
+      },
+      gastosPorSucursalLista: (data.gastosPorSucursalLista ?? []).map((b) => ({
+        ...b,
+        rows: filtrarGastosPorFamilia(b.rows, familiasSeleccionadas),
+      })),
+      gastosSocios: data.gastosSocios
+        ? {
+            rows: filtrarGastosPorFamilia(
+              data.gastosSocios.rows,
+              familiasSeleccionadas,
+            ),
+          }
+        : data.gastosSocios,
+    };
+  }, [data, familiasSeleccionadas, formasPagoSeleccionadas]);
 
   const rangoEfectivo = useMemo(() => {
     if (modo === "anio") return yearRange(anio);
@@ -500,6 +690,25 @@ export default function ResumenPage() {
     cerrarFamiliaDetalle();
   }, [modo, anio, mes, rangoDesde, rangoHasta, sucursalSel, soloSucursalesFijas, cerrarFamiliaDetalle]);
 
+  useEffect(() => {
+    setFamiliasSeleccionadas((prev) => {
+      if (prev.size === 0) return prev;
+      const validas = new Set(opcionesFamilia);
+      const next = new Set([...prev].filter((f) => validas.has(f)));
+      return next.size === prev.size ? prev : next;
+    });
+    setFormasPagoSeleccionadas((prev) => {
+      if (prev.size === 0) return prev;
+      const validas = new Set(opcionesFormaPago);
+      const next = new Set([...prev].filter((f) => validas.has(f)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [opcionesFamilia, opcionesFormaPago]);
+
+  useEffect(() => {
+    cerrarFamiliaDetalle();
+  }, [familiasSeleccionadas, formasPagoSeleccionadas, cerrarFamiliaDetalle]);
+
   const familiaDetalleTotalesPorMes = useMemo(() => {
     if (!familiaDetalleData?.monthKeys.length) return {};
     const mapped: PivotRowGasto[] = familiaDetalleData.rows.map((r) => ({
@@ -575,65 +784,68 @@ export default function ResumenPage() {
   };
 
   const totalesPorMesVentas = useMemo(() => {
-    if (!data?.monthKeys.length) return {};
+    if (!dataFiltrada?.monthKeys.length) return {};
     const acc: Record<string, number> = {};
-    for (const mk of data.monthKeys) acc[mk] = 0;
-    for (const r of data.ventas.rows) {
-      for (const mk of data.monthKeys) {
+    for (const mk of dataFiltrada.monthKeys) acc[mk] = 0;
+    for (const r of dataFiltrada.ventas.rows) {
+      for (const mk of dataFiltrada.monthKeys) {
         acc[mk] += r.byMonth[mk] ?? 0;
       }
     }
-    for (const ev of data.ventasEventos?.rows ?? []) {
-      for (const mk of data.monthKeys) {
+    for (const ev of data?.ventasEventos?.rows ?? []) {
+      for (const mk of dataFiltrada.monthKeys) {
         acc[mk] += ev.byMonth[mk] ?? 0;
       }
     }
     return acc;
-  }, [data]);
+  }, [dataFiltrada, data]);
 
   const totalVentas = useMemo(
     () =>
-      data
-        ? data.ventas.rows.reduce((s, r) => s + r.total, 0) +
-          (data.ventasEventos?.rows ?? []).reduce((s, r) => s + r.total, 0)
+      dataFiltrada
+        ? dataFiltrada.ventas.rows.reduce((s, r) => s + r.total, 0) +
+          (data?.ventasEventos?.rows ?? []).reduce((s, r) => s + r.total, 0)
         : 0,
-    [data],
+    [dataFiltrada, data],
   );
 
   const totalesPorMesGastos = useMemo(() => {
-    if (!data?.monthKeys.length) return {};
+    if (!dataFiltrada?.monthKeys.length) return {};
     const acc: Record<string, number> = {};
-    for (const mk of data.monthKeys) acc[mk] = 0;
-    for (const r of data.gastos.rows) {
-      for (const mk of data.monthKeys) {
+    for (const mk of dataFiltrada.monthKeys) acc[mk] = 0;
+    for (const r of dataFiltrada.gastos.rows) {
+      for (const mk of dataFiltrada.monthKeys) {
         acc[mk] += r.byMonth[mk] ?? 0;
       }
     }
     return acc;
-  }, [data]);
+  }, [dataFiltrada]);
 
   const totalGastos = useMemo(
-    () => (data ? data.gastos.rows.reduce((s, r) => s + r.total, 0) : 0),
-    [data],
+    () =>
+      dataFiltrada
+        ? dataFiltrada.gastos.rows.reduce((s, r) => s + r.total, 0)
+        : 0,
+    [dataFiltrada],
   );
 
   const totalesPorMesGastosSocios = useMemo(() => {
-    if (!data?.monthKeys.length) return {};
-    const rows = data.gastosSocios?.rows ?? [];
+    if (!dataFiltrada?.monthKeys.length) return {};
+    const rows = dataFiltrada.gastosSocios?.rows ?? [];
     const acc: Record<string, number> = {};
-    for (const mk of data.monthKeys) acc[mk] = 0;
+    for (const mk of dataFiltrada.monthKeys) acc[mk] = 0;
     for (const r of rows) {
-      for (const mk of data.monthKeys) {
+      for (const mk of dataFiltrada.monthKeys) {
         acc[mk] += r.byMonth[mk] ?? 0;
       }
     }
     return acc;
-  }, [data]);
+  }, [dataFiltrada]);
 
   const totalGastosSocios = useMemo(() => {
-    const rows = data?.gastosSocios?.rows ?? [];
+    const rows = dataFiltrada?.gastosSocios?.rows ?? [];
     return rows.reduce((s, r) => s + r.total, 0);
-  }, [data]);
+  }, [dataFiltrada]);
 
   const totalesPorMesCreditos = useMemo(() => {
     if (!data?.monthKeys.length) return {};
@@ -655,13 +867,13 @@ export default function ResumenPage() {
 
   /** Ingresos (ventas) agregados por mes y total: sirve con vista única o desglose por sucursal. */
   const ingresosAgregados = useMemo(() => {
-    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
-    const keys = data.monthKeys;
+    if (!dataFiltrada?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const keys = dataFiltrada.monthKeys;
     const porMes: Record<string, number> = {};
     for (const mk of keys) porMes[mk] = 0;
-    if (data.desgloseVentasPorSucursal) {
+    if (dataFiltrada.desgloseVentasPorSucursal) {
       let total = 0;
-      for (const b of data.ventasPorSucursalLista ?? []) {
+      for (const b of dataFiltrada.ventasPorSucursalLista ?? []) {
         for (const r of b.rows) {
           total += r.total;
           for (const mk of keys) porMes[mk] += r.byMonth[mk] ?? 0;
@@ -670,21 +882,21 @@ export default function ResumenPage() {
       return { porMes, total };
     }
     let total = 0;
-    for (const r of data.ventas.rows) {
+    for (const r of dataFiltrada.ventas.rows) {
       total += r.total;
       for (const mk of keys) porMes[mk] += r.byMonth[mk] ?? 0;
     }
-    for (const ev of data.ventasEventos?.rows ?? []) {
+    for (const ev of data?.ventasEventos?.rows ?? []) {
       total += ev.total;
       for (const mk of keys) porMes[mk] += ev.byMonth[mk] ?? 0;
     }
     return { porMes, total };
-  }, [data]);
+  }, [dataFiltrada, data]);
 
   /** Egresos: gastos del negocio + gastos de socios, por mes y total. */
   const egresosAgregados = useMemo(() => {
-    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
-    const keys = data.monthKeys;
+    if (!dataFiltrada?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const keys = dataFiltrada.monthKeys;
     const porMes: Record<string, number> = {};
     for (const mk of keys) porMes[mk] = 0;
     let total = 0;
@@ -696,18 +908,18 @@ export default function ResumenPage() {
       }
     };
 
-    if (data.desgloseVentasPorSucursal) {
-      for (const b of data.gastosPorSucursalLista ?? []) {
+    if (dataFiltrada.desgloseVentasPorSucursal) {
+      for (const b of dataFiltrada.gastosPorSucursalLista ?? []) {
         sumRows(b.rows);
       }
     } else {
-      sumRows(data.gastos.rows);
+      sumRows(dataFiltrada.gastos.rows);
     }
 
-    sumRows(data.gastosSocios?.rows ?? []);
+    sumRows(dataFiltrada.gastosSocios?.rows ?? []);
 
     return { porMes, total };
-  }, [data]);
+  }, [dataFiltrada]);
 
   const resultadoIngresosMenosEgresos = useMemo(() => {
     if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
@@ -746,6 +958,9 @@ export default function ResumenPage() {
       total: resultadoIngresosMenosEgresos.total + ingresoCreditosAgregado.total,
     };
   }, [data, ingresoCreditosAgregado, resultadoIngresosMenosEgresos]);
+
+  const filtroFamiliaActivo = familiasSeleccionadas.size > 0;
+  const filtroFormaPagoActivo = formasPagoSeleccionadas.size > 0;
 
   const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
@@ -915,6 +1130,24 @@ export default function ResumenPage() {
                     </ul>
                   ) : null}
                 </div>
+
+                <ResumenMultiSelect
+                  id="resumen-filtro-familia"
+                  label="Familia"
+                  opciones={opcionesFamilia}
+                  seleccion={familiasSeleccionadas}
+                  onChange={setFamiliasSeleccionadas}
+                  placeholder="Todas las familias"
+                />
+
+                <ResumenMultiSelect
+                  id="resumen-filtro-forma-pago"
+                  label="Forma de pago"
+                  opciones={opcionesFormaPago}
+                  seleccion={formasPagoSeleccionadas}
+                  onChange={setFormasPagoSeleccionadas}
+                  placeholder="Todas las formas"
+                />
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
@@ -947,6 +1180,24 @@ export default function ResumenPage() {
                 <span className="ui-filter-stat">
                   Rango activo: {rangoEfectivo.desde} → {rangoEfectivo.hasta}
                 </span>
+                {filtroFamiliaActivo ? (
+                  <button
+                    type="button"
+                    className="ui-btn-soft-xs"
+                    onClick={() => setFamiliasSeleccionadas(new Set())}
+                  >
+                    Quitar filtro familia
+                  </button>
+                ) : null}
+                {filtroFormaPagoActivo ? (
+                  <button
+                    type="button"
+                    className="ui-btn-soft-xs"
+                    onClick={() => setFormasPagoSeleccionadas(new Set())}
+                  >
+                    Quitar filtro forma de pago
+                  </button>
+                ) : null}
               </div>
             </div>
           </section>
@@ -957,19 +1208,19 @@ export default function ResumenPage() {
             </p>
           ) : null}
 
-          {data && data.monthKeys.length > 0 ? (
+          {data && dataFiltrada && data.monthKeys.length > 0 ? (
             <>
               {data.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
                   <h2 className="text-lg font-semibold text-slate-900">
                     Resumen de ventas por sucursal
                   </h2>
-                  {(data.ventasPorSucursalLista ?? []).length === 0 ? (
+                  {(dataFiltrada.ventasPorSucursalLista ?? []).length === 0 ? (
                     <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
                       Sin ventas en este período.
                     </p>
                   ) : (
-                    (data.ventasPorSucursalLista ?? []).map((bloque) => {
+                    (dataFiltrada.ventasPorSucursalLista ?? []).map((bloque) => {
                       const tpmB = totalesPorMesVentasDesdeRows(bloque.rows, data.monthKeys);
                       const totB = totalVentasDesdeRows(bloque.rows);
                       return (
@@ -1063,7 +1314,7 @@ export default function ResumenPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.ventas.rows.map((r) => (
+                      {dataFiltrada.ventas.rows.map((r) => (
                         <tr key={r.formaPago}>
                           <td className={tdStickyFirst}>{r.formaPago}</td>
                           {data.monthKeys.map((mk) => (
@@ -1089,7 +1340,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {data.ventas.rows.length === 0 && (data.ventasEventos?.rows?.length ?? 0) === 0 ? (
+                      {dataFiltrada.ventas.rows.length === 0 && (data.ventasEventos?.rows?.length ?? 0) === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}
@@ -1099,6 +1350,7 @@ export default function ResumenPage() {
                             {sucursalSel.k === "una" && sucursalSel.v.trim()
                               ? " con ese filtro de sucursal"
                               : ""}
+                            {filtroFormaPagoActivo ? " con ese filtro de forma de pago" : ""}
                             .
                           </td>
                         </tr>
@@ -1125,12 +1377,14 @@ export default function ResumenPage() {
                   <h2 className="text-lg font-semibold text-slate-900">
                     Resumen de gastos por sucursal
                   </h2>
-                  {(data.gastosPorSucursalLista ?? []).length === 0 ? (
+                  {(dataFiltrada.gastosPorSucursalLista ?? []).length === 0 ? (
                     <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
-                      Sin gastos en este período.
+                            Sin gastos en este período
+                            {filtroFamiliaActivo ? " con ese filtro de familia" : ""}
+                            .
                     </p>
                   ) : (
-                    (data.gastosPorSucursalLista ?? []).map((bloque) => {
+                    (dataFiltrada.gastosPorSucursalLista ?? []).map((bloque) => {
                       const tpmG = totalesPorMesGastosDesdeRows(bloque.rows, data.monthKeys);
                       const totG = totalGastosDesdeRows(bloque.rows);
                       return (
@@ -1239,7 +1493,7 @@ export default function ResumenPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.gastos.rows.map((r) => (
+                      {dataFiltrada.gastos.rows.map((r) => (
                         <tr
                           key={r.familia}
                           role="button"
@@ -1265,7 +1519,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {data.gastos.rows.length === 0 ? (
+                      {dataFiltrada.gastos.rows.length === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}
@@ -1275,6 +1529,7 @@ export default function ResumenPage() {
                             {sucursalSel.k === "una" && sucursalSel.v.trim()
                               ? " con ese filtro de sucursal"
                               : ""}
+                            {filtroFamiliaActivo ? " con ese filtro de familia" : ""}
                             .
                           </td>
                         </tr>
@@ -1361,7 +1616,7 @@ export default function ResumenPage() {
                 </section>
               ) : null}
 
-              {data.gastosSocios ? (
+              {dataFiltrada.gastosSocios ? (
                 <section className="ui-card-panel overflow-x-auto">
                   <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
                     Resumen de gastos socios  
@@ -1384,7 +1639,7 @@ export default function ResumenPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(data.gastosSocios.rows ?? []).map((r) => (
+                      {(dataFiltrada.gastosSocios.rows ?? []).map((r) => (
                         <tr
                           key={r.familia}
                           role="button"
@@ -1410,7 +1665,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {(data.gastosSocios.rows ?? []).length === 0 ? (
+                      {(dataFiltrada.gastosSocios.rows ?? []).length === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}
