@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getClientCache,
   setClientCache,
@@ -21,44 +21,7 @@ const VENTAS_ROW_GRID_MOVIL =
   "grid w-full grid-cols-[minmax(0,4.5rem)_minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,4.5rem)] items-center gap-0.5";
 
 const VENTAS_POR_PAGINA = 40;
-const EVENTO_PREFIX = "EVENTO_";
-const EVENTO_PREFIXES = ["evento_", "evento -"] as const;
-const EVENTO_PREFIX_RE = /^\s*evento(?:[_\-\s]|$)/i;
-
-function normalizarTextoEvento(v: string): string {
-  return v
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/^[^a-z0-9]+/, "")
-    .trim();
-}
-
-function esTextoFiltroEvento(v: string): boolean {
-  const t = normalizarTextoEvento(v || "");
-  if (!t) return false;
-  return (
-    EVENTO_PREFIX_RE.test(t) ||
-    EVENTO_PREFIXES.some((p) => t === p) ||
-    t.includes("evento_") ||
-    t.includes("evento-") ||
-    t.includes("evento ") ||
-    t.includes("evento")
-  );
-}
-
-function esSucursalFijaNombre(sucursal: string): boolean {
-  const t = normalizarTextoEvento(sucursal || "");
-  if (!t) return false;
-  return !(
-    EVENTO_PREFIX_RE.test(t) ||
-    EVENTO_PREFIXES.some((p) => t.startsWith(p)) ||
-    t.includes("evento_") ||
-    t.includes("evento-") ||
-    t.includes("evento ") ||
-    t.includes("evento")
-  );
-}
+const VENTAS_DETALLE_URL = "/api/ventas/detalle";
 
 /** Columnas de detalle (escritorio): Id, Fecha, Sucursal, Medio de pago, Total */
 type VentaRow = {
@@ -73,10 +36,8 @@ type VentaRow = {
   monto: number;
 };
 
-function buildVentasDetalleUrl(incluirFinanciamiento: boolean): string {
-  const params = new URLSearchParams();
-  if (incluirFinanciamiento) params.set("incluirFinanciamiento", "1");
-  return params.size ? `/api/ventas/detalle?${params.toString()}` : "/api/ventas/detalle";
+function buildVentasDetalleUrl(): string {
+  return VENTAS_DETALLE_URL;
 }
 
 function mapVentasDetalleRows(raw: Array<Record<string, unknown>>): VentaRow[] {
@@ -170,6 +131,134 @@ function sortRows(
   });
 }
 
+function toggleSeleccionMulti(
+  value: string,
+  seleccion: Set<string>,
+  opciones: string[],
+): Set<string> {
+  if (opciones.length === 0) return new Set();
+  if (seleccion.size === 0) {
+    return new Set(opciones.filter((o) => o !== value));
+  }
+  const next = new Set(seleccion);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  if (next.size === 0 || next.size === opciones.length) return new Set();
+  return next;
+}
+
+function opcionMultiMarcada(value: string, seleccion: Set<string>): boolean {
+  return seleccion.size === 0 || seleccion.has(value);
+}
+
+function podarSeleccion(prev: Set<string>, validas: Set<string>): Set<string> {
+  if (prev.size === 0) return prev;
+  const next = new Set([...prev].filter((v) => validas.has(v)));
+  return next.size === prev.size ? prev : next;
+}
+
+type VentasMultiSelectProps = {
+  id: string;
+  label: string;
+  opciones: string[];
+  seleccion: Set<string>;
+  onChange: (next: Set<string>) => void;
+  placeholder: string;
+  className?: string;
+};
+
+function VentasMultiSelect({
+  id,
+  label,
+  opciones,
+  seleccion,
+  onChange,
+  placeholder,
+  className = "",
+}: VentasMultiSelectProps) {
+  const [abierto, setAbierto] = useState(false);
+  const blurT = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const textoCampo = useMemo(() => {
+    if (opciones.length === 0) return "Sin opciones";
+    if (seleccion.size === 0 || seleccion.size === opciones.length) return placeholder;
+    if (seleccion.size === 1) return [...seleccion][0];
+    return `${seleccion.size} seleccionadas`;
+  }, [seleccion, opciones, placeholder]);
+
+  const todasMarcadas = seleccion.size === 0 || seleccion.size === opciones.length;
+  const algunasMarcadas = seleccion.size > 0 && seleccion.size < opciones.length;
+
+  const abrir = () => {
+    if (blurT.current) clearTimeout(blurT.current);
+    setAbierto(true);
+  };
+
+  const cerrarLuego = () => {
+    blurT.current = setTimeout(() => setAbierto(false), 150);
+  };
+
+  return (
+    <div className={`relative min-w-0 flex flex-col gap-0.5 ${className}`.trim()}>
+      <span className="text-xs text-slate-600">{label}</span>
+      <button
+        type="button"
+        id={id}
+        aria-expanded={abierto}
+        aria-controls={`${id}-lista`}
+        disabled={opciones.length === 0}
+        className="ui-filter-control box-border flex w-full items-center justify-between gap-2 text-left outline-none focus:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={() => (abierto ? setAbierto(false) : abrir())}
+        onBlur={cerrarLuego}
+      >
+        <span className="min-w-0 truncate">{textoCampo}</span>
+        <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
+          {abierto ? "▲" : "▼"}
+        </span>
+      </button>
+      {abierto && opciones.length > 0 ? (
+        <ul
+          id={`${id}-lista`}
+          role="listbox"
+          aria-multiselectable
+          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <li className="border-b border-slate-100 px-3 py-2">
+            <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-sky-700"
+                checked={todasMarcadas}
+                ref={(el) => {
+                  if (el) el.indeterminate = algunasMarcadas;
+                }}
+                onChange={() => onChange(new Set())}
+              />
+              <span className="text-xs font-medium">Todas</span>
+            </label>
+          </li>
+          {opciones.map((opt) => (
+            <li key={opt} className="px-3 py-1.5 hover:bg-slate-50">
+              <label className="flex cursor-pointer items-center gap-2 text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-sky-700"
+                  checked={opcionMultiMarcada(opt, seleccion)}
+                  onChange={() =>
+                    onChange(toggleSeleccionMulti(opt, seleccion, opciones))
+                  }
+                />
+                <span className="min-w-0 truncate text-xs">{opt}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function filtrarVentas(
   rows: VentaRow[],
   opts: {
@@ -179,24 +268,18 @@ function filtrarVentas(
     anio: string;
     rangoDesde: string;
     rangoHasta: string;
-    formaPago: string;
-    sucursal: string;
-    soloSucursalesFijas: boolean;
+    formasPago: Set<string>;
+    sucursales: Set<string>;
   },
 ): VentaRow[] {
   let out = rows;
 
-  const fp = opts.formaPago.trim().toLowerCase();
-  if (fp) {
-    out = out.filter((r) => (r.medioPago || "").toLowerCase().includes(fp));
+  if (opts.formasPago.size > 0) {
+    out = out.filter((r) => opts.formasPago.has((r.medioPago || "").trim()));
   }
 
-  const su = opts.sucursal.trim().toLowerCase();
-  if (su) {
-    out = out.filter((r) => (r.sucursal || "").toLowerCase().includes(su));
-  }
-  if (opts.soloSucursalesFijas) {
-    out = out.filter((r) => esSucursalFijaNombre(r.sucursal));
+  if (opts.sucursales.size > 0) {
+    out = out.filter((r) => opts.sucursales.has((r.sucursal || "").trim()));
   }
 
   if (opts.modoFecha === "todo") {
@@ -258,8 +341,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
 }
 
 export default function VentasPage() {
-  const [incluirFinanciamiento, setIncluirFinanciamiento] = useState(false);
-  const ventasCacheKey = buildVentasDetalleUrl(incluirFinanciamiento);
+  const ventasCacheKey = buildVentasDetalleUrl();
   const initialVentasCache = getClientCache<VentaRow[]>(ventasCacheKey);
 
   const [rows, setRows] = useState<VentaRow[]>(() => initialVentasCache ?? []);
@@ -273,18 +355,46 @@ export default function VentasPage() {
   const [anio, setAnio] = useState("");
   const [rangoDesde, setRangoDesde] = useState("");
   const [rangoHasta, setRangoHasta] = useState("");
-  const [filtroFormaPago, setFiltroFormaPago] = useState("");
-  const [filtroSucursal, setFiltroSucursal] = useState("");
+  const [filtroSucursales, setFiltroSucursales] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [filtroFormasPago, setFiltroFormasPago] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [paginaVentas, setPaginaVentas] = useState(1);
-  const [soloSucursalesFijas, setSoloSucursalesFijas] = useState(false);
-  const filtroEventoActivo = esTextoFiltroEvento(filtroSucursal);
+
+  const opcionesSucursal = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const v = (r.sucursal || "").trim();
+      if (v) set.add(v);
+    }
+    return [...set].sort((a, b) => cmpStr(a, b));
+  }, [rows]);
+
+  const opcionesFormaPago = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const v = (r.medioPago || "").trim();
+      if (v) set.add(v);
+    }
+    return [...set].sort((a, b) => cmpStr(a, b));
+  }, [rows]);
+
+  useEffect(() => {
+    setFiltroSucursales((prev) => podarSeleccion(prev, new Set(opcionesSucursal)));
+  }, [opcionesSucursal]);
+
+  useEffect(() => {
+    setFiltroFormasPago((prev) => podarSeleccion(prev, new Set(opcionesFormaPago)));
+  }, [opcionesFormaPago]);
 
   const cargar = useCallback(
     (opts?: { force?: boolean }) => {
-      const url = buildVentasDetalleUrl(incluirFinanciamiento);
+      const url = buildVentasDetalleUrl();
       if (!opts?.force) {
         const cached = getClientCache<VentaRow[]>(url);
         if (cached) {
@@ -310,7 +420,7 @@ export default function VentasPage() {
           setStatus(e.message);
         });
     },
-    [incluirFinanciamiento],
+    [],
   );
 
   useEffect(() => {
@@ -327,9 +437,8 @@ export default function VentasPage() {
         anio,
         rangoDesde,
         rangoHasta,
-        formaPago: filtroFormaPago,
-        sucursal: filtroSucursal,
-        soloSucursalesFijas,
+        formasPago: filtroFormasPago,
+        sucursales: filtroSucursales,
       }),
     [
       rows,
@@ -339,9 +448,8 @@ export default function VentasPage() {
       anio,
       rangoDesde,
       rangoHasta,
-      filtroFormaPago,
-      filtroSucursal,
-      soloSucursalesFijas,
+      filtroFormasPago,
+      filtroSucursales,
     ],
   );
 
@@ -376,10 +484,8 @@ export default function VentasPage() {
     anio,
     rangoDesde,
     rangoHasta,
-    filtroFormaPago,
-    filtroSucursal,
-    soloSucursalesFijas,
-    incluirFinanciamiento,
+    filtroFormasPago,
+    filtroSucursales,
   ]);
 
   useEffect(() => {
@@ -407,23 +513,8 @@ export default function VentasPage() {
     setAnio("");
     setRangoDesde("");
     setRangoHasta("");
-    setFiltroFormaPago("");
-    setFiltroSucursal("");
-    setSoloSucursalesFijas(false);
-    setIncluirFinanciamiento(false);
-  };
-
-  const toggleFiltroEventos = () => {
-    setFiltroSucursal((prev) => {
-      const activarEventos = !esTextoFiltroEvento(prev);
-      if (activarEventos) setSoloSucursalesFijas(false);
-      return activarEventos ? EVENTO_PREFIX : "";
-    });
-  };
-
-  const toggleSucursalesFijas = () => {
-    setSoloSucursalesFijas((prev) => !prev);
-    setFiltroSucursal((prev) => (esTextoFiltroEvento(prev) ? "" : prev));
+    setFiltroFormasPago(new Set());
+    setFiltroSucursales(new Set());
   };
 
   const thBtn =
@@ -446,135 +537,103 @@ export default function VentasPage() {
         className="ui-filter-bar p-2 sm:p-3"
       >
         <div className="flex flex-col gap-1.5">
-          <div className="grid grid-cols-2 items-end gap-1.5 sm:flex sm:flex-wrap">
-            <label className="col-span-2 flex min-w-[140px] flex-col gap-0.5 text-xs text-slate-600 sm:col-span-1">
-              Fecha
-              <select
-                className="ui-filter-control w-full"
-                value={modoFecha}
-                onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
-              >
-                <option value="todo">Todas las fechas</option>
-                <option value="dia">Día</option>
-                <option value="mes">Mes</option>
-                <option value="anio">Año</option>
-                <option value="rango">Rango</option>
-              </select>
-            </label>
-            {modoFecha === "dia" ? (
-              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                Día
-                <input
-                  type="date"
+          <div className="grid grid-cols-2 items-end gap-1.5 sm:flex sm:flex-wrap sm:items-end sm:gap-1.5">
+            <div className="col-span-2 flex flex-wrap items-end gap-1.5 sm:col-span-1 sm:shrink-0 sm:flex-nowrap">
+              <label className="flex min-w-[9.5rem] flex-col gap-0.5 text-xs text-slate-600">
+                Fecha
+                <select
                   className="ui-filter-control w-full"
-                  value={dia}
-                  onChange={(e) => setDia(e.target.value)}
-                />
+                  value={modoFecha}
+                  onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
+                >
+                  <option value="todo">Todas las fechas</option>
+                  <option value="dia">Día</option>
+                  <option value="mes">Mes</option>
+                  <option value="anio">Año</option>
+                  <option value="rango">Rango</option>
+                </select>
               </label>
-            ) : null}
-            {modoFecha === "mes" ? (
-              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                Mes
-                <input
-                  type="month"
-                  className="ui-filter-control w-full"
-                  value={mes}
-                  onChange={(e) => setMes(e.target.value)}
-                />
-              </label>
-            ) : null}
-            {modoFecha === "anio" ? (
-              <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                Año
-                <input
-                  type="number"
-                  min={1990}
-                  max={2100}
-                  placeholder="Ej: 2024"
-                  className="w-full ui-filter-control placeholder:text-slate-400 sm:w-24"
-                  value={anio}
-                  onChange={(e) => setAnio(e.target.value)}
-                />
-              </label>
-            ) : null}
-            {modoFecha === "rango" ? (
-              <>
-                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                  Desde
+              {modoFecha === "dia" ? (
+                <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                  Día
                   <input
                     type="date"
                     className="ui-filter-control w-full"
-                    value={rangoDesde}
-                    onChange={(e) => setRangoDesde(e.target.value)}
+                    value={dia}
+                    onChange={(e) => setDia(e.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
-                  Hasta
+              ) : null}
+              {modoFecha === "mes" ? (
+                <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                  Mes
                   <input
-                    type="date"
+                    type="month"
                     className="ui-filter-control w-full"
-                    value={rangoHasta}
-                    onChange={(e) => setRangoHasta(e.target.value)}
+                    value={mes}
+                    onChange={(e) => setMes(e.target.value)}
                   />
                 </label>
-              </>
-            ) : null}
-          </div>
-
-          <div className="grid w-full grid-cols-2 gap-1.5 sm:max-w-[50%]">
-            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600">
-              Forma de pago
-              <input
-                type="text"
-                className="w-full ui-filter-control placeholder:text-slate-400"
-                placeholder="Efectivo, débito…"
-                value={filtroFormaPago}
-                onChange={(e) => setFiltroFormaPago(e.target.value)}
-              />
-            </label>
-            <label className="flex min-w-0 flex-col gap-0.5 text-xs text-slate-600">
-              Sucursal
-              <input
-                type="text"
-                className="w-full ui-filter-control placeholder:text-slate-400"
-                placeholder="Nombre…"
-                value={filtroSucursal}
-                onChange={(e) => setFiltroSucursal(e.target.value)}
-              />
-            </label>
+              ) : null}
+              {modoFecha === "anio" ? (
+                <label className="flex w-24 shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                  Año
+                  <input
+                    type="number"
+                    min={1990}
+                    max={2100}
+                    placeholder="Ej: 2024"
+                    className="ui-filter-control w-full placeholder:text-slate-400"
+                    value={anio}
+                    onChange={(e) => setAnio(e.target.value)}
+                  />
+                </label>
+              ) : null}
+              {modoFecha === "rango" ? (
+                <>
+                  <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                    Desde
+                    <input
+                      type="date"
+                      className="ui-filter-control w-full"
+                      value={rangoDesde}
+                      onChange={(e) => setRangoDesde(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                    Hasta
+                    <input
+                      type="date"
+                      className="ui-filter-control w-full"
+                      value={rangoHasta}
+                      onChange={(e) => setRangoHasta(e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+            </div>
+            <VentasMultiSelect
+              id="ventas-filtro-sucursal"
+              label="Sucursal"
+              opciones={opcionesSucursal}
+              seleccion={filtroSucursales}
+              onChange={setFiltroSucursales}
+              placeholder="Todas"
+              className="sm:min-w-[140px] sm:flex-[1_1_20%]"
+            />
+            <VentasMultiSelect
+              id="ventas-filtro-forma-pago"
+              label="Forma de pago"
+              opciones={opcionesFormaPago}
+              seleccion={filtroFormasPago}
+              onChange={setFiltroFormasPago}
+              placeholder="Todas"
+              className="sm:min-w-[140px] sm:flex-[1_1_20%]"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
-            <label className="ui-filter-chip">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 accent-sky-700 sm:h-4 sm:w-4"
-                checked={filtroEventoActivo}
-                onChange={toggleFiltroEventos}
-              />
-              <span>Eventos</span>
-            </label>
-            <label className="ui-filter-chip">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 accent-sky-700 sm:h-4 sm:w-4"
-                checked={soloSucursalesFijas}
-                onChange={toggleSucursalesFijas}
-              />
-              <span className="sm:hidden">Suc. fijas</span>
-              <span className="hidden sm:inline">Solo sucursales fijas</span>
-            </label>
-            <label className="ui-filter-chip">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 accent-sky-700 sm:h-4 sm:w-4"
-                checked={incluirFinanciamiento}
-                onChange={(e) => setIncluirFinanciamiento(e.target.checked)}
-              />
-              <span className="sm:hidden">Financiam.</span>
-              <span className="hidden sm:inline">Incluir financiamiento</span>
-            </label>
             <span className="ui-filter-stat-emphasis sm:hidden">
               Total: {formatClp(totalMontoFiltrado)}
             </span>
