@@ -90,10 +90,13 @@ export default function ImportacionesPage() {
     const income = row.transactionIncome;
     const expense = row.transactionExpense;
     const ok = window.confirm(
-      `¿Eliminar el lote «${row.filename}»?\n\n` +
+      `¿Eliminar el lote «${row.filename}»?\n` +
+        `ID: ${row.id}\n\n` +
         `Se borrarán de la base de datos los movimientos de esta importación ` +
         `(${income.toLocaleString("es-CL")} ingresos, ${expense.toLocaleString("es-CL")} egresos) ` +
-        `y el registro del archivo. Esta acción no se puede deshacer.`,
+        `y el registro del archivo. Esta acción no se puede deshacer.\n\n` +
+        `Si reimportaste porque el lote anterior estaba incompleto, NO uses esto: ` +
+        `borra solo los duplicados con el script SQL de Id Origen.`,
     );
     if (!ok) return;
 
@@ -201,10 +204,11 @@ export default function ImportacionesPage() {
           </section>
 
           <div className="mt-10 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[880px] border-collapse text-left text-xs">
               <thead>
                 <tr className="ui-table-header">
                   <th className="px-4 py-3 font-medium text-white">Fecha</th>
+                  <th className="px-4 py-3 font-medium text-white">ID lote</th>
                   <th className="px-4 py-3 font-medium text-white">Archivo</th>
                   <th className="px-4 py-3 font-medium text-white">Tipo</th>
                   <th className="px-4 py-3 text-right font-medium text-white">
@@ -223,7 +227,7 @@ export default function ImportacionesPage() {
               <tbody>
                 {data.items.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
                       No hay importaciones de Excel registradas aún.{" "}
                       <Link href="/importar" className="text-sky-700 underline">
                         Ir a importar
@@ -241,6 +245,14 @@ export default function ImportacionesPage() {
                           dateStyle: "short",
                           timeStyle: "short",
                         })}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <code
+                          className="block max-w-[9.5rem] truncate font-mono text-[10px] text-slate-500"
+                          title={row.id}
+                        >
+                          {row.id}
+                        </code>
                       </td>
                       <td className="px-4 py-3 text-slate-800">
                         <span className="break-all" title={row.filename}>
@@ -292,7 +304,11 @@ export default function ImportacionesPage() {
           <p className="mt-6 text-xs text-slate-500">
             Los totales superiores suman los movimientos actuales en la base por tipo de importación.
             Si borraste movimientos después de importar, los números pueden ser menores que las filas
-            del Excel.
+            del Excel. El ID de lote sirve para localizar movimientos (detalle de gasto) o para
+            limpiezas SQL. Si reimportaste porque un lote estaba incompleto, no elimines el lote
+            nuevo completo: borra solo duplicados por Id Origen con el script{" "}
+            <code className="rounded bg-slate-100 px-1">egresos-dup-por-id-origen-cleanup.sql</code>
+            .
           </p>
         </>
       ) : !error && loading ? (
