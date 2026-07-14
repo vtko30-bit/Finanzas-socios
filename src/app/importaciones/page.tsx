@@ -60,6 +60,8 @@ export default function ImportacionesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [limpiandoDups, setLimpiandoDups] = useState(false);
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!authenticated) return;
@@ -96,12 +98,13 @@ export default function ImportacionesPage() {
         `(${income.toLocaleString("es-CL")} ingresos, ${expense.toLocaleString("es-CL")} egresos) ` +
         `y el registro del archivo. Esta acción no se puede deshacer.\n\n` +
         `Si reimportaste porque el lote anterior estaba incompleto, NO uses esto: ` +
-        `borra solo los duplicados con el script SQL de Id Origen.`,
+        `usa «Limpiar duplicados (Id Origen)» para borrar solo las copias.`,
     );
     if (!ok) return;
 
     setDeletingId(row.id);
     setError(null);
+    setInfoMsg(null);
     try {
       const res = await fetch(`/api/import/batches/${encodeURIComponent(row.id)}`, {
         method: "DELETE",
@@ -116,6 +119,88 @@ export default function ImportacionesPage() {
       setError("Error de red al eliminar el lote");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const limpiarDuplicadosEgresos = async () => {
+    setError(null);
+    setInfoMsg(null);
+    setLimpiandoDups(true);
+    try {
+      const prevRes = await fetch("/api/import/limpiar-duplicados-egresos");
+      const prev = (await prevRes.json()) as {
+        error?: string;
+        hint?: string;
+        duplicateGroups?: number;
+        toDelete?: number;
+        toKeep?: number;
+        examples?: Array<{ idOrigen: string; total: number }>;
+      };
+      if (!prevRes.ok) {
+        setError(
+          [prev.error ?? "No se pudo previsualizar duplicados", prev.hint]
+            .filter(Boolean)
+            .join(" "),
+        );
+        return;
+      }
+
+      const toDelete = prev.toDelete ?? 0;
+      const groups = prev.duplicateGroups ?? 0;
+      if (toDelete === 0) {
+        setInfoMsg("No hay egresos duplicados por Id Origen.");
+        return;
+      }
+
+      const ejemplos =
+        (prev.examples ?? [])
+          .slice(0, 5)
+          .map((e) => `• ${e.idOrigen} (${e.total} copias)`)
+          .join("\n") || "";
+
+      const ok = window.confirm(
+        `Se encontraron ${groups.toLocaleString("es-CL")} Id Origen duplicados.\n` +
+          `Se borrarán ${toDelete.toLocaleString("es-CL")} copias sobrantes.\n` +
+          `Se conservan las filas clasificadas (o más antiguas) y los Id Origen únicos.\n\n` +
+          (ejemplos ? `Ejemplos:\n${ejemplos}\n\n` : "") +
+          `Los borrados se respaldan antes de eliminar. ¿Continuar?`,
+      );
+      if (!ok) return;
+
+      const postRes = await fetch("/api/import/limpiar-duplicados-egresos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const post = (await postRes.json()) as {
+        error?: string;
+        hint?: string;
+        deleted?: number;
+        backedUp?: number;
+        duplicateGroups?: number;
+        message?: string;
+      };
+      if (!postRes.ok) {
+        setError(
+          [post.error ?? "No se pudo limpiar duplicados", post.hint]
+            .filter(Boolean)
+            .join(" "),
+        );
+        return;
+      }
+
+      setInfoMsg(
+        post.deleted
+          ? `Listo: se borraron ${post.deleted.toLocaleString("es-CL")} duplicados ` +
+              `(${(post.duplicateGroups ?? 0).toLocaleString("es-CL")} Id Origen) ` +
+              `y se respaldaron ${(post.backedUp ?? post.deleted).toLocaleString("es-CL")} filas.`
+          : post.message ?? "No había duplicados para borrar.",
+      );
+      await load();
+    } catch {
+      setError("Error de red al limpiar duplicados");
+    } finally {
+      setLimpiandoDups(false);
     }
   };
 
@@ -149,19 +234,38 @@ export default function ImportacionesPage() {
             Registro de Archivos Importados
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="ui-btn-secondary px-3 py-1.5 disabled:opacity-50"
-        >
-          {loading ? "Actualizando…" : "Actualizar"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canWrite ? (
+            <button
+              type="button"
+              onClick={() => void limpiarDuplicadosEgresos()}
+              disabled={loading || limpiandoDups}
+              className="rounded border border-amber-400 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+              title="Borra solo copias con el mismo Id Origen; conserva la clasificada y los movimientos únicos del reimport."
+            >
+              {limpiandoDups ? "Limpiando…" : "Limpiar duplicados (Id Origen)"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading || limpiandoDups}
+            className="ui-btn-secondary px-3 py-1.5 disabled:opacity-50"
+          >
+            {loading ? "Actualizando…" : "Actualizar"}
+          </button>
+        </div>
       </div>
 
       {error ? (
         <p className="mt-6 ui-alert-error">
           {error}
+        </p>
+      ) : null}
+
+      {infoMsg ? (
+        <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          {infoMsg}
         </p>
       ) : null}
 
@@ -304,11 +408,10 @@ export default function ImportacionesPage() {
           <p className="mt-6 text-xs text-slate-500">
             Los totales superiores suman los movimientos actuales en la base por tipo de importación.
             Si borraste movimientos después de importar, los números pueden ser menores que las filas
-            del Excel. El ID de lote sirve para localizar movimientos (detalle de gasto) o para
-            limpiezas SQL. Si reimportaste porque un lote estaba incompleto, no elimines el lote
-            nuevo completo: borra solo duplicados por Id Origen con el script{" "}
-            <code className="rounded bg-slate-100 px-1">egresos-dup-por-id-origen-cleanup.sql</code>
-            .
+            del Excel. El ID de lote sirve para localizar movimientos (detalle de gasto). Si
+            reimportaste porque un lote estaba incompleto, no elimines el lote nuevo completo: usa
+            «Limpiar duplicados (Id Origen)» (conserva clasificados y filas únicas; respalda antes de
+            borrar).
           </p>
         </>
       ) : !error && loading ? (

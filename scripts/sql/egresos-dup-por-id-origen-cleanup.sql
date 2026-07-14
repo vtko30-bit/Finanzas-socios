@@ -1,5 +1,6 @@
 -- Limpieza de egresos duplicados por Id Origen (transactions.source_id).
--- Pensado para el SQL Editor de Supabase (autocommit: NO uses BEGIN/COMMIT).
+-- Preferible desde la app: Importaciones → «Limpiar duplicados (Id Origen)».
+-- Este script queda como alternativa en el SQL Editor de Supabase (autocommit).
 --
 -- Caso típico: reimportaste porque el lote viejo estaba INCOMPLETO.
 -- - Conserva la fila clasificada (casi siempre la del lote viejo).
