@@ -990,9 +990,11 @@ export const parseExpensesEgresosExcel = (
     }
 
     // Regla de sucursal interna de la empresa para gastos:
-    // - Origen = RG o contiene Banco Estado => Rg
+    // - Origen exacto RG (o Banco Estado) => Rg
+    // - Variantes como "RG MARKER" se conservan tal cual (no colapsar por startsWith)
     // - Origen contiene Happy, Bci o Mercado Libre => Happy
-    if (n === "rg" || n.startsWith("rg") || n.includes("bancoestado")) return "Rg";
+    if (n === "rg" || n.includes("bancoestado")) return "Rg";
+    if (n.startsWith("rg")) return origen.trim();
     if (n.includes("happy") || n.includes("bci") || n.includes("mercadolibre")) {
       return "Happy";
     }
