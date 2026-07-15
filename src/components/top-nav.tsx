@@ -7,18 +7,18 @@ import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
 
 const NAV_BASE: { href: string; label: string }[] = [
-  { href: "/gastos", label: "Gastos" },
-  { href: "/gastos-pago-servicios", label: "Pago servicios BE" },
   { href: "/ventas", label: "Ventas" },
-  { href: "/familias", label: "Familias" },
-  { href: "/categorias", label: "Categorías" },
-  { href: "/socios", label: "Socios" },
+  { href: "/gastos", label: "Gastos" },
   { href: "/resumen", label: "Resumen" },
-  { href: "/movimientos-excluidos", label: "Excluidos" },
+  { href: "/socios", label: "Socios" },
   { href: "/analisis", label: "Análisis" },
-  { href: "/reportes", label: "Reportes" },
+  { href: "/gastos-pago-servicios", label: "Pago de Servicios" },
   { href: "/creditos", label: "Créditos" },
   { href: "/prestamos-otorgados", label: "Préstamos" },
+  { href: "/categorias", label: "Categorías" },
+  { href: "/familias", label: "Familias" },
+  { href: "/movimientos-excluidos", label: "Excluidos" },
+  { href: "/reportes", label: "Reportes" },
 ];
 
 const NAV_OWNER: { href: string; label: string }[] = [
