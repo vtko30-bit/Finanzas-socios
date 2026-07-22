@@ -8,9 +8,9 @@ import {
 } from "@/lib/client-fetch-cache";
 
 const VENTAS_ROW_GRID =
-  "grid w-full min-w-[720px] grid-cols-[minmax(0,7rem)_minmax(0,5.5rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-0";
+  "grid w-full min-w-[640px] grid-cols-[minmax(0,6rem)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,4.5rem)_minmax(0,6rem)] items-center gap-0";
 
-/** Móvil: Fecha, Sucursal, Medio, Total (sin columna Id). Fecha en dd/mm/aa. */
+/** Móvil: Fecha, Sucursal, Medio, Total. Fecha en dd/mm/aa. */
 function fechaMovilCorta(iso: string): string {
   const s = String(iso).trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return iso;
@@ -23,7 +23,7 @@ const VENTAS_ROW_GRID_MOVIL =
 const VENTAS_POR_PAGINA = 40;
 const VENTAS_DETALLE_URL = "/api/ventas/detalle";
 
-/** Columnas de detalle (escritorio): Id, Fecha, Sucursal, Medio de pago, Total */
+/** Fila cruda desde API (transacción individual). */
 type VentaRow = {
   id: string;
   /** Prefijo sucursal (2 letras) + número; ver API detalle. */
@@ -33,6 +33,17 @@ type VentaRow = {
   sucursal: string;
   fecha: string;
   medioPago: string;
+  monto: number;
+};
+
+/** Resumen agrupado: día + forma de pago (+ sucursal opcional). */
+type VentaGrupo = {
+  key: string;
+  fecha: string;
+  /** Nombre de sucursal, o "Todas" si el grupo no parte por local. */
+  sucursal: string;
+  medioPago: string;
+  cantidad: number;
   monto: number;
 };
 
@@ -54,7 +65,7 @@ function mapVentasDetalleRows(raw: Array<Record<string, unknown>>): VentaRow[] {
 
 type FechaFiltroModo = "todo" | "dia" | "mes" | "anio" | "rango";
 
-type SortKey = "fecha" | "idVenta" | "sucursal" | "medioPago" | "monto";
+type SortKey = "fecha" | "sucursal" | "medioPago" | "cantidad" | "monto";
 
 const formatClp = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -85,8 +96,8 @@ function sucursalGrupo(s: string): number {
   return 2;
 }
 
-/** Desempate estable dentro del mismo día: local → medio de pago → id. */
-function cmpMismaFecha(x: VentaRow, y: VentaRow) {
+/** Desempate estable dentro del mismo día: local → medio de pago → key. */
+function cmpMismaFechaGrupo(x: VentaGrupo, y: VentaGrupo) {
   const gx = sucursalGrupo(x.sucursal);
   const gy = sucursalGrupo(y.sucursal);
   if (gx !== gy) return gx - gy;
@@ -94,66 +105,124 @@ function cmpMismaFecha(x: VentaRow, y: VentaRow) {
   if (s !== 0) return s;
   s = cmpStr(x.medioPago || "", y.medioPago || "");
   if (s !== 0) return s;
-  return cmpStr(x.id, y.id);
+  return cmpStr(x.key, y.key);
 }
 
-function sortRows(
+type AgruparOpts = {
+  porSucursal: boolean;
+  /** Texto de columna Sucursal cuando no se parte por local (p. ej. "Todas"). */
+  etiquetaSinSeparar?: string;
+};
+
+/**
+ * Agrupa por día + forma de pago.
+ * Si `porSucursal`, también parte por local (filtro de sucursales explícito).
+ * Si no (filtro Todas), suma todos los locales y la columna muestra "Todas".
+ */
+function agruparVentasPorDiaYFormaPago(
   list: VentaRow[],
+  opts: AgruparOpts,
+): VentaGrupo[] {
+  const etiqueta = opts.etiquetaSinSeparar ?? "Todas";
+  const map = new Map<string, VentaGrupo>();
+  for (const r of list) {
+    const fecha = fechaIsoDia(r.fecha) ?? String(r.fecha).trim().slice(0, 10);
+    const sucursal = (r.sucursal || "").trim() || "—";
+    const medioPago = (r.medioPago || "").trim() || "—";
+    const key = opts.porSucursal
+      ? `${fecha}|${sucursal}|${medioPago}`
+      : `${fecha}|${medioPago}`;
+    const cur = map.get(key);
+    if (cur) {
+      cur.cantidad += 1;
+      cur.monto += Number(r.monto) || 0;
+    } else {
+      map.set(key, {
+        key,
+        fecha,
+        sucursal: opts.porSucursal ? sucursal : etiqueta,
+        medioPago,
+        cantidad: 1,
+        monto: Number(r.monto) || 0,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
+function sortGrupos(
+  list: VentaGrupo[],
   key: SortKey,
   dir: "asc" | "desc",
-): VentaRow[] {
+): VentaGrupo[] {
   const mul = dir === "asc" ? 1 : -1;
   return [...list].sort((x, y) => {
     let c = 0;
     switch (key) {
       case "monto":
         c = (x.monto - y.monto) * mul;
-        return c || cmpStr(x.id, y.id);
+        return c || cmpStr(x.key, y.key);
+      case "cantidad":
+        c = (x.cantidad - y.cantidad) * mul;
+        return c || cmpStr(x.key, y.key);
       case "fecha": {
-        const dx = fechaIsoDia(x.fecha) ?? "";
-        const dy = fechaIsoDia(y.fecha) ?? "";
+        const dx = fechaIsoDia(x.fecha) ?? x.fecha;
+        const dy = fechaIsoDia(y.fecha) ?? y.fecha;
         c = cmpStr(dx, dy) * mul;
         if (c !== 0) return c;
-        return cmpMismaFecha(x, y);
+        return cmpMismaFechaGrupo(x, y);
       }
-      case "idVenta":
-        c = cmpStr(x.idVenta, y.idVenta) * mul;
-        return c || cmpStr(x.id, y.id);
       case "sucursal":
         c = cmpStr(x.sucursal, y.sucursal) * mul;
-        return c || cmpStr(x.id, y.id);
+        return c || cmpStr(x.key, y.key);
       case "medioPago":
         c = cmpStr(x.medioPago, y.medioPago) * mul;
-        return c || cmpStr(x.id, y.id);
+        return c || cmpStr(x.key, y.key);
       default:
         return 0;
     }
   });
 }
 
+/** `null` = todas (sin filtro); Set vacío = ninguna; Set parcial = filtro explícito. */
+type FiltroMultiSeleccion = Set<string> | null;
+
 function toggleSeleccionMulti(
   value: string,
-  seleccion: Set<string>,
+  seleccion: FiltroMultiSeleccion,
   opciones: string[],
-): Set<string> {
-  if (opciones.length === 0) return new Set();
-  if (seleccion.size === 0) {
+): FiltroMultiSeleccion {
+  if (opciones.length === 0) return null;
+  if (seleccion === null) {
     return new Set(opciones.filter((o) => o !== value));
   }
   const next = new Set(seleccion);
   if (next.has(value)) next.delete(value);
   else next.add(value);
-  if (next.size === 0 || next.size === opciones.length) return new Set();
+  if (next.size === 0) return new Set();
+  if (next.size === opciones.length) return null;
   return next;
 }
 
-function opcionMultiMarcada(value: string, seleccion: Set<string>): boolean {
-  return seleccion.size === 0 || seleccion.has(value);
+function opcionMultiMarcada(
+  value: string,
+  seleccion: FiltroMultiSeleccion,
+  totalOpciones: number,
+): boolean {
+  if (seleccion === null || seleccion.size === totalOpciones) return true;
+  if (seleccion.size === 0) return false;
+  return seleccion.has(value);
 }
 
-function podarSeleccion(prev: Set<string>, validas: Set<string>): Set<string> {
+function podarSeleccion(
+  prev: FiltroMultiSeleccion,
+  validas: Set<string>,
+): FiltroMultiSeleccion {
+  if (prev === null) return prev;
   if (prev.size === 0) return prev;
   const next = new Set([...prev].filter((v) => validas.has(v)));
+  if (next.size === 0) return new Set();
+  if (next.size === validas.size) return null;
   return next.size === prev.size ? prev : next;
 }
 
@@ -161,8 +230,8 @@ type VentasMultiSelectProps = {
   id: string;
   label: string;
   opciones: string[];
-  seleccion: Set<string>;
-  onChange: (next: Set<string>) => void;
+  seleccion: FiltroMultiSeleccion;
+  onChange: (next: FiltroMultiSeleccion) => void;
   placeholder: string;
   className?: string;
 };
@@ -181,13 +250,18 @@ function VentasMultiSelect({
 
   const textoCampo = useMemo(() => {
     if (opciones.length === 0) return "Sin opciones";
-    if (seleccion.size === 0 || seleccion.size === opciones.length) return placeholder;
+    if (seleccion === null || seleccion.size === opciones.length) return placeholder;
+    if (seleccion.size === 0) return "Ninguna";
     if (seleccion.size === 1) return [...seleccion][0];
     return `${seleccion.size} seleccionadas`;
   }, [seleccion, opciones, placeholder]);
 
-  const todasMarcadas = seleccion.size === 0 || seleccion.size === opciones.length;
-  const algunasMarcadas = seleccion.size > 0 && seleccion.size < opciones.length;
+  const todasMarcadas =
+    seleccion === null || seleccion.size === opciones.length;
+  const algunasMarcadas =
+    seleccion !== null &&
+    seleccion.size > 0 &&
+    seleccion.size < opciones.length;
 
   const abrir = () => {
     if (blurT.current) clearTimeout(blurT.current);
@@ -233,7 +307,7 @@ function VentasMultiSelect({
                 ref={(el) => {
                   if (el) el.indeterminate = algunasMarcadas;
                 }}
-                onChange={() => onChange(new Set())}
+                onChange={() => onChange(todasMarcadas ? new Set() : null)}
               />
               <span className="text-xs font-medium">Todas</span>
             </label>
@@ -244,7 +318,7 @@ function VentasMultiSelect({
                 <input
                   type="checkbox"
                   className="h-3.5 w-3.5 accent-sky-700"
-                  checked={opcionMultiMarcada(opt, seleccion)}
+                  checked={opcionMultiMarcada(opt, seleccion, opciones.length)}
                   onChange={() =>
                     onChange(toggleSeleccionMulti(opt, seleccion, opciones))
                   }
@@ -268,18 +342,20 @@ function filtrarVentas(
     anio: string;
     rangoDesde: string;
     rangoHasta: string;
-    formasPago: Set<string>;
-    sucursales: Set<string>;
+    formasPago: FiltroMultiSeleccion;
+    sucursales: FiltroMultiSeleccion;
   },
 ): VentaRow[] {
   let out = rows;
 
-  if (opts.formasPago.size > 0) {
-    out = out.filter((r) => opts.formasPago.has((r.medioPago || "").trim()));
+  if (opts.formasPago !== null) {
+    if (opts.formasPago.size === 0) return [];
+    out = out.filter((r) => opts.formasPago!.has((r.medioPago || "").trim()));
   }
 
-  if (opts.sucursales.size > 0) {
-    out = out.filter((r) => opts.sucursales.has((r.sucursal || "").trim()));
+  if (opts.sucursales !== null) {
+    if (opts.sucursales.size === 0) return [];
+    out = out.filter((r) => opts.sucursales!.has((r.sucursal || "").trim()));
   }
 
   if (opts.modoFecha === "todo") {
@@ -355,12 +431,10 @@ export default function VentasPage() {
   const [anio, setAnio] = useState("");
   const [rangoDesde, setRangoDesde] = useState("");
   const [rangoHasta, setRangoHasta] = useState("");
-  const [filtroSucursales, setFiltroSucursales] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [filtroFormasPago, setFiltroFormasPago] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [filtroSucursales, setFiltroSucursales] =
+    useState<FiltroMultiSeleccion>(null);
+  const [filtroFormasPago, setFiltroFormasPago] =
+    useState<FiltroMultiSeleccion>(null);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -453,14 +527,29 @@ export default function VentasPage() {
     ],
   );
 
-  const displayRows = useMemo(
-    () => sortRows(filasFiltradas, sortKey, sortDir),
-    [filasFiltradas, sortKey, sortDir],
-  );
+  const displayRows = useMemo(() => {
+    // Todas: agrupa día + forma de pago (columna "Todas").
+    // Selección explícita (1 o más): separa también por sucursal.
+    const porSucursal =
+      filtroSucursales !== null && filtroSucursales.size > 0;
+    return sortGrupos(
+      agruparVentasPorDiaYFormaPago(filasFiltradas, {
+        porSucursal,
+        etiquetaSinSeparar: "Todas",
+      }),
+      sortKey,
+      sortDir,
+    );
+  }, [filasFiltradas, filtroSucursales, sortKey, sortDir]);
 
   /** Suma del monto de todas las filas que cumplen el filtro (todas las páginas de la tabla). */
   const totalMontoFiltrado = useMemo(
     () => displayRows.reduce((acc, r) => acc + (Number(r.monto) || 0), 0),
+    [displayRows],
+  );
+
+  const totalCantidadFiltrada = useMemo(
+    () => displayRows.reduce((acc, r) => acc + (Number(r.cantidad) || 0), 0),
     [displayRows],
   );
 
@@ -501,7 +590,7 @@ export default function VentasPage() {
         setSortDir((d) => (d === "asc" ? "desc" : "asc"));
         return prev;
       }
-      setSortDir(key === "monto" ? "desc" : "asc");
+      setSortDir(key === "monto" || key === "cantidad" ? "desc" : "asc");
       return key;
     });
   };
@@ -513,8 +602,8 @@ export default function VentasPage() {
     setAnio("");
     setRangoDesde("");
     setRangoHasta("");
-    setFiltroFormasPago(new Set());
-    setFiltroSucursales(new Set());
+    setFiltroFormasPago(null);
+    setFiltroSucursales(null);
   };
 
   const thBtn =
@@ -639,6 +728,10 @@ export default function VentasPage() {
             </span>
             <span className="ui-filter-stat-emphasis hidden sm:inline">
               Total filtrado: {formatClp(totalMontoFiltrado)}
+              <span className="ml-1 font-normal text-slate-600">
+                ({totalCantidadFiltrada.toLocaleString("es-CL")} ventas ·{" "}
+                {displayRows.length.toLocaleString("es-CL")} grupos)
+              </span>
             </span>
             </div>
             <button
@@ -659,21 +752,11 @@ export default function VentasPage() {
       ) : null}
 
       <section className="ui-card-panel min-w-0">
-        <div className="min-w-0 w-full sm:min-w-[720px]">
+        <div className="min-w-0 w-full sm:min-w-[640px]">
         <div className="ui-table-header">
           <div
             className={`hidden sm:grid ${VENTAS_ROW_GRID} px-2 py-2 text-left text-sm text-white`}
           >
-            <div className="px-1">
-              <button
-                type="button"
-                className={thBtn}
-                onClick={() => toggleSort("idVenta")}
-              >
-                Id
-                <SortIcon active={sortKey === "idVenta"} dir={sortDir} />
-              </button>
-            </div>
             <div className="px-1">
               <button
                 type="button"
@@ -692,8 +775,18 @@ export default function VentasPage() {
             </div>
             <div className="px-1">
               <button type="button" className={thBtn} onClick={() => toggleSort("medioPago")}>
-                Medio de pago
+                Forma de pago
                 <SortIcon active={sortKey === "medioPago"} dir={sortDir} />
+              </button>
+            </div>
+            <div className="px-1 text-right">
+              <button
+                type="button"
+                className={`${thBtn} justify-end`}
+                onClick={() => toggleSort("cantidad")}
+              >
+                #
+                <SortIcon active={sortKey === "cantidad"} dir={sortDir} />
               </button>
             </div>
             <div className="px-1 text-right">
@@ -760,37 +853,26 @@ export default function VentasPage() {
               {filasPaginaVentas.map((row) => {
                 return (
                   <div
-                    key={row.id}
+                    key={row.key}
                     role="row"
                     className="border-t border-slate-200"
                   >
                     <div
                       className={`hidden sm:grid ${VENTAS_ROW_GRID} px-3 py-2 text-xs`}
                     >
-                      <div
-                        className="min-w-0 font-mono text-xs"
-                        title={
-                          row.externalRef
-                            ? `${row.idVenta} · Ref. importación: ${row.externalRef}`
-                            : row.idVenta
-                        }
-                      >
-                        {row.idVenta || "—"}
-                      </div>
                       <div className="min-w-0 whitespace-nowrap">{row.fecha}</div>
                       <div className="min-w-0">{row.sucursal || "—"}</div>
                       <div className="min-w-0">{row.medioPago || "—"}</div>
-                      <div className="min-w-0 text-right">{formatClp(row.monto)}</div>
+                      <div className="min-w-0 text-right tabular-nums text-slate-700">
+                        {row.cantidad.toLocaleString("es-CL")}
+                      </div>
+                      <div className="min-w-0 text-right font-medium tabular-nums">
+                        {formatClp(row.monto)}
+                      </div>
                     </div>
                     <div
                       className={`grid sm:hidden ${VENTAS_ROW_GRID_MOVIL} px-2 py-2 text-xs`}
-                      title={
-                        row.externalRef
-                          ? `Id: ${row.idVenta} · Ref.: ${row.externalRef}`
-                          : row.idVenta
-                            ? `Id: ${row.idVenta}`
-                            : undefined
-                      }
+                      title={`${row.cantidad} venta(s)`}
                     >
                       <div
                         className="min-w-0 whitespace-nowrap text-slate-900"
@@ -803,6 +885,9 @@ export default function VentasPage() {
                       </div>
                       <div className="min-w-0 truncate text-slate-800" title={row.medioPago}>
                         {row.medioPago || "—"}
+                        <span className="ml-1 text-[10px] text-slate-500">
+                          ({row.cantidad})
+                        </span>
                       </div>
                       <div className="min-w-0 text-right font-medium tabular-nums text-slate-900">
                         {formatClp(row.monto)}
@@ -818,7 +903,7 @@ export default function VentasPage() {
         {displayRows.length > 0 && totalPaginasVentas > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <span className="text-xs">
-              Filas {(paginaVentas - 1) * VENTAS_POR_PAGINA + 1}–
+              Grupos {(paginaVentas - 1) * VENTAS_POR_PAGINA + 1}–
               {Math.min(paginaVentas * VENTAS_POR_PAGINA, displayRows.length)} de{" "}
               {displayRows.length}
             </span>

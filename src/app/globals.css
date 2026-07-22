@@ -85,7 +85,11 @@ body {
   }
 
   .ui-filter-control {
-    @apply box-border h-8 shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900;
+    @apply box-border h-8 min-h-8 max-h-8 shrink-0 rounded border border-slate-300 bg-white px-2 py-0 text-xs leading-8 text-slate-900;
+  }
+
+  select.ui-filter-control {
+    @apply align-middle;
   }
 
   .ui-filter-chip {
