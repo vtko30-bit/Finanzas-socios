@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Menu } from "lucide-react";
+import { Home, Menu } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
+
+const RG_SUITE_URL =
+  process.env.NEXT_PUBLIC_RG_SUITE_URL || "https://rg-suite.vercel.app";
 
 const NAV_BASE: { href: string; label: string }[] = [
   { href: "/ventas", label: "Ventas" },
@@ -110,6 +113,15 @@ export function TopNav() {
           >
             Finanzas Rg
           </Link>
+
+          <a
+            href={RG_SUITE_URL}
+            title="Volver al inicio — aplicaciones"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/25 bg-white/10 px-2.5 py-1.5 text-sm font-medium text-white transition hover:bg-white/20"
+          >
+            <Home className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">Inicio</span>
+          </a>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
