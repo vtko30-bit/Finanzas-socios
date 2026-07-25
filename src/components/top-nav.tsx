@@ -107,21 +107,22 @@ export function TopNav() {
             ) : null}
           </div>
 
-          <Link
-            href="/"
-            className="min-w-0 truncate text-lg font-bold tracking-tight text-white hover:text-white/90"
-          >
-            Finanzas Rg
-          </Link>
-
-          <a
-            href={RG_SUITE_URL}
-            title="Volver al inicio — aplicaciones"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/25 bg-white/10 px-2.5 py-1.5 text-sm font-medium text-white transition hover:bg-white/20"
-          >
-            <Home className="h-4 w-4" aria-hidden />
-            <span className="hidden sm:inline">Inicio</span>
-          </a>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Link
+              href="/"
+              className="min-w-0 truncate text-lg font-bold tracking-tight text-white hover:text-white/90"
+            >
+              Finanzas Rg
+            </Link>
+            <a
+              href={RG_SUITE_URL}
+              title="Volver al inicio — aplicaciones"
+              aria-label="Volver al inicio"
+              className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-white/85 transition hover:bg-white/15 hover:text-white"
+            >
+              <Home className="h-4 w-4" aria-hidden />
+            </a>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
