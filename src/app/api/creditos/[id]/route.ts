@@ -36,6 +36,7 @@ export async function GET(
       lender,
       description,
       principal,
+      repaid_total,
       currency,
       disbursement_date,
       total_installments,
@@ -54,6 +55,16 @@ export async function GET(
   if (!credit) {
     return NextResponse.json({ error: "Crédito no encontrado" }, { status: 404 });
   }
+
+  const flexible = Number(credit.total_installments) === 0;
+  const principal = Number(credit.principal) || 0;
+  const repaid = Number(credit.repaid_total) || 0;
+  const creditOut = {
+    ...credit,
+    repaid_total: repaid,
+    pending: flexible ? Math.round((principal - repaid) * 100) / 100 : null,
+    flexible,
+  };
 
   const { data: installments, error: iErr } = await supabase
     .from("credit_installments")
@@ -94,6 +105,33 @@ export async function GET(
     return NextResponse.json({ error: txErr.message }, { status: 500 });
   }
 
+  let partialPayments: Array<{
+    id: string;
+    date: string;
+    amount: number;
+    description: string | null;
+  }> = [];
+  if (flexible) {
+    const { data: payTxs, error: payErr } = await supabase
+      .from("transactions")
+      .select("id, date, amount, description")
+      .eq("credit_id", id)
+      .eq("organization_id", member.organization_id)
+      .eq("source", "creditos")
+      .eq("credit_component", "pago_capital")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false });
+    if (payErr) {
+      return NextResponse.json({ error: payErr.message }, { status: 500 });
+    }
+    partialPayments = (payTxs ?? []).map((t) => ({
+      id: String(t.id),
+      date: String(t.date ?? "").slice(0, 10),
+      amount: Number(t.amount) || 0,
+      description: t.description != null ? String(t.description) : null,
+    }));
+  }
+
   const rows = installments ?? [];
   const interestTotal = rows.reduce((acc, row) => acc + (Number(row.interest_amount) || 0), 0);
   const feeValues = rows.map((row) => Number(row.fee_amount) || 0);
@@ -110,8 +148,9 @@ export async function GET(
       : null;
 
   return NextResponse.json({
-    credit,
+    credit: creditOut,
     installments: rows,
+    partial_payments: partialPayments,
     form_data: {
       interest_total: interestTotal,
       fee_per_installment: feePerInstallment,
@@ -285,13 +324,23 @@ export async function DELETE(
 
   const { data: credit, error: cErr } = await supabase
     .from("credits")
-    .select("id, lender, description, status")
+    .select("id, lender, description, status, repaid_total")
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
   if (!credit) {
     return NextResponse.json({ error: "Crédito no encontrado" }, { status: 404 });
+  }
+
+  if ((Number(credit.repaid_total) || 0) > 0.01) {
+    return NextResponse.json(
+      {
+        error:
+          "No se puede eliminar un crédito con pagos parciales. Revierte los pagos o edita el estado.",
+      },
+      { status: 409 },
+    );
   }
 
   const { count: paidCount, error: paidErr } = await supabase

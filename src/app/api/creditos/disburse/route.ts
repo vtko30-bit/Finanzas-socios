@@ -19,6 +19,9 @@ function humanizeCreditSchemaError(message: string): string {
   ) {
     return "Faltan migraciones de créditos en la base de datos (tablas credits/credit_installments). Aplica las migraciones de Supabase y reintenta.";
   }
+  if (m.includes("repaid_total") && (m.includes("column") || m.includes("does not exist"))) {
+    return "Falta la migración 0040 (credits.repaid_total). Aplícala en Supabase y reintenta.";
+  }
   return message;
 }
 
@@ -113,110 +116,137 @@ export async function POST(request: Request) {
   if (!Number.isFinite(principal) || principal <= 0) {
     return NextResponse.json({ error: "principal debe ser > 0" }, { status: 400 });
   }
+
+  /** 0 = sin cuotas fijas (pagos parciales variables). */
+  const flexible = totalInstallments === 0;
   if (
     !Number.isFinite(totalInstallments) ||
-    totalInstallments < 1 ||
-    totalInstallments > 600
+    totalInstallments < 0 ||
+    totalInstallments > 600 ||
+    (!flexible && totalInstallments < 1)
   ) {
     return NextResponse.json(
-      { error: "total_installments debe ser entre 1 y 600" },
+      {
+        error:
+          "total_installments debe ser 0 (sin cuotas fijas) o entre 1 y 600",
+      },
       { status: 400 },
     );
   }
 
-  const fee = feePerInstallment > 0 ? round2(feePerInstallment) : 0;
-  const expectedGrandTotal = round2(
-    round2(principal) + round2(interestTotal) + totalInstallments * fee,
-  );
+  if (flexible && (interestTotal > 0 || feePerInstallment > 0)) {
+    return NextResponse.json(
+      {
+        error:
+          "En modo sin cuotas fijas no se usa interés ni comisión por cuota. Déjalos en 0.",
+      },
+      { status: 400 },
+    );
+  }
+  if (flexible && (firstTotalOpt != null || recurringTotalOpt != null)) {
+    return NextResponse.json(
+      { error: "En modo sin cuotas fijas no indiques totales de cuota." },
+      { status: 400 },
+    );
+  }
 
-  let schedule;
-  try {
-    if (firstTotalOpt != null && recurringTotalOpt != null) {
-      if (totalInstallments < 2) {
+  let schedule: ReturnType<typeof scheduleEqualParts> = [];
+  let templateInstallment = 0;
+
+  if (!flexible) {
+    const fee = feePerInstallment > 0 ? round2(feePerInstallment) : 0;
+    const expectedGrandTotal = round2(
+      round2(principal) + round2(interestTotal) + totalInstallments * fee,
+    );
+
+    try {
+      if (firstTotalOpt != null && recurringTotalOpt != null) {
+        if (totalInstallments < 2) {
+          return NextResponse.json(
+            {
+              error:
+                "Con una sola cuota indique solo first_installment_total (sin recurring_installment_total).",
+            },
+            { status: 400 },
+          );
+        }
+        const sumCuotas = round2(
+          firstTotalOpt + recurringTotalOpt * (totalInstallments - 1),
+        );
+        if (
+          Math.abs(sumCuotas - expectedGrandTotal) >
+          Math.max(0.05, 0.0001 * Math.max(expectedGrandTotal, 1))
+        ) {
+          return NextResponse.json(
+            {
+              error: `La suma de cuotas (${sumCuotas}) debe coincidir con principal + interés total + n×comisión (${expectedGrandTotal}).`,
+            },
+            { status: 400 },
+          );
+        }
+        schedule = scheduleFirstAndRecurring({
+          totalInstallments,
+          principal: round2(principal),
+          interestTotal: round2(interestTotal),
+          feePerInstallment: fee,
+          firstTotal: firstTotalOpt,
+          recurringTotal: recurringTotalOpt,
+        });
+      } else if (firstTotalOpt != null && recurringTotalOpt == null) {
+        if (totalInstallments !== 1) {
+          return NextResponse.json(
+            {
+              error:
+                "Indique también recurring_installment_total, o deje ambos vacíos para cuotas iguales.",
+            },
+            { status: 400 },
+          );
+        }
+        const sumCuotas = round2(firstTotalOpt);
+        if (
+          Math.abs(sumCuotas - expectedGrandTotal) >
+          Math.max(0.05, 0.0001 * Math.max(expectedGrandTotal, 1))
+        ) {
+          return NextResponse.json(
+            {
+              error: `El total de la única cuota (${sumCuotas}) debe ser ${expectedGrandTotal}.`,
+            },
+            { status: 400 },
+          );
+        }
+        schedule = scheduleFirstAndRecurring({
+          totalInstallments: 1,
+          principal: round2(principal),
+          interestTotal: round2(interestTotal),
+          feePerInstallment: fee,
+          firstTotal: firstTotalOpt,
+          recurringTotal: firstTotalOpt,
+        });
+      } else if (firstTotalOpt == null && recurringTotalOpt != null) {
         return NextResponse.json(
-          {
-            error:
-              "Con una sola cuota indique solo first_installment_total (sin recurring_installment_total).",
-          },
+          { error: "Indique first_installment_total o deje ambos montos vacíos." },
           { status: 400 },
         );
+      } else {
+        schedule = scheduleEqualParts({
+          totalInstallments,
+          principal: round2(principal),
+          interestTotal: round2(interestTotal),
+          feePerInstallment: fee,
+        });
       }
-      const sumCuotas = round2(
-        firstTotalOpt + recurringTotalOpt * (totalInstallments - 1),
-      );
-      if (
-        Math.abs(sumCuotas - expectedGrandTotal) >
-        Math.max(0.05, 0.0001 * Math.max(expectedGrandTotal, 1))
-      ) {
-        return NextResponse.json(
-          {
-            error: `La suma de cuotas (${sumCuotas}) debe coincidir con principal + interés total + n×comisión (${expectedGrandTotal}).`,
-          },
-          { status: 400 },
-        );
-      }
-      schedule = scheduleFirstAndRecurring({
-        totalInstallments,
-        principal: round2(principal),
-        interestTotal: round2(interestTotal),
-        feePerInstallment: fee,
-        firstTotal: firstTotalOpt,
-        recurringTotal: recurringTotalOpt,
-      });
-    } else if (firstTotalOpt != null && recurringTotalOpt == null) {
-      if (totalInstallments !== 1) {
-        return NextResponse.json(
-          {
-            error:
-              "Indique también recurring_installment_total, o deje ambos vacíos para cuotas iguales.",
-          },
-          { status: 400 },
-        );
-      }
-      const sumCuotas = round2(firstTotalOpt);
-      if (
-        Math.abs(sumCuotas - expectedGrandTotal) >
-        Math.max(0.05, 0.0001 * Math.max(expectedGrandTotal, 1))
-      ) {
-        return NextResponse.json(
-          {
-            error: `El total de la única cuota (${sumCuotas}) debe ser ${expectedGrandTotal}.`,
-          },
-          { status: 400 },
-        );
-      }
-      schedule = scheduleFirstAndRecurring({
-        totalInstallments: 1,
-        principal: round2(principal),
-        interestTotal: round2(interestTotal),
-        feePerInstallment: fee,
-        firstTotal: firstTotalOpt,
-        recurringTotal: firstTotalOpt,
-      });
-    } else if (firstTotalOpt == null && recurringTotalOpt != null) {
+    } catch (e) {
       return NextResponse.json(
-        { error: "Indique first_installment_total o deje ambos montos vacíos." },
+        { error: e instanceof Error ? e.message : "Plan de cuotas inválido" },
         { status: 400 },
       );
-    } else {
-      schedule = scheduleEqualParts({
-        totalInstallments,
-        principal: round2(principal),
-        interestTotal: round2(interestTotal),
-        feePerInstallment: fee,
-      });
     }
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Plan de cuotas inválido" },
-      { status: 400 },
-    );
-  }
 
-  const templateInstallment =
-    totalInstallments >= 2 && recurringTotalOpt != null
-      ? round2(recurringTotalOpt)
-      : schedule[0]?.total_amount ?? 0;
+    templateInstallment =
+      totalInstallments >= 2 && recurringTotalOpt != null
+        ? round2(recurringTotalOpt)
+        : schedule[0]?.total_amount ?? 0;
+  }
 
   const { data: creditRow, error: cErr } = await supabase
     .from("credits")
@@ -229,6 +259,7 @@ export async function POST(request: Request) {
       disbursement_date: disbursementDate,
       total_installments: totalInstallments,
       installment_amount: templateInstallment,
+      repaid_total: 0,
       status: "active",
       created_by: user.id,
     })
@@ -262,13 +293,17 @@ export async function POST(request: Request) {
     status: "pending" as const,
   }));
 
-  const { error: insErr } = await supabase.from("credit_installments").insert(installmentRows);
-  if (insErr) {
-    await supabase.from("credits").delete().eq("id", creditId);
-    return NextResponse.json(
-      { error: humanizeCreditSchemaError(insErr.message) },
-      { status: 500 },
-    );
+  if (installmentRows.length > 0) {
+    const { error: insErr } = await supabase
+      .from("credit_installments")
+      .insert(installmentRows);
+    if (insErr) {
+      await supabase.from("credits").delete().eq("id", creditId);
+      return NextResponse.json(
+        { error: humanizeCreditSchemaError(insErr.message) },
+        { status: 500 },
+      );
+    }
   }
 
   const dedupe = dedupeHashManual([
@@ -322,8 +357,9 @@ export async function POST(request: Request) {
       transaction_id: txRow.id,
       principal: round2(principal),
       installments: totalInstallments,
-      schedule_mode:
-        firstTotalOpt != null
+      schedule_mode: flexible
+        ? "flexible"
+        : firstTotalOpt != null
           ? totalInstallments === 1
             ? "single_custom"
             : "first_and_recurring"
@@ -335,5 +371,6 @@ export async function POST(request: Request) {
     credit_id: creditId,
     disbursement_transaction_id: txRow.id,
     installments_created: installmentRows.length,
+    flexible,
   });
 }

@@ -10,6 +10,9 @@ function humanizeCreditSchemaError(message: string): string {
   ) {
     return "Faltan migraciones de créditos en la base de datos (tabla credits). Aplica las migraciones de Supabase y reintenta.";
   }
+  if (m.includes("repaid_total") && (m.includes("column") || m.includes("does not exist"))) {
+    return "Falta la migración 0040 (credits.repaid_total). Aplícala en Supabase y reintenta.";
+  }
   return message;
 }
 
@@ -36,6 +39,7 @@ export async function GET() {
       lender,
       description,
       principal,
+      repaid_total,
       currency,
       disbursement_date,
       total_installments,
@@ -54,5 +58,19 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ credits: credits ?? [] });
+  const rows = (credits ?? []).map((c) => {
+    const principal = Number(c.principal) || 0;
+    const repaid = Number(c.repaid_total) || 0;
+    const flexible = Number(c.total_installments) === 0;
+    return {
+      ...c,
+      repaid_total: repaid,
+      pending: flexible
+        ? Math.round((principal - repaid) * 100) / 100
+        : null,
+      flexible,
+    };
+  });
+
+  return NextResponse.json({ credits: rows });
 }

@@ -40,6 +40,9 @@ type CreditRow = {
   lender: string;
   description: string;
   principal: number;
+  repaid_total?: number;
+  pending?: number | null;
+  flexible?: boolean;
   currency: string;
   disbursement_date: string;
   total_installments: number;
@@ -59,6 +62,13 @@ type InstallmentRow = {
   paid_amount: number;
   paid_at: string | null;
   status: string;
+};
+
+type PartialPaymentRow = {
+  id: string;
+  date: string;
+  amount: number;
+  description: string | null;
 };
 
 type CreditFormData = {
@@ -85,6 +95,8 @@ export default function CreditosPage() {
     () => new Date().toISOString().slice(0, 10),
   );
   const [nCuotas, setNCuotas] = useState("12");
+  /** Sin plan de cuotas: pagos parciales de monto libre. */
+  const [sinCuotasFijas, setSinCuotasFijas] = useState(false);
   const [origenCuenta, setOrigenCuenta] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [interestTotal, setInterestTotal] = useState("");
@@ -97,10 +109,14 @@ export default function CreditosPage() {
   const [detail, setDetail] = useState<{
     credit: CreditRow;
     installments: InstallmentRow[];
+    partialPayments: PartialPaymentRow[];
     formData: CreditFormData | null;
   } | null>(null);
   const [payNum, setPayNum] = useState("");
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [partialAmount, setPartialAmount] = useState("");
+  const [partialDate, setPartialDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [partialBusy, setPartialBusy] = useState(false);
   const [editModal, setEditModal] = useState<{
     id: string;
     lender: string;
@@ -149,8 +165,44 @@ export default function CreditosPage() {
     e.preventDefault();
     setMsg("");
     const p = Number(principal);
+    if (!lender.trim() || !Number.isFinite(p) || p <= 0) {
+      setMsg("Completa prestamista y monto.");
+      return;
+    }
+
+    if (sinCuotasFijas) {
+      const res = await fetch("/api/creditos/disburse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lender: lender.trim(),
+          description: description.trim(),
+          principal: p,
+          disbursement_date: disbursementDate,
+          total_installments: 0,
+          origen_cuenta: origenCuenta.trim(),
+          payment_method: paymentMethod.trim(),
+          interest_total: 0,
+          fee_per_installment: 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo registrar");
+        return;
+      }
+      setMsg("Crédito creado sin cuotas fijas. Registra pagos parciales cuando corresponda.");
+      setLender("");
+      setDescription("");
+      setPrincipal("");
+      setSinCuotasFijas(false);
+      setShowCreateForm(false);
+      void load();
+      return;
+    }
+
     const n = Number(nCuotas);
-    if (!lender.trim() || !Number.isFinite(p) || p <= 0 || !Number.isFinite(n) || n < 1) {
+    if (!Number.isFinite(n) || n < 1) {
       setMsg("Completa prestamista, monto y número de cuotas.");
       return;
     }
@@ -212,6 +264,7 @@ export default function CreditosPage() {
   const openDetail = async (id: string) => {
     setDetailId(id);
     setMsg("");
+    setPartialAmount("");
     setReconcileCand([]);
     setReconcilePickId(null);
     setReconcileCandTotal(null);
@@ -225,6 +278,7 @@ export default function CreditosPage() {
     setDetail({
       credit: data.credit,
       installments: data.installments ?? [],
+      partialPayments: data.partial_payments ?? [],
       formData: data.form_data ?? null,
     });
   };
@@ -261,6 +315,71 @@ export default function CreditosPage() {
     setMsg(data.credit_closed ? "Cuota pagada. Crédito cerrado." : "Cuota pagada.");
     void openDetail(detailId);
     void load();
+  };
+
+  const onPayPartial = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!detailId) return;
+    const amt = Number(partialAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setMsg("Indica un monto de pago válido.");
+      return;
+    }
+    setPartialBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/creditos/${detailId}/pay-partial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amt,
+          paid_at: partialDate,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo registrar el pago parcial");
+        return;
+      }
+      setMsg(
+        data.closed
+          ? "Pago registrado. Crédito cerrado."
+          : `Pago registrado. Pendiente: ${formatClp(Number(data.pending) || 0)}.`,
+      );
+      setPartialAmount("");
+      void openDetail(detailId);
+      void load();
+    } catch {
+      setMsg("Error de red al registrar pago parcial");
+    } finally {
+      setPartialBusy(false);
+    }
+  };
+
+  const revertirUltimoParcial = async () => {
+    if (!detailId) return;
+    if (!window.confirm("¿Revertir el último pago parcial de este crédito?")) return;
+    setPartialBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/creditos/${detailId}/revert-last-partial`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo revertir");
+        return;
+      }
+      setMsg(
+        `Pago de ${formatClp(Number(data.reverted_amount) || 0)} revertido. Pendiente: ${formatClp(Number(data.pending) || 0)}.`,
+      );
+      void openDetail(detailId);
+      void load();
+    } catch {
+      setMsg("Error de red al revertir pago");
+    } finally {
+      setPartialBusy(false);
+    }
   };
 
   const buscarConciliacion = async () => {
@@ -499,6 +618,23 @@ export default function CreditosPage() {
                 required
               />
             </label>
+            <label className="flex cursor-pointer items-start gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-1 h-3.5 w-3.5 accent-sky-700"
+                checked={sinCuotasFijas}
+                onChange={(e) => setSinCuotasFijas(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-slate-800">Sin cuotas fijas</span>
+                <span className="mt-0.5 block text-xs text-slate-600">
+                  Préstamo de socio u otro con devoluciones parciales de monto variable (sin interés
+                  ni plan de cuotas).
+                </span>
+              </span>
+            </label>
+            {!sinCuotasFijas ? (
+              <>
             <label className="text-sm">
               Número de cuotas
               <input
@@ -563,6 +699,13 @@ export default function CreditosPage() {
                 placeholder={Number(nCuotas) < 2 ? "—" : "Mismo monto fijo"}
               />
             </label>
+              </>
+            ) : (
+              <p className="sm:col-span-2 rounded-md border border-cyan-100 bg-cyan-50/70 px-3 py-2 text-xs text-cyan-950">
+                Se registrará el desembolso (ingreso) y podrás ir cargando pagos parciales de cualquier
+                monto hasta saldar el total.
+              </p>
+            )}
             <label className="text-sm">
               Origen cuenta (sucursal / caja)
               <input
@@ -610,7 +753,11 @@ export default function CreditosPage() {
               >
                 <div className="font-medium text-slate-900">{c.lender}</div>
                 <div className="text-xs text-slate-600">
-                  {c.principal} {c.currency} · {c.total_installments} cuotas · {c.status}
+                  {formatClp(c.principal)} {c.currency} ·{" "}
+                  {c.flexible || c.total_installments === 0
+                    ? `Sin cuotas · pendiente ${formatClp(Number(c.pending) || Math.max(0, c.principal - (Number(c.repaid_total) || 0)))}`
+                    : `${c.total_installments} cuotas`}{" "}
+                  · {c.status}
                 </div>
               </button>
               <div className="flex items-center gap-3">
@@ -681,11 +828,21 @@ export default function CreditosPage() {
       {detail && detailId ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           {(() => {
+            const isFlexible =
+              Boolean(detail.credit.flexible) ||
+              Number(detail.credit.total_installments) === 0;
             const paidInstallments = detail.installments.filter((i) => i.status === "paid");
-            const totalPaid = paidInstallments.reduce(
+            const totalPaidInstallments = paidInstallments.reduce(
               (acc, installment) => acc + (Number(installment.paid_amount) || 0),
               0,
             );
+            const pendingFlexible =
+              Number(detail.credit.pending) ||
+              Math.max(
+                0,
+                (Number(detail.credit.principal) || 0) -
+                  (Number(detail.credit.repaid_total) || 0),
+              );
             return (
               <>
                 <div className="mb-4 ui-card p-3">
@@ -714,39 +871,62 @@ export default function CreditosPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-slate-500">Número de cuotas</dt>
-                      <dd className="text-slate-900">{detail.credit.total_installments}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Interés total</dt>
+                      <dt className="text-xs text-slate-500">Modalidad</dt>
                       <dd className="text-slate-900">
-                        {formatClp(detail.formData?.interest_total ?? 0)}
+                        {isFlexible
+                          ? "Sin cuotas fijas (pagos parciales)"
+                          : `${detail.credit.total_installments} cuotas`}
                       </dd>
                     </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Comisión por cuota</dt>
-                      <dd className="text-slate-900">
-                        {detail.formData?.fee_per_installment != null
-                          ? formatClp(detail.formData.fee_per_installment)
-                          : "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Total primera cuota</dt>
-                      <dd className="text-slate-900">
-                        {detail.formData?.first_installment_total != null
-                          ? formatClp(detail.formData.first_installment_total)
-                          : "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Total cuotas 2..N</dt>
-                      <dd className="text-slate-900">
-                        {detail.formData?.recurring_installment_total != null
-                          ? formatClp(detail.formData.recurring_installment_total)
-                          : "Variable"}
-                      </dd>
-                    </div>
+                    {isFlexible ? (
+                      <>
+                        <div>
+                          <dt className="text-xs text-slate-500">Pagado</dt>
+                          <dd className="text-slate-900">
+                            {formatClp(Number(detail.credit.repaid_total) || 0)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-slate-500">Pendiente</dt>
+                          <dd className="font-semibold text-slate-900">
+                            {formatClp(pendingFlexible)}
+                          </dd>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <dt className="text-xs text-slate-500">Interés total</dt>
+                          <dd className="text-slate-900">
+                            {formatClp(detail.formData?.interest_total ?? 0)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-slate-500">Comisión por cuota</dt>
+                          <dd className="text-slate-900">
+                            {detail.formData?.fee_per_installment != null
+                              ? formatClp(detail.formData.fee_per_installment)
+                              : "—"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-slate-500">Total primera cuota</dt>
+                          <dd className="text-slate-900">
+                            {detail.formData?.first_installment_total != null
+                              ? formatClp(detail.formData.first_installment_total)
+                              : "—"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-slate-500">Total cuotas 2..N</dt>
+                          <dd className="text-slate-900">
+                            {detail.formData?.recurring_installment_total != null
+                              ? formatClp(detail.formData.recurring_installment_total)
+                              : "Variable"}
+                          </dd>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <dt className="text-xs text-slate-500">Origen cuenta</dt>
                       <dd className="text-slate-900">
@@ -766,40 +946,75 @@ export default function CreditosPage() {
                   </dl>
                 </div>
 
-                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-emerald-900">Cuotas pagadas</h3>
-                    <span className="text-xs text-emerald-800">
-                      {paidInstallments.length} de {detail.installments.length} pagadas · total{" "}
-                      {formatClp(totalPaid)}
-                    </span>
+                {isFlexible ? (
+                  <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-emerald-900">Pagos parciales</h3>
+                      <span className="text-xs text-emerald-800">
+                        {detail.partialPayments.length} pago(s) · total{" "}
+                        {formatClp(Number(detail.credit.repaid_total) || 0)}
+                      </span>
+                    </div>
+                    {detail.partialPayments.length === 0 ? (
+                      <p className="mt-2 text-sm text-emerald-900/80">
+                        Aún no hay pagos parciales registrados.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {detail.partialPayments.map((p) => (
+                          <li
+                            key={p.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded border border-emerald-200 bg-white px-2 py-1"
+                          >
+                            <span className="text-slate-800">{formatIsoDate(p.date)}</span>
+                            <span className="font-medium tabular-nums text-slate-900">
+                              {formatClp(p.amount)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                  {paidInstallments.length === 0 ? (
-                    <p className="mt-2 text-sm text-emerald-900/80">
-                      Este crédito aún no registra cuotas pagadas.
-                    </p>
-                  ) : (
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {paidInstallments.map((i) => (
-                        <li
-                          key={`paid-${i.id}`}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded border border-emerald-200 bg-white px-2 py-1"
-                        >
-                          <span className="text-slate-800">Cuota #{i.installment_number}</span>
-                          <span className="text-slate-700">
-                            Pago: {formatClp(i.paid_amount || i.total_amount)} · Fecha{" "}
-                            {formatIsoDate(i.paid_at)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                ) : (
+                  <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-emerald-900">Cuotas pagadas</h3>
+                      <span className="text-xs text-emerald-800">
+                        {paidInstallments.length} de {detail.installments.length} pagadas · total{" "}
+                        {formatClp(totalPaidInstallments)}
+                      </span>
+                    </div>
+                    {paidInstallments.length === 0 ? (
+                      <p className="mt-2 text-sm text-emerald-900/80">
+                        Este crédito aún no registra cuotas pagadas.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {paidInstallments.map((i) => (
+                          <li
+                            key={`paid-${i.id}`}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded border border-emerald-200 bg-white px-2 py-1"
+                          >
+                            <span className="text-slate-800">Cuota #{i.installment_number}</span>
+                            <span className="text-slate-700">
+                              Pago: {formatClp(i.paid_amount || i.total_amount)} · Fecha{" "}
+                              {formatIsoDate(i.paid_at)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </>
             );
           })()}
           <div className="flex items-start justify-between gap-3">
-            <h2 className="font-medium text-slate-900">Cuotas — {detail.credit.lender}</h2>
+            <h2 className="font-medium text-slate-900">
+              {detail.credit.flexible || detail.credit.total_installments === 0
+                ? `Pagos — ${detail.credit.lender}`
+                : `Cuotas — ${detail.credit.lender}`}
+            </h2>
             <button
               type="button"
               className="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
@@ -810,6 +1025,60 @@ export default function CreditosPage() {
               Cerrar
             </button>
           </div>
+
+          {detail.credit.flexible || detail.credit.total_installments === 0 ? (
+            <>
+              {canWrite &&
+              detail.credit.status === "active" &&
+              (Number(detail.credit.pending) || 0) > 0.01 ? (
+                <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={onPayPartial}>
+                  <label className="text-sm">
+                    Monto a pagar
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="mt-1 w-36 ui-field px-2 py-1"
+                      value={partialAmount}
+                      onChange={(e) => setPartialAmount(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Fecha pago
+                    <input
+                      type="date"
+                      className="mt-1 ui-field px-2 py-1"
+                      value={partialDate}
+                      onChange={(e) => setPartialDate(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    disabled={partialBusy}
+                  >
+                    Registrar pago parcial
+                  </button>
+                </form>
+              ) : detail.credit.status === "closed" ||
+                (Number(detail.credit.pending) || 0) <= 0.01 ? (
+                <p className="mt-3 text-sm text-slate-600">Este crédito está saldado.</p>
+              ) : null}
+              {canWrite && (Number(detail.credit.repaid_total) || 0) > 0.01 ? (
+                <button
+                  type="button"
+                  className="mt-3 text-sm text-rose-700 underline disabled:opacity-50"
+                  disabled={partialBusy}
+                  onClick={() => void revertirUltimoParcial()}
+                >
+                  Revertir último pago parcial
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
           <ul className="mt-2 max-h-60 overflow-auto text-sm">
             {detail.installments.map((i) => (
               <li key={i.id} className="flex items-center justify-between border-b border-slate-50 py-1">
@@ -936,6 +1205,8 @@ export default function CreditosPage() {
               ) : null}
             </div>
           ) : null}
+            </>
+          )}
         </section>
       ) : null}
 
