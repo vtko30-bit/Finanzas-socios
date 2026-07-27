@@ -8,8 +8,13 @@ export const DEFAULT_BANK_POSITION_LABELS = [
   "Mercado Pago — Cta. Vista",
   "Banco Estado — FFMM",
   "Banco de Chile — FFMM",
-  "Otras Inversiones",
+  "Efectivo",
 ] as const;
+
+/** Etiquetas antiguas → nombre actual en la planilla. */
+const LEGACY_BANK_LABEL_ALIASES: Record<string, string> = {
+  "Otras Inversiones": "Efectivo",
+};
 
 export type BankPositionRow = {
   banco: string;
@@ -49,7 +54,11 @@ export function emptyBankPositionRows(): BankPositionRow[] {
 export function mergeBankPositionRows(
   saved: BankPositionRow[],
 ): BankPositionRow[] {
-  const byBanco = new Map(saved.map((r) => [r.banco, r]));
+  const byBanco = new Map<string, BankPositionRow>();
+  for (const r of saved) {
+    const banco = LEGACY_BANK_LABEL_ALIASES[r.banco] ?? r.banco;
+    byBanco.set(banco, { ...r, banco });
+  }
   return DEFAULT_BANK_POSITION_LABELS.map((banco) => {
     const hit = byBanco.get(banco);
     if (hit) return hit;

@@ -188,8 +188,13 @@ export function BankPositionSection({
             <p className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
               {loading ? "—" : formatClp(totals.total)}
             </p>
-            <p className="text-xs text-slate-400">
-              Fecha de corte: {formatFecha(data?.snapshotDate ?? null)}
+            <p className="mt-3 inline-flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-sm text-slate-800">
+              <span className="font-medium text-cyan-800">
+                Fecha de actualización
+              </span>
+              <span className="font-semibold tabular-nums text-slate-900">
+                {formatFecha(data?.snapshotDate ?? null)}
+              </span>
             </p>
           </div>
           {!loading ? <BalanceSparkline /> : null}
