@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import {
   BalanceMiniCard,
@@ -15,6 +16,9 @@ import {
   rowTotal,
   type BankPositionRow,
 } from "@/lib/bank-position-defaults";
+
+const BALANCE_VISIBLE_KEY = "finanzas.balanceVisible";
+const BALANCE_OCULTO = "••••••••";
 
 type BankPositionSectionProps = {
   variant?: "default" | "premium";
@@ -64,6 +68,33 @@ export function BankPositionSection({
   const [formRows, setFormRows] = useState<BankPositionRow[]>(
     emptyBankPositionRows(),
   );
+  /** false = montos ocultos hasta que el usuario los pida. */
+  const [balanceVisible, setBalanceVisible] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(BALANCE_VISIBLE_KEY) === "1") {
+        setBalanceVisible(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleBalanceVisible = () => {
+    setBalanceVisible((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(BALANCE_VISIBLE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  const montoVisible = (valor: string) =>
+    loading ? "—" : balanceVisible ? valor : BALANCE_OCULTO;
 
   const cargar = useCallback(() => {
     setLoading(true);
@@ -185,9 +216,36 @@ export function BankPositionSection({
               Balance General
             </h2>
             <p className="text-sm font-medium text-slate-500">Total Balance</p>
-            <p className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-              {loading ? "—" : formatClp(totals.total)}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p
+                className={`text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl ${
+                  !balanceVisible && !loading ? "select-none tracking-widest" : ""
+                }`}
+                aria-live="polite"
+              >
+                {montoVisible(formatClp(totals.total))}
+              </p>
+              {!loading ? (
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700"
+                  onClick={toggleBalanceVisible}
+                  aria-pressed={balanceVisible}
+                  aria-label={
+                    balanceVisible
+                      ? "Ocultar total del balance"
+                      : "Mostrar total del balance"
+                  }
+                  title={balanceVisible ? "Ocultar montos" : "Mostrar montos"}
+                >
+                  {balanceVisible ? (
+                    <EyeOff className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <Eye className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                  )}
+                </button>
+              ) : null}
+            </div>
             <p className="mt-3 inline-flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-sm text-slate-800">
               <span className="font-medium text-cyan-800">
                 Fecha de actualización
@@ -203,17 +261,17 @@ export function BankPositionSection({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <BalanceMiniCard
             label="Cta. Principal"
-            amount={loading ? "—" : formatClp(totals.saldoCtaCte)}
+            amount={montoVisible(formatClp(totals.saldoCtaCte))}
             icon={Building2}
           />
           <BalanceMiniCard
             label="Ahorro Mensual"
-            amount={loading ? "—" : formatClp(totals.ahorro)}
+            amount={montoVisible(formatClp(totals.ahorro))}
             icon={PiggyBank}
           />
           <BalanceMiniCard
             label="Efectivo Disponible"
-            amount={loading ? "—" : formatClp(totals.efectivo)}
+            amount={montoVisible(formatClp(totals.efectivo))}
             icon={Wallet}
           />
         </div>
