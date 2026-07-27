@@ -136,12 +136,16 @@ export default function CreditosPage() {
       source: string | null;
       origen_cuenta: string | null;
       external_ref: string | null;
+      counterparty?: string | null;
     }[]
   >([]);
   const [reconcileCandTotal, setReconcileCandTotal] = useState<number | null>(null);
   const [reconcileCandLoading, setReconcileCandLoading] = useState(false);
   const [reconcilePickId, setReconcilePickId] = useState<string | null>(null);
+  const [reconcilePickIds, setReconcilePickIds] = useState<string[]>([]);
   const [reconcileWorking, setReconcileWorking] = useState(false);
+  const [partialFilterName, setPartialFilterName] = useState("");
+  const [partialFilterAmount, setPartialFilterAmount] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -265,8 +269,11 @@ export default function CreditosPage() {
     setDetailId(id);
     setMsg("");
     setPartialAmount("");
+    setPartialFilterName("");
+    setPartialFilterAmount("");
     setReconcileCand([]);
     setReconcilePickId(null);
+    setReconcilePickIds([]);
     setReconcileCandTotal(null);
     const res = await fetch(`/api/creditos/${id}`);
     const data = await res.json();
@@ -288,6 +295,7 @@ export default function CreditosPage() {
     setDetail(null);
     setReconcileCand([]);
     setReconcilePickId(null);
+    setReconcilePickIds([]);
     setReconcileCandTotal(null);
   };
 
@@ -379,6 +387,80 @@ export default function CreditosPage() {
       setMsg("Error de red al revertir pago");
     } finally {
       setPartialBusy(false);
+    }
+  };
+
+  const buscarConciliacionParcial = async () => {
+    if (!detailId) return;
+    setReconcileCandLoading(true);
+    setMsg("");
+    setReconcilePickIds([]);
+    try {
+      const params = new URLSearchParams();
+      if (partialFilterName.trim()) params.set("name", partialFilterName.trim());
+      const amountN = Number(partialFilterAmount);
+      if (partialFilterAmount.trim() && Number.isFinite(amountN) && amountN > 0) {
+        params.set("amount", String(amountN));
+      }
+      const qs = params.toString();
+      const res = await fetch(
+        `/api/creditos/${detailId}/reconcile-partial-candidates${qs ? `?${qs}` : ""}`,
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Error");
+        setReconcileCand([]);
+        return;
+      }
+      const list = (data.candidates ?? []) as typeof reconcileCand;
+      setReconcileCand(list);
+      const pending = Number(data.pending);
+      if (Number.isFinite(pending)) setReconcileCandTotal(pending);
+      if (list.length === 0) {
+        setMsg(
+          `No hay egresos importados candidatos. Pendiente del crédito: ${formatClp(Number(data.pending) || 0)}.`,
+        );
+      } else {
+        setMsg(
+          `Se encontraron ${list.length} egreso(s). Pendiente: ${formatClp(Number(data.pending) || 0)}.`,
+        );
+      }
+    } catch {
+      setMsg("Error de red al buscar egresos");
+      setReconcileCand([]);
+    } finally {
+      setReconcileCandLoading(false);
+    }
+  };
+
+  const confirmarConciliacionParcial = async () => {
+    if (!detailId || reconcilePickIds.length === 0) return;
+    setReconcileWorking(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/creditos/${detailId}/reconcile-partial-transaction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_ids: reconcilePickIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo conciliar");
+        return;
+      }
+      setMsg(
+        data.closed
+          ? "Egreso(s) conciliado(s). Crédito cerrado."
+          : `Egreso(s) conciliado(s). Pendiente: ${formatClp(Number(data.pending) || 0)}.`,
+      );
+      setReconcileCand([]);
+      setReconcilePickIds([]);
+      void openDetail(detailId);
+      void load();
+    } catch {
+      setMsg("Error de red al conciliar");
+    } finally {
+      setReconcileWorking(false);
     }
   };
 
@@ -1075,6 +1157,124 @@ export default function CreditosPage() {
                 >
                   Revertir último pago parcial
                 </button>
+              ) : null}
+              {canWrite &&
+              detail.credit.status === "active" &&
+              (Number(detail.credit.pending) || 0) > 0.01 ? (
+                <div className="mt-6 border-t border-slate-200 pt-4">
+                  <h3 className="text-sm font-medium text-slate-800">
+                    Conciliar con egreso importado
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Busca egresos de planilla (<code className="text-[11px]">excel_…</code>) sin
+                    vincular a crédito. Al conciliar, el gasto pasa a financiamiento y se suma al
+                    abono del crédito (sin duplicar el movimiento).
+                  </p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs text-slate-600">
+                      Filtrar por nombre / glosa
+                      <input
+                        type="text"
+                        className="mt-1 w-full ui-field px-2 py-1.5 text-sm"
+                        placeholder="Ej: socio, transferencia"
+                        value={partialFilterName}
+                        onChange={(e) => setPartialFilterName(e.target.value)}
+                      />
+                    </label>
+                    <label className="text-xs text-slate-600">
+                      Filtrar por monto exacto (opcional)
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="mt-1 w-full ui-field px-2 py-1.5 text-sm"
+                        placeholder="Ej: 500000"
+                        value={partialFilterAmount}
+                        onChange={(e) => setPartialFilterAmount(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded border border-emerald-700 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                      disabled={reconcileCandLoading || reconcileWorking}
+                      onClick={() => void buscarConciliacionParcial()}
+                    >
+                      {reconcileCandLoading ? "Buscando…" : "Buscar egresos importados"}
+                    </button>
+                    {reconcileCandTotal != null ? (
+                      <span className="text-xs text-slate-600">
+                        Pendiente: {formatClp(reconcileCandTotal)}
+                      </span>
+                    ) : null}
+                    {reconcilePickIds.length > 0 ? (
+                      <span className="text-xs text-slate-700">
+                        Seleccionado:{" "}
+                        {formatClp(
+                          reconcileCand
+                            .filter((c) => reconcilePickIds.includes(c.id))
+                            .reduce((acc, c) => acc + (Number(c.amount) || 0), 0),
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
+                  {reconcileCand.length > 0 ? (
+                    <ul className="mt-3 max-h-48 space-y-2 overflow-auto text-sm">
+                      {reconcileCand.map((c) => (
+                        <li
+                          key={c.id}
+                          className="rounded border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+                        >
+                          <label className="flex cursor-pointer gap-2">
+                            <input
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 accent-emerald-700"
+                              checked={reconcilePickIds.includes(c.id)}
+                              onChange={(e) =>
+                                setReconcilePickIds((prev) =>
+                                  e.target.checked
+                                    ? [...prev, c.id]
+                                    : prev.filter((id) => id !== c.id),
+                                )
+                              }
+                            />
+                            <span className="min-w-0">
+                              <span className="font-medium text-slate-900">
+                                {c.date} · {formatClp(c.amount)}
+                              </span>
+                              {c.counterparty ? (
+                                <span className="block truncate text-slate-700">
+                                  {c.counterparty}
+                                </span>
+                              ) : null}
+                              {c.description ? (
+                                <span className="block truncate text-slate-700">
+                                  {c.description}
+                                </span>
+                              ) : null}
+                              <span className="block break-all font-mono text-[10px] text-slate-500">
+                                {c.id}
+                              </span>
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {reconcileCand.length > 0 ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+                        disabled={reconcilePickIds.length === 0 || reconcileWorking}
+                        onClick={() => void confirmarConciliacionParcial()}
+                      >
+                        {reconcileWorking ? "Conciliando…" : "Conciliar selección"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </>
           ) : (
