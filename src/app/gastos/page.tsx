@@ -766,6 +766,7 @@ function GastosPageContent() {
     gastoIds: string[];
     categoria: string;
     familia: string;
+    descripcion: string;
   } | null>(null);
   const [detailRow, setDetailRow] = useState<GastoRow | null>(null);
   const [reconcileModal, setReconcileModal] = useState<{
@@ -1345,10 +1346,45 @@ function GastosPageContent() {
     }
   };
 
+  const guardarDescripcionGasto = async (
+    id: string,
+    descripcion: string,
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/gastos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: descripcion.trim() }),
+      });
+      const data = (await res.json()) as {
+        description?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        mostrarAviso(data.error || "No se pudo guardar la descripción");
+        return false;
+      }
+      const nextDesc = data.description ?? descripcion.trim();
+      setRows((prev) => {
+        const next = prev.map((r) =>
+          r.id === id ? { ...r, descripcion: nextDesc } : r,
+        );
+        setClientCache(gastosCacheKey, next);
+        return next;
+      });
+      return true;
+    } catch {
+      mostrarAviso("Error de red al guardar la descripción");
+      return false;
+    }
+  };
+
   const aplicarEdicionConceptoModal = async () => {
     if (!editModal) return;
     const catTrim = editModal.categoria.trim();
     const famTrim = editModal.familia.trim();
+    const descTrim = editModal.descripcion.trim();
+    const soloUnaLinea = editModal.gastoIds.length === 1;
 
     if (!catTrim) {
       mostrarAviso("Escribe o elige una categoría.");
@@ -1357,6 +1393,19 @@ function GastosPageContent() {
 
     setSaveInProgress(true);
     const guardarOpts: GuardarConceptoOpts = { silent: true };
+
+    const cerrarSiOk = async (ok: boolean) => {
+      if (!ok) return;
+      if (soloUnaLinea) {
+        const descOk = await guardarDescripcionGasto(
+          editModal.gastoIds[0]!,
+          descTrim,
+        );
+        if (!descOk) return;
+      }
+      setEditModal(null);
+      setSelectedGastoIds(new Set());
+    };
 
     try {
       const fetchFamilies = async (): Promise<CatalogFamily[]> => {
@@ -1407,10 +1456,7 @@ function GastosPageContent() {
             existingConcept.id,
             guardarOpts,
           );
-          if (ok) {
-            setEditModal(null);
-            setSelectedGastoIds(new Set());
-          }
+          await cerrarSiOk(ok);
           return;
         }
 
@@ -1443,10 +1489,7 @@ function GastosPageContent() {
           existingConcept.id,
           { ...guardarOpts, catalogoSnapshot: nextCatalogo },
         );
-        if (ok) {
-          setEditModal(null);
-          setSelectedGastoIds(new Set());
-        }
+        await cerrarSiOk(ok);
         return;
       }
 
@@ -1456,10 +1499,7 @@ function GastosPageContent() {
           catTrim,
           guardarOpts,
         );
-        if (ok) {
-          setEditModal(null);
-          setSelectedGastoIds(new Set());
-        }
+        await cerrarSiOk(ok);
         return;
       }
 
@@ -1514,10 +1554,7 @@ function GastosPageContent() {
         newConcept.id,
         { ...guardarOpts, catalogoSnapshot: nextCatalogo },
       );
-      if (ok) {
-        setEditModal(null);
-        setSelectedGastoIds(new Set());
-      }
+      await cerrarSiOk(ok);
     } finally {
       setSaveInProgress(false);
     }
@@ -1600,6 +1637,7 @@ function GastosPageContent() {
       gastoIds: ordenados.map((r) => r.id),
       categoria: categoriaDisplayLabel(first, catalogo),
       familia: (first.familia ?? "").trim(),
+      descripcion: (first.descripcion ?? "").trim(),
     });
   }, [rows, selectedGastoIds, catalogo]);
 
@@ -2240,8 +2278,8 @@ function GastosPageContent() {
                           <button
                             type="button"
                             className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
-                            title="Editar categoría"
-                            aria-label="Editar categoría"
+                            title="Editar gasto"
+                            aria-label="Editar gasto"
                             disabled={uiBloqueadoGuardado}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2250,6 +2288,7 @@ function GastosPageContent() {
                                 gastoIds: [row.id],
                                 categoria: categoriaDisplayLabel(row, catalogo),
                                 familia: (row.familia ?? "").trim(),
+                                descripcion: (row.descripcion ?? "").trim(),
                               });
                             }}
                           >
@@ -2649,8 +2688,24 @@ function GastosPageContent() {
                 >
                   {editModal.gastoIds.length > 1
                     ? `Editar categoría (${editModal.gastoIds.length} gastos)`
-                    : "Editar categoría del gasto"}
+                    : "Editar gasto"}
                 </h3>
+                {editModal.gastoIds.length === 1 ? (
+                  <label className="mt-4 block text-sm text-slate-700">
+                    Descripción
+                    <textarea
+                      className="mt-1 w-full resize-y rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-500"
+                      rows={3}
+                      value={editModal.descripcion}
+                      disabled={uiBloqueadoGuardado}
+                      onChange={(e) =>
+                        setEditModal((m) =>
+                          m ? { ...m, descripcion: e.target.value } : m,
+                        )
+                      }
+                    />
+                  </label>
+                ) : null}
                 <div className="mt-4">
                   <ComboboxLista
                     id="gasto-edit-categoria"
