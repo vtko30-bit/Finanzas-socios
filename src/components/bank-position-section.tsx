@@ -12,6 +12,7 @@ import {
 } from "@/components/dashboard-balance-ui";
 import {
   emptyBankPositionRows,
+  isEfectivoLabel,
   isSaldoCtaCteLabel,
   rowTotal,
   type BankPositionRow,
@@ -120,7 +121,31 @@ export function BankPositionSection({
     setFormError("");
     setFormDate(data?.snapshotDate ?? todayIso());
     setFormRows(
-      (data?.rows ?? emptyBankPositionRows()).map((r) => ({ ...r })),
+      (data?.rows ?? emptyBankPositionRows()).map((r) => {
+        if (isEfectivoLabel(r.banco)) {
+          const efectivo =
+            (Number(r.efectivo) || 0) > 0
+              ? Number(r.efectivo) || 0
+              : Number(r.saldoCtaCte) || 0;
+          const ahorro = Number(r.ahorro) || 0;
+          return {
+            ...r,
+            saldoCtaCte: 0,
+            ahorro,
+            efectivo,
+            total: rowTotal(0, ahorro, efectivo),
+          };
+        }
+        const saldoCtaCte = Number(r.saldoCtaCte) || 0;
+        const ahorro = Number(r.ahorro) || 0;
+        return {
+          ...r,
+          saldoCtaCte,
+          ahorro,
+          efectivo: 0,
+          total: rowTotal(saldoCtaCte, ahorro, 0),
+        };
+      }),
     );
     setModalOpen(true);
   };
@@ -157,12 +182,22 @@ export function BankPositionSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           snapshotDate: formDate,
-          lines: formRows.map((r) => ({
-            banco: r.banco,
-            saldoCtaCte: r.saldoCtaCte,
-            ahorro: r.ahorro,
-            efectivo: r.efectivo,
-          })),
+          lines: formRows.map((r) => {
+            if (isEfectivoLabel(r.banco)) {
+              return {
+                banco: r.banco,
+                saldoCtaCte: 0,
+                ahorro: r.ahorro,
+                efectivo: r.efectivo,
+              };
+            }
+            return {
+              banco: r.banco,
+              saldoCtaCte: r.saldoCtaCte,
+              ahorro: r.ahorro,
+              efectivo: 0,
+            };
+          }),
         }),
       });
       let json: PosicionResponse;
@@ -400,35 +435,38 @@ export function BankPositionSection({
                 />
               </label>
               <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-xs">
+              <table className="w-full min-w-[480px] border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-slate-600">
                     <th className="px-2 py-2 font-medium">Banco</th>
-                    <th className="px-2 py-2 font-medium">Saldo cta.cte.</th>
+                    <th className="px-2 py-2 font-medium">Saldo</th>
                     <th className="px-2 py-2 font-medium">Ahorro</th>
-                    <th className="px-2 py-2 font-medium">Efectivo</th>
                     <th className="px-2 py-2 text-right font-medium">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {formRows.map((row, idx) => {
                     const esSaldoCtaCte = isSaldoCtaCteLabel(row.banco);
+                    const esEfectivo = isEfectivoLabel(row.banco);
+                    const saldoEditable = esSaldoCtaCte || esEfectivo;
+                    const saldoValue = esEfectivo ? row.efectivo : row.saldoCtaCte;
+                    const saldoField = esEfectivo ? "efectivo" : "saldoCtaCte";
                     return (
                     <tr key={row.banco} className="border-b border-slate-100">
                       <td className="max-w-[12rem] px-2 py-2 text-slate-900">
                         {row.banco}
                       </td>
                       <td className="px-2 py-2">
-                        {esSaldoCtaCte ? (
+                        {saldoEditable ? (
                           <input
                             type="number"
                             min={0}
                             step={1}
                             className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right text-slate-900"
-                            value={row.saldoCtaCte || ""}
+                            value={saldoValue || ""}
                             disabled={saving}
                             onChange={(e) =>
-                              actualizarMonto(idx, "saldoCtaCte", e.target.value)
+                              actualizarMonto(idx, saldoField, e.target.value)
                             }
                           />
                         ) : (
@@ -447,19 +485,6 @@ export function BankPositionSection({
                           disabled={saving}
                           onChange={(e) =>
                             actualizarMonto(idx, "ahorro", e.target.value)
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right text-slate-900"
-                          value={row.efectivo || ""}
-                          disabled={saving}
-                          onChange={(e) =>
-                            actualizarMonto(idx, "efectivo", e.target.value)
                           }
                         />
                       </td>

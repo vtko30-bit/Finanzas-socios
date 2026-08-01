@@ -24,9 +24,14 @@ export type BankPositionRow = {
   total: number;
 };
 
-/** Cuentas corrientes y vista usan la columna «Saldo cta.cte.» */
+/** Cuentas corrientes y vista usan la columna «Saldo». */
 export function isSaldoCtaCteLabel(banco: string): boolean {
   return /cta\.cte|cta\.\s*vista/i.test(banco);
+}
+
+/** Fila de efectivo: el monto se carga en la columna Saldo (campo `efectivo`). */
+export function isEfectivoLabel(banco: string): boolean {
+  return (banco || "").trim().toLowerCase() === "efectivo";
 }
 
 export function rowTotal(
