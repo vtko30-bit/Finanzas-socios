@@ -8,7 +8,9 @@ import {
   mergeBankPositionRows,
   sumBankPositionRows,
   rowTotal,
-  DEFAULT_BANK_POSITION_LABELS,
+  FIXED_BANK_POSITION_LABELS,
+  isFixedBankLabel,
+  isEfectivoLabel,
   type BankPositionRow,
 } from "@/lib/bank-position-defaults";
 
@@ -144,31 +146,78 @@ export async function POST(request: Request) {
   }
 
   const rawLines = Array.isArray(body.lines) ? (body.lines as LineInput[]) : [];
-  const allowed = new Set<string>(DEFAULT_BANK_POSITION_LABELS);
+  const byBanco = new Map<string, LineInput>();
+  for (const line of rawLines) {
+    const banco = String(line.banco ?? "").trim();
+    if (!banco) continue;
+    if (byBanco.has(banco)) {
+      return NextResponse.json(
+        { error: `Nombre de línea duplicado: ${banco}` },
+        { status: 400 },
+      );
+    }
+    byBanco.set(banco, line);
+  }
+
   const rows: BankPositionRow[] = [];
 
-  for (const label of DEFAULT_BANK_POSITION_LABELS) {
-    const input = rawLines.find((l) => String(l.banco ?? "").trim() === label);
+  for (const label of FIXED_BANK_POSITION_LABELS.filter((l) => !isEfectivoLabel(l))) {
+    const input = byBanco.get(label);
+    byBanco.delete(label);
     const saldoCtaCte = parseAmount(input?.saldoCtaCte);
     const ahorro = parseAmount(input?.ahorro);
-    const efectivo = parseAmount(input?.efectivo);
     rows.push({
       banco: label,
       saldoCtaCte,
       ahorro,
-      efectivo,
-      total: rowTotal(saldoCtaCte, ahorro, efectivo),
+      efectivo: 0,
+      total: rowTotal(saldoCtaCte, ahorro, 0),
     });
   }
 
-  for (const line of rawLines) {
-    const banco = String(line.banco ?? "").trim();
-    if (banco && !allowed.has(banco)) {
+  const ffmmEntries = [...byBanco.entries()].filter(
+    ([banco]) => !isEfectivoLabel(banco) && !isFixedBankLabel(banco),
+  );
+  ffmmEntries.sort(([a], [b]) =>
+    a.localeCompare(b, "es", { sensitivity: "base" }),
+  );
+
+  for (const [banco, input] of ffmmEntries) {
+    byBanco.delete(banco);
+    const ahorro = parseAmount(input?.ahorro);
+    if (!banco.trim()) {
       return NextResponse.json(
-        { error: `Banco no reconocido: ${banco}` },
+        { error: "Cada fondo mutuo debe tener un nombre." },
         { status: 400 },
       );
     }
+    rows.push({
+      banco,
+      saldoCtaCte: 0,
+      ahorro,
+      efectivo: 0,
+      total: rowTotal(0, ahorro, 0),
+    });
+  }
+
+  const efectivoInput = byBanco.get("Efectivo");
+  byBanco.delete("Efectivo");
+  const efectivoAmt = parseAmount(efectivoInput?.efectivo);
+  const efectivoAhorro = parseAmount(efectivoInput?.ahorro);
+  rows.push({
+    banco: "Efectivo",
+    saldoCtaCte: 0,
+    ahorro: efectivoAhorro,
+    efectivo: efectivoAmt,
+    total: rowTotal(0, efectivoAhorro, efectivoAmt),
+  });
+
+  for (const [banco] of byBanco) {
+    if (isFixedBankLabel(banco)) continue;
+    return NextResponse.json(
+      { error: `Línea no reconocida: ${banco}` },
+      { status: 400 },
+    );
   }
 
   const now = new Date().toISOString();

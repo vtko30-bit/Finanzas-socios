@@ -13,13 +13,22 @@ import {
 import {
   emptyBankPositionRows,
   isEfectivoLabel,
+  isFixedBankLabel,
   isSaldoCtaCteLabel,
+  mergeBankPositionRows,
   rowTotal,
+  splitFixedAndFfmm,
   type BankPositionRow,
 } from "@/lib/bank-position-defaults";
 
 const BALANCE_VISIBLE_KEY = "finanzas.balanceVisible";
 const BALANCE_OCULTO = "••••••••";
+
+type FfmmFormRow = {
+  id: string;
+  nombre: string;
+  monto: number;
+};
 
 type BankPositionSectionProps = {
   variant?: "default" | "premium";
@@ -39,6 +48,19 @@ const formatClp = (n: number) =>
     currency: "CLP",
     maximumFractionDigits: 0,
   }).format(n || 0);
+
+/** Entero con separador de miles (es-CL); vacío si es 0. */
+function formatMilesInput(n: number): string {
+  if (!n) return "";
+  return new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(n);
+}
+
+/** Parsea monto con puntos/comas u otros símbolos; solo dígitos. */
+function parseMilesInput(raw: string): number {
+  const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return 0;
+  return Math.max(0, Math.round(Number(digits) || 0));
+}
 
 function todayIso(): string {
   const d = new Date();
@@ -66,9 +88,10 @@ export function BankPositionSection({
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formDate, setFormDate] = useState(todayIso);
-  const [formRows, setFormRows] = useState<BankPositionRow[]>(
+  const [formFixedRows, setFormFixedRows] = useState<BankPositionRow[]>(() =>
     emptyBankPositionRows(),
   );
+  const [formFfmmRows, setFormFfmmRows] = useState<FfmmFormRow[]>([]);
   /** false = montos ocultos hasta que el usuario los pida. */
   const [balanceVisible, setBalanceVisible] = useState(false);
 
@@ -120,8 +143,10 @@ export function BankPositionSection({
   const abrirModal = () => {
     setFormError("");
     setFormDate(data?.snapshotDate ?? todayIso());
-    setFormRows(
-      (data?.rows ?? emptyBankPositionRows()).map((r) => {
+    const merged = mergeBankPositionRows(data?.rows ?? emptyBankPositionRows());
+    const { fixed, ffmm } = splitFixedAndFfmm(merged);
+    setFormFixedRows(
+      fixed.map((r) => {
         if (isEfectivoLabel(r.banco)) {
           const efectivo =
             (Number(r.efectivo) || 0) > 0
@@ -147,16 +172,23 @@ export function BankPositionSection({
         };
       }),
     );
+    setFormFfmmRows(
+      ffmm.map((r, i) => ({
+        id: `ffmm-${i}-${r.banco}`,
+        nombre: r.banco,
+        monto: Number(r.ahorro) || 0,
+      })),
+    );
     setModalOpen(true);
   };
 
-  const actualizarMonto = (
+  const actualizarMontoFijo = (
     index: number,
     field: "saldoCtaCte" | "ahorro" | "efectivo",
     raw: string,
   ) => {
-    const n = raw === "" ? 0 : Math.max(0, Math.round(Number(raw) || 0));
-    setFormRows((prev) =>
+    const n = parseMilesInput(raw);
+    setFormFixedRows((prev) =>
       prev.map((row, i) => {
         if (i !== index) return row;
         const saldoCtaCte = field === "saldoCtaCte" ? n : row.saldoCtaCte;
@@ -173,31 +205,87 @@ export function BankPositionSection({
     );
   };
 
+  const agregarFfmm = () => {
+    setFormFfmmRows((prev) => [
+      ...prev,
+      {
+        id: `ffmm-new-${Date.now()}-${prev.length}`,
+        nombre: "",
+        monto: 0,
+      },
+    ]);
+  };
+
+  const actualizarFfmmNombre = (id: string, nombre: string) => {
+    setFormFfmmRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, nombre } : r)),
+    );
+  };
+
+  const actualizarFfmmMonto = (id: string, raw: string) => {
+    const monto = parseMilesInput(raw);
+    setFormFfmmRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, monto } : r)),
+    );
+  };
+
+  const eliminarFfmm = (id: string) => {
+    setFormFfmmRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
   const guardar = async () => {
     setSaving(true);
     setFormError("");
     try {
+      const nombres = formFfmmRows.map((r) => r.nombre.trim()).filter(Boolean);
+      const uniq = new Set(nombres.map((n) => n.toLowerCase()));
+      if (uniq.size !== nombres.length) {
+        throw new Error("Hay fondos mutuos con el mismo nombre.");
+      }
+      for (const r of formFfmmRows) {
+        const nombre = r.nombre.trim();
+        if (!nombre && r.monto > 0) {
+          throw new Error("Indica el nombre de cada fondo mutuo con monto.");
+        }
+        if (nombre && isFixedBankLabel(nombre)) {
+          throw new Error(
+            `«${nombre}» es una cuenta fija; usa otro nombre para el fondo mutuo.`,
+          );
+        }
+      }
+
+      const ffmmLines = formFfmmRows
+        .filter((r) => r.nombre.trim())
+        .map((r) => ({
+          banco: r.nombre.trim(),
+          saldoCtaCte: 0,
+          ahorro: r.monto,
+          efectivo: 0,
+        }));
+
+      const fixedLines = formFixedRows.map((r) => {
+        if (isEfectivoLabel(r.banco)) {
+          return {
+            banco: r.banco,
+            saldoCtaCte: 0,
+            ahorro: r.ahorro,
+            efectivo: r.efectivo,
+          };
+        }
+        return {
+          banco: r.banco,
+          saldoCtaCte: r.saldoCtaCte,
+          ahorro: r.ahorro,
+          efectivo: 0,
+        };
+      });
+
       const res = await fetch("/api/posicion-bancaria", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           snapshotDate: formDate,
-          lines: formRows.map((r) => {
-            if (isEfectivoLabel(r.banco)) {
-              return {
-                banco: r.banco,
-                saldoCtaCte: 0,
-                ahorro: r.ahorro,
-                efectivo: r.efectivo,
-              };
-            }
-            return {
-              banco: r.banco,
-              saldoCtaCte: r.saldoCtaCte,
-              ahorro: r.ahorro,
-              efectivo: 0,
-            };
-          }),
+          lines: [...fixedLines, ...ffmmLines],
         }),
       });
       let json: PosicionResponse;
@@ -435,6 +523,7 @@ export function BankPositionSection({
                 />
               </label>
               <div className="mt-4 overflow-x-auto">
+              <p className="mb-2 text-xs font-medium text-slate-600">Cuentas</p>
               <table className="w-full min-w-[480px] border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-slate-600">
@@ -445,7 +534,7 @@ export function BankPositionSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {formRows.map((row, idx) => {
+                  {formFixedRows.map((row, idx) => {
                     const esSaldoCtaCte = isSaldoCtaCteLabel(row.banco);
                     const esEfectivo = isEfectivoLabel(row.banco);
                     const saldoEditable = esSaldoCtaCte || esEfectivo;
@@ -459,14 +548,13 @@ export function BankPositionSection({
                       <td className="px-2 py-2">
                         {saldoEditable ? (
                           <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right text-slate-900"
-                            value={saldoValue || ""}
+                            type="text"
+                            inputMode="numeric"
+                            className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right tabular-nums text-slate-900"
+                            value={formatMilesInput(saldoValue)}
                             disabled={saving}
                             onChange={(e) =>
-                              actualizarMonto(idx, saldoField, e.target.value)
+                              actualizarMontoFijo(idx, saldoField, e.target.value)
                             }
                           />
                         ) : (
@@ -477,14 +565,13 @@ export function BankPositionSection({
                       </td>
                       <td className="px-2 py-2">
                         <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right text-slate-900"
-                          value={row.ahorro || ""}
+                          type="text"
+                          inputMode="numeric"
+                          className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right tabular-nums text-slate-900"
+                          value={formatMilesInput(row.ahorro)}
                           disabled={saving}
                           onChange={(e) =>
-                            actualizarMonto(idx, "ahorro", e.target.value)
+                            actualizarMontoFijo(idx, "ahorro", e.target.value)
                           }
                         />
                       </td>
@@ -494,6 +581,82 @@ export function BankPositionSection({
                     </tr>
                     );
                   })}
+                </tbody>
+              </table>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-slate-600">Fondos mutuos</p>
+                <button
+                  type="button"
+                  className="rounded border border-sky-700 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                  disabled={saving}
+                  onClick={agregarFfmm}
+                >
+                  Agregar fondo
+                </button>
+              </div>
+              <table className="mt-2 w-full min-w-[480px] border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-slate-600">
+                    <th className="px-2 py-2 font-medium">Nombre</th>
+                    <th className="px-2 py-2 font-medium">Monto</th>
+                    <th className="px-2 py-2 text-right font-medium">Total</th>
+                    <th className="w-16 px-2 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {formFfmmRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-2 py-3 text-center text-slate-500"
+                      >
+                        Sin fondos. Usa «Agregar fondo» para detallar por banco o instrumento.
+                      </td>
+                    </tr>
+                  ) : (
+                    formFfmmRows.map((row) => (
+                      <tr key={row.id} className="border-b border-slate-100">
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            className="w-full min-w-[10rem] rounded border border-slate-300 px-2 py-1 text-slate-900"
+                            placeholder="Ej: BCI — FFMM Liquidez"
+                            value={row.nombre}
+                            disabled={saving}
+                            onChange={(e) =>
+                              actualizarFfmmNombre(row.id, e.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-right tabular-nums text-slate-900"
+                            value={formatMilesInput(row.monto)}
+                            disabled={saving}
+                            onChange={(e) =>
+                              actualizarFfmmMonto(row.id, e.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+                          {formatClp(row.monto)}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <button
+                            type="button"
+                            className="text-xs text-rose-700 underline disabled:opacity-50"
+                            disabled={saving}
+                            onClick={() => eliminarFfmm(row.id)}
+                          >
+                            Quitar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
               </div>
