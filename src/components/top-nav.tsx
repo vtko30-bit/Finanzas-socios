@@ -18,6 +18,7 @@ const NAV_BASE: { href: string; label: string }[] = [
   { href: "/gastos-pago-servicios", label: "Pago de Servicios" },
   { href: "/creditos", label: "Créditos" },
   { href: "/prestamos-otorgados", label: "Préstamos" },
+  { href: "/inversiones", label: "Inversiones" },
   { href: "/categorias", label: "Categorías" },
   { href: "/familias", label: "Familias" },
   { href: "/movimientos-excluidos", label: "Excluidos" },
