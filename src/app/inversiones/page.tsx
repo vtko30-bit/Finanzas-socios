@@ -51,6 +51,12 @@ export default function InversionesPage() {
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<InvestmentRow | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editKind, setEditKind] = useState("ffmm");
+  const [editInstitution, setEditInstitution] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
   const [moves, setMoves] = useState<MovementRow[]>([]);
   const [moveKind, setMoveKind] = useState<"aporte" | "rescate" | "rendimiento">(
     "aporte",
@@ -92,6 +98,11 @@ export default function InversionesPage() {
     }
     setDetail(data.investment);
     setMoves(data.movements ?? []);
+    setEditing(false);
+    setEditName(data.investment.name ?? "");
+    setEditKind(data.investment.kind ?? "ffmm");
+    setEditInstitution(data.investment.institution ?? "");
+    setEditNotes(data.investment.notes ?? "");
   };
 
   const onCreate = async (e: FormEvent) => {
@@ -155,6 +166,36 @@ export default function InversionesPage() {
       void load();
     } finally {
       setMoveBusy(false);
+    }
+  };
+
+  const onSaveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!detailId || !canWrite) return;
+    setEditBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/inversiones/${detailId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          kind: editKind,
+          institution: editInstitution,
+          notes: editNotes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "No se pudo guardar");
+        return;
+      }
+      setEditing(false);
+      setMsg("Inversión actualizada.");
+      void openDetail(detailId);
+      void load();
+    } finally {
+      setEditBusy(false);
     }
   };
 
@@ -338,12 +379,96 @@ export default function InversionesPage() {
               onClick={() => {
                 setDetailId(null);
                 setDetail(null);
+                setEditing(false);
                 setMoves([]);
               }}
             >
               Cerrar detalle
             </button>
           </div>
+
+          {canWrite && editing ? (
+            <form
+              onSubmit={(e) => void onSaveEdit(e)}
+              className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2"
+            >
+              <label className="text-sm">
+                Nombre
+                <input
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                />
+              </label>
+              <label className="text-sm">
+                Tipo
+                <select
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  value={editKind}
+                  onChange={(e) => setEditKind(e.target.value)}
+                >
+                  <option value="ffmm">FFMM</option>
+                  <option value="dap">Depósito a plazo</option>
+                  <option value="etf">ETF</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                Institución
+                <input
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  value={editInstitution}
+                  onChange={(e) => setEditInstitution(e.target.value)}
+                />
+              </label>
+              <label className="text-sm">
+                Notas
+                <input
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                <button
+                  type="submit"
+                  className="ui-btn-primary"
+                  disabled={editBusy}
+                >
+                  {editBusy ? "Guardando…" : "Guardar cambios"}
+                </button>
+                <button
+                  type="button"
+                  className="ui-btn-secondary"
+                  onClick={() => {
+                    setEditing(false);
+                    setEditName(detail.name);
+                    setEditKind(detail.kind);
+                    setEditInstitution(detail.institution ?? "");
+                    setEditNotes(detail.notes ?? "");
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          ) : canWrite ? (
+            <div>
+              <button
+                type="button"
+                className="ui-btn-secondary"
+                onClick={() => {
+                  setEditName(detail.name);
+                  setEditKind(detail.kind);
+                  setEditInstitution(detail.institution ?? "");
+                  setEditNotes(detail.notes ?? "");
+                  setEditing(true);
+                }}
+              >
+                Editar datos
+              </button>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
