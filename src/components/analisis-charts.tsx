@@ -315,21 +315,21 @@ export function AnalisisCharts() {
         </p>
         <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
           <div className="h-[300px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={verSucursales ? ventasData : evoData}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="label" tick={chartTick} />
-                <YAxis tick={chartTick} tickFormatter={compactAxis} />
-                <Tooltip
-                  formatter={(value) => fmt(Number(value))}
-                  contentStyle={tooltipStyle}
-                />
-                <Legend />
-                {verSucursales ? (
-                  SUCURSALES_RESUMEN_CANONICAS.map((s) => (
+            {verSucursales ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={ventasData}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={chartTick} />
+                  <YAxis tick={chartTick} tickFormatter={compactAxis} />
+                  <Tooltip
+                    formatter={(value) => fmt(Number(value))}
+                    contentStyle={tooltipStyle}
+                  />
+                  <Legend />
+                  {SUCURSALES_RESUMEN_CANONICAS.map((s) => (
                     <Bar
                       key={s}
                       dataKey={s}
@@ -337,12 +337,27 @@ export function AnalisisCharts() {
                       stackId="ventas"
                       fill={SUCURSAL_COLOR[s]}
                     />
-                  ))
-                ) : (
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={evoData}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={chartTick} />
+                  <YAxis tick={chartTick} tickFormatter={compactAxis} />
+                  <Tooltip
+                    formatter={(value) => fmt(Number(value))}
+                    contentStyle={tooltipStyle}
+                  />
+                  <Legend />
                   <Bar dataKey="ingresos" name="Ventas" fill="#059669" />
-                )}
-              </BarChart>
-            </ResponsiveContainer>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div>
             <h3 className="text-sm font-medium text-slate-700">
