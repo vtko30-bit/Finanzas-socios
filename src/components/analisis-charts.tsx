@@ -18,12 +18,21 @@ import {
   YAxis,
 } from "recharts";
 import {
-  fillYearMonths,
+  aggregateNamedInRange,
+  currentYm,
+  fillPeriodoMonths,
+  fillPeriodoSucursal,
   fillYearSucursalMonths,
+  lastNMonthKeys,
+  monthKeysInclusive,
+  shiftYm,
+  sucursalTotals,
   topWithOtros,
+  yearMonthKeys,
   type MonthlyPoint,
   type NamedTotal,
   type SucursalMonthPoint,
+  type SucursalTotales,
 } from "@/lib/analytics-monthly-model";
 import {
   SUCURSALES_RESUMEN_CANONICAS,
@@ -52,10 +61,10 @@ const MES_CORTO = [
   "Dic",
 ];
 
-const SUCURSAL_COLOR: Record<string, string> = {
-  Rg: "#059669",
-  Happy: "#0284c7",
-  Eventos: "#7c3aed",
+const SUCURSAL_COLOR_B: Record<string, string> = {
+  Rg: "#6ee7b7",
+  Happy: "#7dd3fc",
+  Eventos: "#c4b5fd",
 };
 
 const MES_COLORS = [
@@ -86,7 +95,18 @@ const compactAxis = (v: number) =>
     compactDisplay: "short",
   }).format(v);
 
+type PeriodoModo = "ultimos12" | "anio" | "rango";
 type ChartKind = "bar" | "line" | "pie";
+
+type ComparacionMesRow = {
+  mes: string;
+  RgA: number;
+  HappyA: number;
+  EventosA: number;
+  RgB: number;
+  HappyB: number;
+  EventosB: number;
+};
 
 const CHART_KIND_LABEL: Record<ChartKind, string> = {
   bar: "Barras",
@@ -115,9 +135,9 @@ function sucursalAmt(row: SucursalChartRow, s: SucursalResumenCanonico): number 
 
 function toSucursalChartRows(
   rows: SucursalMonthPoint[],
-  year: string,
+  keys: string[],
 ): SucursalChartRow[] {
-  return fillYearSucursalMonths(rows, year).map((m) => ({
+  return fillPeriodoSucursal(rows, keys).map((m) => ({
     ...m,
     label: mesCorto(m.periodo),
     total: m.Rg + m.Happy + m.Eventos,
@@ -288,6 +308,95 @@ function SucursalPeriodChart({
   );
 }
 
+function TotalesSucursalTable({
+  filas,
+  series,
+}: {
+  filas: Array<{ etiqueta: string } & SucursalTotales>;
+  series: readonly SucursalResumenCanonico[];
+}) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full min-w-[18rem] text-left text-xs text-slate-700">
+        <thead>
+          <tr className="border-b border-slate-200 text-slate-500">
+            <th className="py-1.5 pr-2 font-medium">Año</th>
+            {series.map((s) => (
+              <th key={s} className="py-1.5 pr-2 font-medium tabular-nums">
+                {s}
+              </th>
+            ))}
+            {series.length > 1 ? (
+              <th className="py-1.5 font-medium tabular-nums">Total</th>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((f) => (
+            <tr key={f.etiqueta} className="border-b border-slate-100">
+              <td className="py-1.5 pr-2 font-medium">{f.etiqueta}</td>
+              {series.map((s) => (
+                <td key={s} className="py-1.5 pr-2 tabular-nums">
+                  {fmt(f[s])}
+                </td>
+              ))}
+              {series.length > 1 ? (
+                <td className="py-1.5 tabular-nums font-medium">{fmt(f.total)}</td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ComparacionSucursalChart({
+  data,
+  series,
+  yearA,
+  yearB,
+  mismoAno,
+}: {
+  data: ComparacionMesRow[];
+  series: readonly SucursalResumenCanonico[];
+  yearA: string;
+  yearB: string;
+  mismoAno: boolean;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis dataKey="mes" tick={chartTick} />
+        <YAxis tick={chartTick} tickFormatter={compactAxis} />
+        <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={tooltipStyle} />
+        <Legend />
+        {series.map((s) => (
+          <Bar
+            key={`${s}A`}
+            dataKey={`${s}A`}
+            name={mismoAno ? s : `${s} ${yearA}`}
+            stackId="A"
+            fill={SUCURSAL_COLOR[s]}
+          />
+        ))}
+        {mismoAno
+          ? null
+          : series.map((s) => (
+              <Bar
+                key={`${s}B`}
+                dataKey={`${s}B`}
+                name={`${s} ${yearB}`}
+                stackId="B"
+                fill={SUCURSAL_COLOR_B[s] ?? "#cbd5e1"}
+              />
+            ))}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function AnalisisCharts() {
   const [monthly, setMonthly] = useState<MonthlyPoint[]>([]);
   const [ventasPorSucursal, setVentasPorSucursal] = useState<
@@ -296,15 +405,20 @@ export function AnalisisCharts() {
   const [gastosPorSucursal, setGastosPorSucursal] = useState<
     SucursalMonthPoint[]
   >([]);
-  const [mixPorAno, setMixPorAno] = useState<Record<string, NamedTotal[]>>({});
-  const [familiasPorAno, setFamiliasPorAno] = useState<
+  const [mixPorMes, setMixPorMes] = useState<Record<string, NamedTotal[]>>({});
+  const [familiasPorMes, setFamiliasPorMes] = useState<
     Record<string, NamedTotal[]>
   >({});
   const [years, setYears] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [sucursal, setSucursal] = useState("");
+  const [modo, setModo] = useState<PeriodoModo>("ultimos12");
   const [yearEvo, setYearEvo] = useState("");
+  const [rangoDesde, setRangoDesde] = useState(() =>
+    shiftYm(currentYm(), -11),
+  );
+  const [rangoHasta, setRangoHasta] = useState(() => currentYm());
   const [yearA, setYearA] = useState("");
   const [yearB, setYearB] = useState("");
   const [kindVentas, setKindVentas] = useState<ChartKind>("bar");
@@ -325,8 +439,8 @@ export function AnalisisCharts() {
         setMonthly(rows);
         setVentasPorSucursal(data.ventasPorSucursal ?? []);
         setGastosPorSucursal(data.gastosPorSucursal ?? []);
-        setMixPorAno(data.mixPorAno ?? {});
-        setFamiliasPorAno(data.familiasPorAno ?? {});
+        setMixPorMes(data.mixPorMes ?? data.mixPorAno ?? {});
+        setFamiliasPorMes(data.familiasPorMes ?? data.familiasPorAno ?? {});
         setYears(ys);
         const latest = ys[ys.length - 1] ?? "";
         const prev = ys.length >= 2 ? ys[ys.length - 2]! : latest;
@@ -340,18 +454,32 @@ export function AnalisisCharts() {
         setMonthly([]);
         setVentasPorSucursal([]);
         setGastosPorSucursal([]);
-        setMixPorAno({});
-        setFamiliasPorAno({});
+        setMixPorMes({});
+        setFamiliasPorMes({});
         setYears([]);
       })
       .finally(() => setLoading(false));
     return () => ac.abort();
   }, [sucursal]);
 
+  const periodKeys = useMemo(() => {
+    if (modo === "anio" && yearEvo) return yearMonthKeys(yearEvo);
+    if (modo === "rango") return monthKeysInclusive(rangoDesde, rangoHasta);
+    return lastNMonthKeys(12);
+  }, [modo, yearEvo, rangoDesde, rangoHasta]);
+
+  const periodoLabel = useMemo(() => {
+    if (!periodKeys.length) return "";
+    if (modo === "anio") return yearEvo;
+    if (modo === "ultimos12") return "últimos 12 meses";
+    const a = periodKeys[0]!;
+    const b = periodKeys[periodKeys.length - 1]!;
+    return `${mesCorto(a)} – ${mesCorto(b)}`;
+  }, [modo, yearEvo, periodKeys]);
+
   const evoData = useMemo(() => {
-    if (!yearEvo) return [];
     let acumulado = 0;
-    return fillYearMonths(monthly, yearEvo).map((m) => {
+    return fillPeriodoMonths(monthly, periodKeys).map((m) => {
       acumulado += m.neto;
       return {
         ...m,
@@ -359,15 +487,15 @@ export function AnalisisCharts() {
         acumulado,
       };
     });
-  }, [monthly, yearEvo]);
+  }, [monthly, periodKeys]);
 
   const ventasData = useMemo(
-    () => (yearEvo ? toSucursalChartRows(ventasPorSucursal, yearEvo) : []),
-    [ventasPorSucursal, yearEvo],
+    () => toSucursalChartRows(ventasPorSucursal, periodKeys),
+    [ventasPorSucursal, periodKeys],
   );
   const gastosData = useMemo(
-    () => (yearEvo ? toSucursalChartRows(gastosPorSucursal, yearEvo) : []),
-    [gastosPorSucursal, yearEvo],
+    () => toSucursalChartRows(gastosPorSucursal, periodKeys),
+    [gastosPorSucursal, periodKeys],
   );
 
   const kpis = useMemo(() => {
@@ -382,26 +510,60 @@ export function AnalisisCharts() {
   }, [evoData]);
 
   const mixAnio = useMemo(
-    () => topWithOtros(mixPorAno[yearEvo] ?? [], 6),
-    [mixPorAno, yearEvo],
+    () => topWithOtros(aggregateNamedInRange(mixPorMes, periodKeys), 6),
+    [mixPorMes, periodKeys],
   );
   const topFamilias = useMemo(
-    () => topWithOtros(familiasPorAno[yearEvo] ?? [], 5),
-    [familiasPorAno, yearEvo],
+    () => topWithOtros(aggregateNamedInRange(familiasPorMes, periodKeys), 5),
+    [familiasPorMes, periodKeys],
   );
 
-  const comparacion = useMemo(() => {
+  const comparacionIngresos = useMemo(() => {
     if (!yearA || !yearB) return [];
-    const a = fillYearMonths(monthly, yearA);
-    const b = fillYearMonths(monthly, yearB);
+    const a = fillYearSucursalMonths(ventasPorSucursal, yearA);
+    const b = fillYearSucursalMonths(ventasPorSucursal, yearB);
     return MES_CORTO.map((mes, i) => ({
       mes,
-      ingresosA: a[i]?.ingresos ?? 0,
-      ingresosB: b[i]?.ingresos ?? 0,
-      gastosA: a[i]?.gastos ?? 0,
-      gastosB: b[i]?.gastos ?? 0,
+      RgA: a[i]?.Rg ?? 0,
+      HappyA: a[i]?.Happy ?? 0,
+      EventosA: a[i]?.Eventos ?? 0,
+      RgB: b[i]?.Rg ?? 0,
+      HappyB: b[i]?.Happy ?? 0,
+      EventosB: b[i]?.Eventos ?? 0,
     }));
-  }, [monthly, yearA, yearB]);
+  }, [ventasPorSucursal, yearA, yearB]);
+
+  const comparacionGastos = useMemo(() => {
+    if (!yearA || !yearB) return [];
+    const a = fillYearSucursalMonths(gastosPorSucursal, yearA);
+    const b = fillYearSucursalMonths(gastosPorSucursal, yearB);
+    return MES_CORTO.map((mes, i) => ({
+      mes,
+      RgA: a[i]?.Rg ?? 0,
+      HappyA: a[i]?.Happy ?? 0,
+      EventosA: a[i]?.Eventos ?? 0,
+      RgB: b[i]?.Rg ?? 0,
+      HappyB: b[i]?.Happy ?? 0,
+      EventosB: b[i]?.Eventos ?? 0,
+    }));
+  }, [gastosPorSucursal, yearA, yearB]);
+
+  const totalesIngresosA = useMemo(
+    () => sucursalTotals(fillYearSucursalMonths(ventasPorSucursal, yearA)),
+    [ventasPorSucursal, yearA],
+  );
+  const totalesIngresosB = useMemo(
+    () => sucursalTotals(fillYearSucursalMonths(ventasPorSucursal, yearB)),
+    [ventasPorSucursal, yearB],
+  );
+  const totalesGastosA = useMemo(
+    () => sucursalTotals(fillYearSucursalMonths(gastosPorSucursal, yearA)),
+    [gastosPorSucursal, yearA],
+  );
+  const totalesGastosB = useMemo(
+    () => sucursalTotals(fillYearSucursalMonths(gastosPorSucursal, yearB)),
+    [gastosPorSucursal, yearB],
+  );
 
   const mismoAno = yearA === yearB;
   const series: readonly SucursalResumenCanonico[] =
@@ -412,7 +574,7 @@ export function AnalisisCharts() {
   const captionSucursal = (kind: ChartKind, sujeto: string) => {
     if (kind === "pie") {
       return sucursal === ""
-        ? `Participación del año por sucursal.`
+        ? `Participación del período por sucursal.`
         : `${sujeto} de ${sucursal} por mes.`;
     }
     if (sucursal === "") {
@@ -459,20 +621,61 @@ export function AnalisisCharts() {
           </select>
         </label>
         <label className="text-sm text-slate-700">
-          Año
+          Período
           <select
             className="ui-field mt-1"
-            value={yearEvo}
-            onChange={(e) => setYearEvo(e.target.value)}
+            value={modo}
+            onChange={(e) => setModo(e.target.value as PeriodoModo)}
           >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
+            <option value="ultimos12">Últimos 12 meses</option>
+            <option value="anio">Año calendario</option>
+            <option value="rango">Rango de meses</option>
           </select>
         </label>
+        {modo === "anio" ? (
+          <label className="text-sm text-slate-700">
+            Año
+            <select
+              className="ui-field mt-1"
+              value={yearEvo}
+              onChange={(e) => setYearEvo(e.target.value)}
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {modo === "rango" ? (
+          <>
+            <label className="text-sm text-slate-700">
+              Desde
+              <input
+                type="month"
+                className="ui-field mt-1"
+                value={rangoDesde}
+                onChange={(e) => setRangoDesde(e.target.value)}
+              />
+            </label>
+            <label className="text-sm text-slate-700">
+              Hasta
+              <input
+                type="month"
+                className="ui-field mt-1"
+                value={rangoHasta}
+                onChange={(e) => setRangoHasta(e.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
       </div>
+      {modo === "rango" && periodKeys.length === 0 ? (
+        <p className="text-sm text-amber-700">
+          Elegí un rango válido (desde ≤ hasta).
+        </p>
+      ) : null}
 
       <section className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -509,7 +712,7 @@ export function AnalisisCharts() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-[#0a2a6e]">
-              Ventas {yearEvo}
+              Ventas {periodoLabel}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               {captionSucursal(kindVentas, "Ingresos")}
@@ -537,7 +740,7 @@ export function AnalisisCharts() {
               <RankBars
                 items={mixAnio}
                 color="#059669"
-                empty="Sin ventas en este año."
+                empty="Sin ventas en este período."
               />
             </div>
           </div>
@@ -548,7 +751,7 @@ export function AnalisisCharts() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-[#0a2a6e]">
-              Gastos {yearEvo}
+              Gastos {periodoLabel}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               {captionSucursal(kindGastos, "Egresos")} A la derecha, top
@@ -577,7 +780,7 @@ export function AnalisisCharts() {
               <RankBars
                 items={topFamilias}
                 color="#dc2626"
-                empty="Sin gastos de negocio en este año."
+                empty="Sin gastos de negocio en este período."
               />
             </div>
           </div>
@@ -588,11 +791,11 @@ export function AnalisisCharts() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-[#0a2a6e]">
-              Balance {yearEvo}
+              Balance {periodoLabel}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               Neto del mes (ingresos − gastos). Rojo si el mes cierra negativo.
-              {kindBalance === "bar" ? " La línea es el acumulado del año." : ""}
+              {kindBalance === "bar" ? " La línea es el acumulado del período." : ""}
             </p>
           </div>
           <ChartKindToggle
@@ -676,7 +879,8 @@ export function AnalisisCharts() {
             Comparación año contra año
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Ingresos y gastos mes a mes. Elegí dos años distintos para comparar.
+            Cada barra apila Rg, Happy y Eventos. El tono más oscuro es el año A
+            y el más claro el año B.
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
             <label className="text-sm text-slate-700">
@@ -712,67 +916,49 @@ export function AnalisisCharts() {
           <div className="mt-4 grid gap-8 lg:grid-cols-2">
             <div>
               <h3 className="text-sm font-medium text-slate-700">Ingresos</h3>
-              <div className="mt-2 h-[280px] w-full min-w-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={comparacion}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="mes" tick={chartTick} />
-                    <YAxis tick={chartTick} tickFormatter={compactAxis} />
-                    <Tooltip
-                      formatter={(value) => fmt(Number(value))}
-                      contentStyle={tooltipStyle}
-                    />
-                    <Legend />
-                    {mismoAno ? (
-                      <Bar
-                        dataKey="ingresosA"
-                        name={`Ingresos ${yearA}`}
-                        fill="#059669"
-                      />
-                    ) : (
-                      <>
-                        <Bar dataKey="ingresosA" name={yearA} fill="#047857" />
-                        <Bar dataKey="ingresosB" name={yearB} fill="#6ee7b7" />
-                      </>
-                    )}
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="mt-2 h-[300px] w-full min-w-0">
+                <ComparacionSucursalChart
+                  data={comparacionIngresos}
+                  series={series}
+                  yearA={yearA}
+                  yearB={yearB}
+                  mismoAno={mismoAno}
+                />
               </div>
+              <TotalesSucursalTable
+                series={series}
+                filas={
+                  mismoAno
+                    ? [{ etiqueta: yearA, ...totalesIngresosA }]
+                    : [
+                        { etiqueta: yearA, ...totalesIngresosA },
+                        { etiqueta: yearB, ...totalesIngresosB },
+                      ]
+                }
+              />
             </div>
             <div>
               <h3 className="text-sm font-medium text-slate-700">Gastos</h3>
-              <div className="mt-2 h-[280px] w-full min-w-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={comparacion}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="mes" tick={chartTick} />
-                    <YAxis tick={chartTick} tickFormatter={compactAxis} />
-                    <Tooltip
-                      formatter={(value) => fmt(Number(value))}
-                      contentStyle={tooltipStyle}
-                    />
-                    <Legend />
-                    {mismoAno ? (
-                      <Bar
-                        dataKey="gastosA"
-                        name={`Gastos ${yearA}`}
-                        fill="#dc2626"
-                      />
-                    ) : (
-                      <>
-                        <Bar dataKey="gastosA" name={yearA} fill="#b91c1c" />
-                        <Bar dataKey="gastosB" name={yearB} fill="#fca5a5" />
-                      </>
-                    )}
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="mt-2 h-[300px] w-full min-w-0">
+                <ComparacionSucursalChart
+                  data={comparacionGastos}
+                  series={series}
+                  yearA={yearA}
+                  yearB={yearB}
+                  mismoAno={mismoAno}
+                />
               </div>
+              <TotalesSucursalTable
+                series={series}
+                filas={
+                  mismoAno
+                    ? [{ etiqueta: yearA, ...totalesGastosA }]
+                    : [
+                        { etiqueta: yearA, ...totalesGastosA },
+                        { etiqueta: yearB, ...totalesGastosB },
+                      ]
+                }
+              />
             </div>
           </div>
         </section>

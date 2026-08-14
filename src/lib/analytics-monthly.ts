@@ -30,6 +30,9 @@ export {
   fillYearSucursalMonths,
   fillYearVentasSucursal,
   topWithOtros,
+  monthKeysInclusive,
+  lastNMonthKeys,
+  aggregateNamedInRange,
 } from "@/lib/analytics-monthly-model";
 
 const HISTORICO_DESDE = "2000-01-01";
@@ -72,8 +75,8 @@ export type AnalyticsMonthlyPayload = {
   years: string[];
   ventasPorSucursal: SucursalMonthPoint[];
   gastosPorSucursal: SucursalMonthPoint[];
-  mixPorAno: Record<string, NamedTotal[]>;
-  familiasPorAno: Record<string, NamedTotal[]>;
+  mixPorMes: Record<string, NamedTotal[]>;
+  familiasPorMes: Record<string, NamedTotal[]>;
 };
 
 export async function loadAnalyticsMonthly(args: {
@@ -142,7 +145,7 @@ export async function loadAnalyticsMonthly(args: {
     const cur = ventasSuc.get(periodo) ?? emptySuc();
     cur[suc] += amt;
     ventasSuc.set(periodo, cur);
-    bumpNamed(mixStore, periodo.slice(0, 4), normalizeFormaPago(r.payment_method), amt);
+    bumpNamed(mixStore, periodo, normalizeFormaPago(r.payment_method), amt);
   }
 
   for (const raw of expenses) {
@@ -164,7 +167,7 @@ export async function loadAnalyticsMonthly(args: {
       raw as Parameters<typeof familiaNombreDesdeRawTx>[0],
     );
     if (esFamiliaSocio(familia)) continue;
-    bumpNamed(famStore, periodo.slice(0, 4), familia, amt);
+    bumpNamed(famStore, periodo, familia, amt);
   }
 
   const monthly = [...byMonth.entries()]
@@ -195,7 +198,7 @@ export async function loadAnalyticsMonthly(args: {
     years,
     ventasPorSucursal,
     gastosPorSucursal,
-    mixPorAno: namedByYear(mixStore),
-    familiasPorAno: namedByYear(famStore),
+    mixPorMes: namedByYear(mixStore),
+    familiasPorMes: namedByYear(famStore),
   };
 }

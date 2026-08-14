@@ -16,7 +16,7 @@ export default function AnalisisPage() {
     <PageShell size="xl">
       <PageHeader
         title="Análisis y gráficos"
-        description="Ventas, gastos y balance del año, con la misma base que Resumen. Comparación entre años al final."
+        description="Ventas, gastos y balance por período (últimos 12 meses, año o rango), con la misma base que Resumen."
       />
 
       <AuthNotice
