@@ -16,11 +16,21 @@ import {
 import type {
   MonthlyPoint,
   NamedTotal,
-  VentasSucursalPoint,
+  SucursalMonthPoint,
 } from "@/lib/analytics-monthly-model";
 
-export type { MonthlyPoint, NamedTotal, VentasSucursalPoint } from "@/lib/analytics-monthly-model";
-export { fillYearMonths, fillYearVentasSucursal, topWithOtros } from "@/lib/analytics-monthly-model";
+export type {
+  MonthlyPoint,
+  NamedTotal,
+  SucursalMonthPoint,
+  VentasSucursalPoint,
+} from "@/lib/analytics-monthly-model";
+export {
+  fillYearMonths,
+  fillYearSucursalMonths,
+  fillYearVentasSucursal,
+  topWithOtros,
+} from "@/lib/analytics-monthly-model";
 
 const HISTORICO_DESDE = "2000-01-01";
 const HISTORICO_HASTA = "2099-12-31";
@@ -60,7 +70,8 @@ function namedByYear(
 export type AnalyticsMonthlyPayload = {
   monthly: MonthlyPoint[];
   years: string[];
-  ventasPorSucursal: VentasSucursalPoint[];
+  ventasPorSucursal: SucursalMonthPoint[];
+  gastosPorSucursal: SucursalMonthPoint[];
   mixPorAno: Record<string, NamedTotal[]>;
   familiasPorAno: Record<string, NamedTotal[]>;
 };
@@ -113,10 +124,13 @@ export async function loadAnalyticsMonthly(args: {
     byMonth.set(periodo, cur);
   };
 
-  const ventasSuc = new Map<
-    string,
-    Record<SucursalResumenCanonico, number>
-  >();
+  const emptySuc = (): Record<SucursalResumenCanonico, number> => ({
+    Rg: 0,
+    Happy: 0,
+    Eventos: 0,
+  });
+  const ventasSuc = new Map<string, Record<SucursalResumenCanonico, number>>();
+  const gastosSuc = new Map<string, Record<SucursalResumenCanonico, number>>();
   const mixStore = new Map<string, Map<string, number>>();
   const famStore = new Map<string, Map<string, number>>();
 
@@ -125,17 +139,25 @@ export async function loadAnalyticsMonthly(args: {
     const amt = Number(r.amount) || 0;
     addMonth(periodo, "ingresos", amt);
     const suc = sucursalResumenCanonica(r.origen_cuenta);
-    const cur = ventasSuc.get(periodo) ?? { Rg: 0, Happy: 0, Eventos: 0 };
+    const cur = ventasSuc.get(periodo) ?? emptySuc();
     cur[suc] += amt;
     ventasSuc.set(periodo, cur);
     bumpNamed(mixStore, periodo.slice(0, 4), normalizeFormaPago(r.payment_method), amt);
   }
 
   for (const raw of expenses) {
-    const r = raw as { date?: unknown; amount?: unknown };
+    const r = raw as {
+      date?: unknown;
+      amount?: unknown;
+      origen_cuenta?: unknown;
+    };
     const periodo = periodoFromDate(r.date);
     const amt = Number(r.amount) || 0;
     addMonth(periodo, "gastos", amt);
+    const suc = sucursalResumenCanonica(r.origen_cuenta);
+    const curG = gastosSuc.get(periodo) ?? emptySuc();
+    curG[suc] += amt;
+    gastosSuc.set(periodo, curG);
     const familia = familiaNombreDesdeRawTx(
       raw as Parameters<typeof familiaNombreDesdeRawTx>[0],
     );
@@ -152,9 +174,15 @@ export async function loadAnalyticsMonthly(args: {
       neto: v.ingresos - v.gastos,
     }));
 
-  const ventasPorSucursal: VentasSucursalPoint[] = [...ventasSuc.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([periodo, v]) => ({ periodo, ...v }));
+  const toSucursalPoints = (
+    map: Map<string, Record<SucursalResumenCanonico, number>>,
+  ): SucursalMonthPoint[] =>
+    [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([periodo, v]) => ({ periodo, ...v }));
+
+  const ventasPorSucursal = toSucursalPoints(ventasSuc);
+  const gastosPorSucursal = toSucursalPoints(gastosSuc);
 
   const years = [
     ...new Set(monthly.map((m) => m.periodo.slice(0, 4)).filter(Boolean)),
@@ -164,6 +192,7 @@ export async function loadAnalyticsMonthly(args: {
     monthly,
     years,
     ventasPorSucursal,
+    gastosPorSucursal,
     mixPorAno: namedByYear(mixStore),
     familiasPorAno: namedByYear(famStore),
   };

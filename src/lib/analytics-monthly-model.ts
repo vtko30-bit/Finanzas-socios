@@ -10,12 +10,27 @@ export type NamedTotal = {
   total: number;
 };
 
-export type VentasSucursalPoint = {
+export type SucursalMonthPoint = {
   periodo: string;
   Rg: number;
   Happy: number;
   Eventos: number;
 };
+
+export type VentasSucursalPoint = SucursalMonthPoint;
+
+export function fillYearSucursalMonths(
+  rows: SucursalMonthPoint[],
+  year: string,
+): SucursalMonthPoint[] {
+  const by = new Map(rows.map((m) => [m.periodo, m]));
+  return Array.from({ length: 12 }, (_, i) => {
+    const periodo = `${year}-${String(i + 1).padStart(2, "0")}`;
+    return by.get(periodo) ?? { periodo, Rg: 0, Happy: 0, Eventos: 0 };
+  });
+}
+
+export const fillYearVentasSucursal = fillYearSucursalMonths;
 
 export function fillYearMonths(
   monthly: MonthlyPoint[],
@@ -25,17 +40,6 @@ export function fillYearMonths(
   return Array.from({ length: 12 }, (_, i) => {
     const periodo = `${year}-${String(i + 1).padStart(2, "0")}`;
     return by.get(periodo) ?? { periodo, ingresos: 0, gastos: 0, neto: 0 };
-  });
-}
-
-export function fillYearVentasSucursal(
-  rows: VentasSucursalPoint[],
-  year: string,
-): VentasSucursalPoint[] {
-  const by = new Map(rows.map((m) => [m.periodo, m]));
-  return Array.from({ length: 12 }, (_, i) => {
-    const periodo = `${year}-${String(i + 1).padStart(2, "0")}`;
-    return by.get(periodo) ?? { periodo, Rg: 0, Happy: 0, Eventos: 0 };
   });
 }
 
