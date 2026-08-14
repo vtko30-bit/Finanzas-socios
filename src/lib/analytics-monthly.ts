@@ -154,7 +154,9 @@ export async function loadAnalyticsMonthly(args: {
     const periodo = periodoFromDate(r.date);
     const amt = Number(r.amount) || 0;
     addMonth(periodo, "gastos", amt);
-    const suc = sucursalResumenCanonica(r.origen_cuenta);
+    const suc = sucursalResumenCanonica(
+      typeof r.origen_cuenta === "string" ? r.origen_cuenta : null,
+    );
     const curG = gastosSuc.get(periodo) ?? emptySuc();
     curG[suc] += amt;
     gastosSuc.set(periodo, curG);
