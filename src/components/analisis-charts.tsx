@@ -13,13 +13,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-type MonthlyPoint = {
-  periodo: string;
-  ingresos: number;
-  gastos: number;
-  neto: number;
-};
+import { fillYearMonths, type MonthlyPoint } from "@/lib/analytics-monthly-model";
+import { SUCURSALES_RESUMEN_CANONICAS } from "@/lib/sucursal-resumen";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -28,160 +23,229 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-const mesCorto = (periodo: string) => {
-  const [y, m] = periodo.split("-");
-  const labels = [
-    "Ene",
-    "Feb",
-    "Mar",
-    "Abr",
-    "May",
-    "Jun",
-    "Jul",
-    "Ago",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dic",
-  ];
-  const mi = Number(m) - 1;
-  if (mi >= 0 && mi < 12) return `${labels[mi]} ${y?.slice(2) ?? ""}`;
-  return periodo;
+const MES_CORTO = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
+
+const chartTick = { fill: "#64748b", fontSize: 11 };
+const tooltipStyle = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  color: "#0f172a",
 };
+const compactAxis = (v: number) =>
+  new Intl.NumberFormat("es-CL", {
+    notation: "compact",
+    compactDisplay: "short",
+  }).format(v);
+
+function mesCorto(periodo: string) {
+  const mi = Number(periodo.slice(5, 7)) - 1;
+  const y = periodo.slice(2, 4);
+  if (mi >= 0 && mi < 12) return `${MES_CORTO[mi]} ${y}`;
+  return periodo;
+}
 
 export function AnalisisCharts() {
   const [monthly, setMonthly] = useState<MonthlyPoint[]>([]);
   const [years, setYears] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sucursal, setSucursal] = useState("");
+  const [yearEvo, setYearEvo] = useState("");
   const [yearA, setYearA] = useState("");
   const [yearB, setYearB] = useState("");
 
   useEffect(() => {
-    fetch("/api/analytics/mensual")
+    const ac = new AbortController();
+    setLoading(true);
+    setError("");
+    const q = sucursal ? `?sucursal=${encodeURIComponent(sucursal)}` : "";
+    fetch(`/api/analytics/mensual${q}`, { signal: ac.signal })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error");
-        setMonthly(data.monthly ?? []);
+        const rows: MonthlyPoint[] = data.monthly ?? [];
         const ys: string[] = data.years ?? [];
+        setMonthly(rows);
         setYears(ys);
-        if (ys.length >= 2) {
-          setYearA(ys[ys.length - 2]!);
-          setYearB(ys[ys.length - 1]!);
-        } else if (ys.length === 1) {
-          setYearA(ys[0]!);
-          setYearB(ys[0]!);
-        }
+        const latest = ys[ys.length - 1] ?? "";
+        const prev = ys.length >= 2 ? ys[ys.length - 2]! : latest;
+        setYearEvo((cur) => (cur && ys.includes(cur) ? cur : latest));
+        setYearA((cur) => (cur && ys.includes(cur) ? cur : prev));
+        setYearB((cur) => (cur && ys.includes(cur) ? cur : latest));
       })
-      .catch((e: Error) => setError(e.message));
-  }, []);
+      .catch((e: Error) => {
+        if (e.name === "AbortError") return;
+        setError(e.message);
+        setMonthly([]);
+        setYears([]);
+      })
+      .finally(() => setLoading(false));
+    return () => ac.abort();
+  }, [sucursal]);
 
-  const lineData = useMemo(
-    () =>
-      monthly.map((m) => ({
-        ...m,
-        label: mesCorto(m.periodo),
-      })),
-    [monthly],
-  );
+  const evoData = useMemo(() => {
+    if (!yearEvo) return [];
+    return fillYearMonths(monthly, yearEvo).map((m) => ({
+      ...m,
+      label: mesCorto(m.periodo),
+    }));
+  }, [monthly, yearEvo]);
 
-  const comparacionMes = useMemo(() => {
+  const kpis = useMemo(() => {
+    const acc = evoData.reduce(
+      (s, m) => ({
+        ingresos: s.ingresos + m.ingresos,
+        gastos: s.gastos + m.gastos,
+        neto: s.neto + m.neto,
+      }),
+      { ingresos: 0, gastos: 0, neto: 0 },
+    );
+    return acc;
+  }, [evoData]);
+
+  const comparacion = useMemo(() => {
     if (!yearA || !yearB) return [];
-    const labels = [
-      "Ene",
-      "Feb",
-      "Mar",
-      "Abr",
-      "May",
-      "Jun",
-      "Jul",
-      "Ago",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dic",
-    ];
-    return labels.map((label, i) => {
-      const mm = String(i + 1).padStart(2, "0");
-      const pA = `${yearA}-${mm}`;
-      const pB = `${yearB}-${mm}`;
-      const rowA = monthly.find((x) => x.periodo === pA);
-      const rowB = monthly.find((x) => x.periodo === pB);
-      if (yearA === yearB) {
-        return {
-          mes: label,
-          ingresos: rowA?.ingresos ?? 0,
-          gastos: rowA?.gastos ?? 0,
-        };
-      }
-      return {
-        mes: label,
-        [`${yearA}_ing`]: rowA?.ingresos ?? 0,
-        [`${yearA}_gas`]: rowA?.gastos ?? 0,
-        [`${yearB}_ing`]: rowB?.ingresos ?? 0,
-        [`${yearB}_gas`]: rowB?.gastos ?? 0,
-      };
-    });
+    const a = fillYearMonths(monthly, yearA);
+    const b = fillYearMonths(monthly, yearB);
+    return MES_CORTO.map((mes, i) => ({
+      mes,
+      ingresosA: a[i]?.ingresos ?? 0,
+      ingresosB: b[i]?.ingresos ?? 0,
+      gastosA: a[i]?.gastos ?? 0,
+      gastosB: b[i]?.gastos ?? 0,
+      netoA: a[i]?.neto ?? 0,
+      netoB: b[i]?.neto ?? 0,
+    }));
   }, [monthly, yearA, yearB]);
 
-  const mismoAno = yearA && yearB && yearA === yearB;
+  const mismoAno = yearA === yearB;
 
-  if (error) {
-    return (
-      <p className="ui-alert-warning">{error}</p>
-    );
+  if (loading) {
+    return <p className="text-sm text-slate-600">Cargando análisis…</p>;
   }
 
-  if (!monthly.length) {
+  if (error) {
+    return <p className="ui-alert-warning">{error}</p>;
+  }
+
+  if (!monthly.length && !years.length) {
     return (
       <p className="text-sm text-slate-600">
-        No hay transacciones para graficar. Importa un Excel desde Importar.
+        No hay transacciones operativas para graficar (o todas están en familias
+        excluidas). Importa un Excel o revisá el período en Resumen.
       </p>
     );
   }
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm text-slate-700">
+          Sucursal
+          <select
+            className="ui-field mt-1"
+            value={sucursal}
+            onChange={(e) => setSucursal(e.target.value)}
+          >
+            <option value="">Todas</option>
+            {SUCURSALES_RESUMEN_CANONICAS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-slate-700">
+          Año
+          <select
+            className="ui-field mt-1"
+            value={yearEvo}
+            onChange={(e) => setYearEvo(e.target.value)}
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Ingresos
+          </p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700">
+            {fmt(kpis.ingresos)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Gastos
+          </p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-rose-700">
+            {fmt(kpis.gastos)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Neto
+          </p>
+          <p
+            className={`mt-1 text-xl font-semibold tabular-nums ${
+              kpis.neto >= 0 ? "text-sky-800" : "text-rose-700"
+            }`}
+          >
+            {fmt(kpis.neto)}
+          </p>
+        </div>
+      </section>
+
       <section>
-        <h2 className="text-lg font-semibold text-[#0a2a6e]">Evolución mensual</h2>
+        <h2 className="text-lg font-semibold text-[#0a2a6e]">
+          Evolución mensual {yearEvo}
+        </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Ingresos, gastos y resultado neto por mes.
+          Ingresos, gastos y resultado neto (operativo, sin familias excluidas).
         </p>
         <div className="mt-4 h-[320px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-              <YAxis
-                tick={{ fill: "#94a3b8", fontSize: 11 }}
-                tickFormatter={(v) =>
-                  new Intl.NumberFormat("es-CL", {
-                    notation: "compact",
-                    compactDisplay: "short",
-                  }).format(Number(v))
-                }
-              />
-              <Tooltip
-                formatter={(value) => fmt(Number(value))}
-                contentStyle={{
-                  backgroundColor: "#0f172a",
-                  border: "1px solid #334155",
-                  borderRadius: 8,
-                }}
-              />
+            <LineChart data={evoData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="label" tick={chartTick} />
+              <YAxis tick={chartTick} tickFormatter={compactAxis} />
+              <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={tooltipStyle} />
               <Legend />
-              <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#4ade80" dot={false} />
-              <Line type="monotone" dataKey="gastos" name="Gastos" stroke="#f87171" dot={false} />
-              <Line type="monotone" dataKey="neto" name="Neto" stroke="#00bcd4" dot={false} />
+              <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#059669" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="gastos" name="Gastos" stroke="#dc2626" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="neto" name="Neto" stroke="#0369a6" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </section>
 
-      {years.length >= 1 && (
+      {years.length >= 1 ? (
         <section>
-          <h2 className="text-lg font-semibold">Comparación año contra año (por mes)</h2>
+          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+            Comparación año contra año
+          </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Elige dos años y compara ingresos y gastos mes a mes.
+            Ingresos y gastos mes a mes. Elegí dos años distintos para comparar.
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
             <label className="text-sm text-slate-700">
@@ -213,47 +277,55 @@ export function AnalisisCharts() {
               </select>
             </label>
           </div>
-          <div className="mt-4 h-[360px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparacionMes} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="mes" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                <YAxis
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
-                  tickFormatter={(v) =>
-                    new Intl.NumberFormat("es-CL", {
-                      notation: "compact",
-                      compactDisplay: "short",
-                    }).format(Number(v))
-                  }
-                />
-                <Tooltip
-                  formatter={(value) => fmt(Number(value))}
-                  contentStyle={{
-                    backgroundColor: "#0f172a",
-                    border: "1px solid #334155",
-                    borderRadius: 8,
-                  }}
-                />
-                <Legend />
-                {mismoAno ? (
-                  <>
-                    <Bar dataKey="ingresos" name={`Ingresos ${yearA}`} fill="#22c55e" />
-                    <Bar dataKey="gastos" name={`Gastos ${yearA}`} fill="#ef4444" />
-                  </>
-                ) : (
-                  <>
-                    <Bar dataKey={`${yearA}_ing`} name={`Ingresos ${yearA}`} fill="#22c55e" />
-                    <Bar dataKey={`${yearA}_gas`} name={`Gastos ${yearA}`} fill="#ef4444" />
-                    <Bar dataKey={`${yearB}_ing`} name={`Ingresos ${yearB}`} fill="#86efac" />
-                    <Bar dataKey={`${yearB}_gas`} name={`Gastos ${yearB}`} fill="#fca5a5" />
-                  </>
-                )}
-              </BarChart>
-            </ResponsiveContainer>
+
+          <div className="mt-4 grid gap-8 lg:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-medium text-slate-700">Ingresos</h3>
+              <div className="mt-2 h-[280px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={comparacion} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="mes" tick={chartTick} />
+                    <YAxis tick={chartTick} tickFormatter={compactAxis} />
+                    <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={tooltipStyle} />
+                    <Legend />
+                    {mismoAno ? (
+                      <Bar dataKey="ingresosA" name={`Ingresos ${yearA}`} fill="#059669" />
+                    ) : (
+                      <>
+                        <Bar dataKey="ingresosA" name={yearA} fill="#047857" />
+                        <Bar dataKey="ingresosB" name={yearB} fill="#6ee7b7" />
+                      </>
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-slate-700">Gastos</h3>
+              <div className="mt-2 h-[280px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={comparacion} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="mes" tick={chartTick} />
+                    <YAxis tick={chartTick} tickFormatter={compactAxis} />
+                    <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={tooltipStyle} />
+                    <Legend />
+                    {mismoAno ? (
+                      <Bar dataKey="gastosA" name={`Gastos ${yearA}`} fill="#dc2626" />
+                    ) : (
+                      <>
+                        <Bar dataKey="gastosA" name={yearA} fill="#b91c1c" />
+                        <Bar dataKey="gastosB" name={yearB} fill="#fca5a5" />
+                      </>
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </section>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -173,6 +173,7 @@ export async function fetchExpenseRowsPaged(args: {
       amount,
       source,
       description,
+      external_ref,
       counterparty,
       origen_cuenta,
       concepto,
