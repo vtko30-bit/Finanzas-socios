@@ -358,18 +358,70 @@ function TotalesSucursalTable({
 }
 
 function ComparacionSucursalChart({
+  kind,
   data,
   series,
   yearA,
   yearB,
   mismoAno,
 }: {
+  kind: Extract<ChartKind, "bar" | "line">;
   data: ComparacionMesRow[];
   series: readonly SucursalResumenCanonico[];
   yearA: string;
   yearB: string;
   mismoAno: boolean;
 }) {
+  const seriesA = series.map((s) => ({
+    key: `${s}A`,
+    name: mismoAno ? s : `${s} ${yearA}`,
+    color: SUCURSAL_COLOR[s] ?? "#059669",
+  }));
+  const seriesB = mismoAno
+    ? []
+    : series.map((s) => ({
+        key: `${s}B`,
+        name: `${s} ${yearB}`,
+        color: SUCURSAL_COLOR_B[s] ?? "#cbd5e1",
+      }));
+
+  if (kind === "line") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="mes" tick={chartTick} />
+          <YAxis tick={chartTick} tickFormatter={compactAxis} />
+          <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={tooltipStyle} />
+          <Legend />
+          {seriesA.map((s) => (
+            <Line
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              name={s.name}
+              stroke={s.color}
+              strokeWidth={2}
+              dot={false}
+            />
+          ))}
+          {seriesB.map((s) => (
+            <Line
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              name={s.name}
+              stroke={s.color}
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={false}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -378,26 +430,24 @@ function ComparacionSucursalChart({
         <YAxis tick={chartTick} tickFormatter={compactAxis} />
         <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={tooltipStyle} />
         <Legend />
-        {series.map((s) => (
+        {seriesA.map((s) => (
           <Bar
-            key={`${s}A`}
-            dataKey={`${s}A`}
-            name={mismoAno ? s : `${s} ${yearA}`}
+            key={s.key}
+            dataKey={s.key}
+            name={s.name}
             stackId="A"
-            fill={SUCURSAL_COLOR[s]}
+            fill={s.color}
           />
         ))}
-        {mismoAno
-          ? null
-          : series.map((s) => (
-              <Bar
-                key={`${s}B`}
-                dataKey={`${s}B`}
-                name={`${s} ${yearB}`}
-                stackId="B"
-                fill={SUCURSAL_COLOR_B[s] ?? "#cbd5e1"}
-              />
-            ))}
+        {seriesB.map((s) => (
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            name={s.name}
+            stackId="B"
+            fill={s.color}
+          />
+        ))}
       </BarChart>
     </ResponsiveContainer>
   );
@@ -430,6 +480,9 @@ export function AnalisisCharts() {
   const [kindVentas, setKindVentas] = useState<ChartKind>("bar");
   const [kindGastos, setKindGastos] = useState<ChartKind>("bar");
   const [kindBalance, setKindBalance] = useState<ChartKind>("bar");
+  const [kindComparacion, setKindComparacion] = useState<
+    Extract<ChartKind, "bar" | "line">
+  >("bar");
 
   useEffect(() => {
     const ac = new AbortController();
@@ -577,20 +630,6 @@ export function AnalisisCharts() {
       ? SUCURSALES_RESUMEN_CANONICAS
       : [sucursal as SucursalResumenCanonico];
 
-  const captionSucursal = (kind: ChartKind, sujeto: string) => {
-    if (kind === "pie") {
-      return sucursal === ""
-        ? `Participación del período por sucursal.`
-        : `${sujeto} de ${sucursal} por mes.`;
-    }
-    if (sucursal === "") {
-      return kind === "line"
-        ? `${sujeto} por mes, una línea por sucursal.`
-        : `${sujeto} por mes, apilados por sucursal.`;
-    }
-    return `${sujeto} mensuales de ${sucursal}.`;
-  };
-
   if (loading) {
     return <p className="text-sm text-slate-600">Cargando análisis…</p>;
   }
@@ -716,14 +755,9 @@ export function AnalisisCharts() {
 
       <section>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#0a2a6e]">
-              Ventas {periodoLabel}
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              {captionSucursal(kindVentas, "Ingresos")}
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+            Ventas {periodoLabel}
+          </h2>
           <ChartKindToggle
             value={kindVentas}
             onChange={setKindVentas}
@@ -755,15 +789,9 @@ export function AnalisisCharts() {
 
       <section>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#0a2a6e]">
-              Gastos {periodoLabel}
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              {captionSucursal(kindGastos, "Egresos")} A la derecha, top
-              familias del negocio.
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+            Gastos {periodoLabel}
+          </h2>
           <ChartKindToggle
             value={kindGastos}
             onChange={setKindGastos}
@@ -795,15 +823,9 @@ export function AnalisisCharts() {
 
       <section>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#0a2a6e]">
-              Balance {periodoLabel}
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Neto del mes (ingresos − gastos). Rojo si el mes cierra negativo.
-              {kindBalance === "bar" ? " La línea es el acumulado del período." : ""}
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+            Balance {periodoLabel}
+          </h2>
           <ChartKindToggle
             value={kindBalance}
             onChange={setKindBalance}
@@ -881,13 +903,27 @@ export function AnalisisCharts() {
 
       {years.length >= 1 ? (
         <section>
-          <h2 className="text-lg font-semibold text-[#0a2a6e]">
-            Comparación año contra año
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Cada barra apila Rg, Happy y Eventos. El tono más oscuro es el año A
-            y el más claro el año B.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[#0a2a6e]">
+                Comparación año contra año
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {kindComparacion === "line"
+                  ? mismoAno
+                    ? "Una línea por sucursal a lo largo del año."
+                    : "Una línea por sucursal y año. El tono más oscuro (línea continua) es el año A; el más claro (punteada) es el año B."
+                  : "Cada barra apila Rg, Happy y Eventos. El tono más oscuro es el año A y el más claro el año B."}
+              </p>
+            </div>
+            <ChartKindToggle
+              value={kindComparacion}
+              onChange={(k) =>
+                setKindComparacion(k === "line" ? "line" : "bar")
+              }
+              options={["bar", "line"]}
+            />
+          </div>
           <div className="mt-3 flex flex-wrap gap-3">
             <label className="text-sm text-slate-700">
               Año A
@@ -924,6 +960,7 @@ export function AnalisisCharts() {
               <h3 className="text-sm font-medium text-slate-700">Ingresos</h3>
               <div className="mt-2 h-[300px] w-full min-w-0">
                 <ComparacionSucursalChart
+                  kind={kindComparacion}
                   data={comparacionIngresos}
                   series={series}
                   yearA={yearA}
@@ -947,6 +984,7 @@ export function AnalisisCharts() {
               <h3 className="text-sm font-medium text-slate-700">Gastos</h3>
               <div className="mt-2 h-[300px] w-full min-w-0">
                 <ComparacionSucursalChart
+                  kind={kindComparacion}
                   data={comparacionGastos}
                   series={series}
                   yearA={yearA}
