@@ -61,6 +61,12 @@ const MES_CORTO = [
   "Dic",
 ];
 
+const SUCURSAL_COLOR: Record<string, string> = {
+  Rg: "#059669",
+  Happy: "#0284c7",
+  Eventos: "#7c3aed",
+};
+
 const SUCURSAL_COLOR_B: Record<string, string> = {
   Rg: "#6ee7b7",
   Happy: "#7dd3fc",
