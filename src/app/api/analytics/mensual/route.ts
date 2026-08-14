@@ -25,12 +25,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { monthly, years } = await loadAnalyticsMonthly({
+    const payload = await loadAnalyticsMonthly({
       supabase,
       organizationId: member.organization_id,
       sucursal,
     });
-    return NextResponse.json({ monthly, years });
+    return NextResponse.json(payload);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Error al cargar análisis";
     return NextResponse.json({ error: message }, { status: 500 });

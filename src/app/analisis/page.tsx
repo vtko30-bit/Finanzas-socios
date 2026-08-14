@@ -16,7 +16,7 @@ export default function AnalisisPage() {
     <PageShell size="xl">
       <PageHeader
         title="Análisis y gráficos"
-        description="Misma base que Resumen: operativo, sin familias excluidas. Evolución mensual y comparación entre años."
+        description="Ventas, gastos y balance del año, con la misma base que Resumen. Comparación entre años al final."
       />
 
       <AuthNotice
