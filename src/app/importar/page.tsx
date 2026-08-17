@@ -47,6 +47,16 @@ type DuplicateReviewItem = {
   }>;
 };
 
+function ymdLocal(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addDaysYmd(ymd: string, days: number) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y ?? 0, (m ?? 1) - 1, (d ?? 1) + days);
+  return ymdLocal(dt);
+}
+
 export default function ImportarPage() {
   const { ready, authenticated } = useAuthState();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
@@ -60,6 +70,9 @@ export default function ImportarPage() {
   const [loadingPagoServicios, setLoadingPagoServicios] = useState(false);
   const [loadingOtrosIngresos, setLoadingOtrosIngresos] = useState(false);
   const [loadingVentas, setLoadingVentas] = useState(false);
+  const [loadingFudoVentas, setLoadingFudoVentas] = useState(false);
+  const [fudoDesde, setFudoDesde] = useState(() => addDaysYmd(ymdLocal(), -1));
+  const [fudoHasta, setFudoHasta] = useState(() => ymdLocal());
   const [loadingResetTodo, setLoadingResetTodo] = useState(false);
   const [loadingResetVentas, setLoadingResetVentas] = useState(false);
   const [loadingBackup, setLoadingBackup] = useState(false);
@@ -324,6 +337,62 @@ export default function ImportarPage() {
       );
     } finally {
       setLoadingVentas(false);
+    }
+  };
+
+  const submitFudoVentas = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!authenticated) return;
+    setLoadingFudoVentas(true);
+    setStatus("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/fudo/sync-ventas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: fudoDesde, to: fudoHasta }),
+      });
+      const text = await res.text();
+      const data = parseApiBody(text);
+      if (!res.ok) {
+        setStatus(mensajeApi(data) || "Error al sincronizar ventas de Fudo");
+        return;
+      }
+      const inserted = Number(data.inserted ?? 0);
+      const duplicates = Number(data.duplicates ?? 0);
+      const fetched = Number(data.fetched ?? 0);
+      const skippedLocked = Number(data.skippedLocked ?? 0);
+      const skippedResumen = Number(data.skippedResumenDays ?? 0);
+      const errs = Array.isArray(data.errors)
+        ? (data.errors as unknown[]).map(String).filter(Boolean)
+        : [];
+      const extra = [
+        skippedLocked > 0 ? `${skippedLocked} en período cerrado` : "",
+        skippedResumen > 0
+          ? `${skippedResumen} omitidas (ese día ya tiene ventas resumidas)`
+          : "",
+        errs.length ? errs.join(" · ") : "",
+      ]
+        .filter(Boolean)
+        .join(". ");
+      setStatus(
+        `Fudo: ${inserted} venta(s) nueva(s) de ${fetched} leídas (${duplicates} ya estaban).${
+          extra ? ` ${extra}` : ""
+        }`,
+      );
+      if (inserted > 0) {
+        setSuccessMessage("Las ventas de Fudo se actualizaron.");
+        invalidateMainNavCaches();
+        setShowSuccessModal(true);
+      }
+    } catch (error) {
+      setStatus(
+        `Error inesperado al sincronizar Fudo: ${
+          error instanceof Error ? error.message : "desconocido"
+        }`,
+      );
+    } finally {
+      setLoadingFudoVentas(false);
     }
   };
 
@@ -642,6 +711,53 @@ export default function ImportarPage() {
             siempre que no sea byte por byte igual al ya importado.
           </li>
         </ul>
+      </section>
+
+      <section className="ui-card p-6">
+        <h1 className="page-title">Actualizar ventas desde Fudo</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          Trae las ventas cerradas de Rg y Happy. Las que ya están (Excel o Fudo)
+          no se duplican.
+        </p>
+        <form
+          onSubmit={submitFudoVentas}
+          className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+        >
+          <label className="text-sm text-slate-700">
+            Desde
+            <input
+              type="date"
+              className="ui-field mt-1"
+              value={fudoDesde}
+              onChange={(e) => setFudoDesde(e.target.value)}
+              disabled={!authenticated || loadingFudoVentas}
+            />
+          </label>
+          <label className="text-sm text-slate-700">
+            Hasta
+            <input
+              type="date"
+              className="ui-field mt-1"
+              value={fudoHasta}
+              onChange={(e) => setFudoHasta(e.target.value)}
+              disabled={!authenticated || loadingFudoVentas}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={
+              !authenticated ||
+              !canWrite ||
+              capsLoading ||
+              loadingFudoVentas ||
+              !fudoDesde ||
+              !fudoHasta
+            }
+            className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
+          >
+            {loadingFudoVentas ? "Sincronizando…" : "Actualizar desde Fudo"}
+          </button>
+        </form>
       </section>
 
       <section className="ui-card p-6">

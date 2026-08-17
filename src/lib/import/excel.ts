@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import * as XLSX from "xlsx";
 import { z } from "zod";
+import { ventasDetalleDedupeHash } from "@/lib/ventas-dedupe-hash";
 
 const movementSchema = z.object({
   date: z.string().min(10),
@@ -759,9 +760,7 @@ export const parseConsolidatedExcel = (
       ventasLayout &&
       entry.external_ref.trim() &&
       !entry.external_ref.startsWith("resumen|")
-        ? hash(
-            `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}`,
-          )
+        ? ventasDetalleDedupeHash(entry)
         : ventasLayout
           ? hash(
               `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}|${entry.payment_method}`,

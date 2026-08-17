@@ -47,6 +47,7 @@ export async function GET() {
     const k = (b.summary_json as SummaryJson | null)?.importKind;
     return (
       k === "excel_ventas" ||
+      k === "fudo_ventas" ||
       k === "excel_egresos" ||
       k === "excel_egresos_bancoestado_servicios" ||
       k === "excel_otros_ingresos"
@@ -79,7 +80,7 @@ export async function GET() {
     const kind = summary.importKind ?? "";
     const c = countMap.get(b.id) ?? { income: 0, expense: 0 };
 
-    if (kind === "excel_ventas") {
+    if (kind === "excel_ventas" || kind === "fudo_ventas") {
       totalVentasIngresos += c.income;
     } else if (kind === "excel_otros_ingresos") {
       totalOtrosIngresos += c.income;
