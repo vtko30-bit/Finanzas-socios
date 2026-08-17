@@ -380,9 +380,9 @@ export default function ImportarPage() {
           extra ? ` ${extra}` : ""
         }`,
       );
+      invalidateMainNavCaches();
       if (inserted > 0) {
         setSuccessMessage("Las ventas de Fudo se actualizaron.");
-        invalidateMainNavCaches();
         setShowSuccessModal(true);
       }
     } catch (error) {

@@ -8,6 +8,7 @@ import {
 } from "@/lib/org-excluded-families-db";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
+import { normalizeFormaPago } from "@/lib/forma-pago";
 
 const PAGE_SIZE = 1000;
 const INCOME_TYPES = ["income", "ingreso"] as const;
@@ -128,7 +129,9 @@ export async function GET(request: Request) {
       (row as { origen_cuenta?: string }).origen_cuenta ?? "";
     const conceptoCol = (row as { concepto?: string }).concepto ?? "";
     const conceptId = (row as { concept_id?: string | null }).concept_id ?? null;
-    const medioPago = (row as { payment_method?: string }).payment_method ?? "";
+    const medioPago = normalizeFormaPago(
+      (row as { payment_method?: string }).payment_method ?? "",
+    );
     const cat = row as {
       concept_catalog?: {
         id?: string;

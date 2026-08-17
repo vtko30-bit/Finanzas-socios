@@ -8,9 +8,10 @@ import { useAuthContext } from "@/components/auth-provider";
 
 const RG_SUITE_URL =
   process.env.NEXT_PUBLIC_RG_SUITE_URL || "https://rg-suite.vercel.app";
+const FUDO_VENTAS_URL = `${RG_SUITE_URL.replace(/\/$/, "")}/fudo?view=ventas`;
 
-const NAV_BASE: { href: string; label: string }[] = [
-  { href: "/ventas", label: "Ventas" },
+const NAV_BASE: { href: string; label: string; external?: boolean }[] = [
+  { href: FUDO_VENTAS_URL, label: "Ventas", external: true },
   { href: "/gastos", label: "Gastos" },
   { href: "/resumen", label: "Resumen" },
   { href: "/socios", label: "Socios" },
@@ -93,14 +94,25 @@ export function TopNav() {
                 <ul className="max-h-[min(70vh,24rem)] overflow-y-auto py-1">
                   {navItems.map((item) => (
                     <li key={item.href} role="none">
-                      <Link
-                        href={item.href}
-                        role="menuitem"
-                        className="block px-4 py-2.5 text-sm text-slate-900 hover:bg-slate-50"
-                        onClick={close}
-                      >
-                        {item.label}
-                      </Link>
+                      {item.external ? (
+                        <a
+                          href={item.href}
+                          role="menuitem"
+                          className="block px-4 py-2.5 text-sm text-slate-900 hover:bg-slate-50"
+                          onClick={close}
+                        >
+                          {item.label}
+                        </a>
+                      ) : (
+                        <Link
+                          href={item.href}
+                          role="menuitem"
+                          className="block px-4 py-2.5 text-sm text-slate-900 hover:bg-slate-50"
+                          onClick={close}
+                        >
+                          {item.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
