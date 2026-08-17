@@ -6,11 +6,13 @@ import { Home, Menu } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
 
+type NavItem = { href: string; label: string; external?: boolean };
+
 const RG_SUITE_URL =
   process.env.NEXT_PUBLIC_RG_SUITE_URL || "https://rg-suite.vercel.app";
 const FUDO_VENTAS_URL = `${RG_SUITE_URL.replace(/\/$/, "")}/fudo?view=ventas`;
 
-const NAV_BASE: { href: string; label: string; external?: boolean }[] = [
+const NAV_BASE: NavItem[] = [
   { href: FUDO_VENTAS_URL, label: "Ventas", external: true },
   { href: "/gastos", label: "Gastos" },
   { href: "/resumen", label: "Resumen" },
@@ -26,14 +28,14 @@ const NAV_BASE: { href: string; label: string; external?: boolean }[] = [
   { href: "/reportes", label: "Reportes" },
 ];
 
-const NAV_OWNER: { href: string; label: string }[] = [
+const NAV_OWNER: NavItem[] = [
   { href: "/importar", label: "Importar" },
   { href: "/importaciones", label: "Importaciones" },
   { href: "/periodos-cerrados", label: "Períodos cerrados" },
   { href: "/equipo", label: "Equipo" },
 ];
 
-const NAV_LOGIN: { href: string; label: string }[] = [
+const NAV_LOGIN: NavItem[] = [
   { href: "/login", label: "Login" },
 ];
 
