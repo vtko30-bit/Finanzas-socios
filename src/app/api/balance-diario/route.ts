@@ -23,8 +23,27 @@ export async function GET(request: Request) {
   try {
     const organizationId = await resolveOrganizationId();
     const report = await sendDailyBankPosition(organizationId);
+    const sent = report.recipients.filter((r) => r.ok).length;
+    console.info(
+      "[balance-diario]",
+      JSON.stringify({
+        snapshotDate: report.snapshotDate,
+        sent,
+        recipients: report.recipients,
+      }),
+    );
+    if (!sent) {
+      return NextResponse.json(
+        { error: "No se envió ningún correo", ...report },
+        { status: 500 },
+      );
+    }
     return NextResponse.json({ ok: true, ...report });
   } catch (e) {
+    console.error(
+      "[balance-diario]",
+      e instanceof Error ? e.message : String(e),
+    );
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },
       { status: 500 },
