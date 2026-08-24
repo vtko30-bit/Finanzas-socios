@@ -426,7 +426,9 @@ export default function ImportarPage() {
       const errs = Array.isArray(data.errors)
         ? (data.errors as unknown[]).map(String).filter(Boolean)
         : [];
+      const updated = Number(data.updated ?? 0);
       const extra = [
+        updated > 0 ? `${updated} corregidos` : "",
         skippedLocked > 0 ? `${skippedLocked} en período cerrado` : "",
         skippedId > 0 ? `${skippedId} ya estaban (mismo Id Fudo)` : "",
         errs.length ? errs.join(" · ") : "",
@@ -435,15 +437,19 @@ export default function ImportarPage() {
         .join(". ");
       let note = `Se leyeron ${fetched} gasto(s) válido(s) de ${apiRows} filas Fudo. Se insertaron ${inserted}. ${duplicates} ya estaban.`;
       if (extra) note += ` ${extra}`;
-      if (inserted === 0 && fetched === 0 && apiRows === 0 && !errs.length) {
+      if (inserted === 0 && updated === 0 && fetched === 0 && apiRows === 0 && !errs.length) {
         note =
           "Fudo no devolvió gastos en ese rango. Amplía Desde/Hasta (máx. 31 días) y vuelve a intentar.";
       } else if (inserted === 0 && skippedLocked > 0 && skippedLocked >= fetched) {
         note =
           `Hay ${skippedLocked} gasto(s) en un período cerrado, por eso no se cargaron. Reabre el período en Períodos cerrados o elige fechas abiertas.`;
-      } else if (inserted > 0) {
-        note += " Ya deberían verse en Gastos (origen Rg / Happy).";
-        setSuccessMessage("Los gastos de Fudo se actualizaron.");
+      } else if (inserted > 0 || updated > 0) {
+        note += " En Gastos el origen es Fudo Rg / Fudo Happy.";
+        setSuccessMessage(
+          updated > 0 && inserted === 0
+            ? "Se corrigió el mapeo de los gastos de Fudo."
+            : "Los gastos de Fudo se actualizaron.",
+        );
         setShowSuccessModal(true);
       }
       setFudoGastosNote(note);

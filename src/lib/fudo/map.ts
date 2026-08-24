@@ -38,6 +38,13 @@ export function toDateOnly(isoOrDate: string, timeZone = "America/Santiago"): st
   }).format(d);
 }
 
+/** Origen en Finanzas: "Fudo Rg", "Fudo Happy". */
+export function fudoGastoOrigen(branch: FudoBranch): string {
+  const label = asString(branch) || "Sin sucursal";
+  if (/^fudo\b/i.test(label)) return label;
+  return `Fudo ${label}`;
+}
+
 export function mapSalesToVentasRows(
   branch: FudoBranch,
   response: FudoListResponse,
@@ -205,6 +212,23 @@ export function mapProductsToCatalogoRows(
   return rows.sort((a, b) => a.Nombre.localeCompare(b.Nombre, "es"));
 }
 
+function firstIncluded(
+  resource: FudoJsonApiResource,
+  included: FudoJsonApiResource[] | undefined,
+  relNames: string[],
+  types: string[],
+) {
+  for (const name of relNames) {
+    const id = relId(resource, name);
+    if (!id) continue;
+    for (const t of types) {
+      const found = resolveIncluded(included, t, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export function mapExpensesToGastoRows(
   branch: FudoBranch,
   response: FudoListResponse,
@@ -215,38 +239,41 @@ export function mapExpensesToGastoRows(
   for (const expense of response.data) {
     const attrs = expense.attributes ?? {};
     if (attrs.canceled === true) continue;
-    const amount = asNumber(attrs.amount);
-    if (amount <= 0) continue;
 
-    const cat = resolveIncluded(
+    const cat = firstIncluded(
+      expense,
       included,
-      "ExpenseCategory",
-      relId(expense, "expenseCategory"),
+      ["expenseCategory", "expense-category", "category"],
+      ["ExpenseCategory", "expense-category"],
     );
-    const provider = resolveIncluded(
+    const provider = firstIncluded(
+      expense,
       included,
-      "Provider",
-      relId(expense, "provider"),
+      ["provider", "supplier"],
+      ["Provider", "provider", "supplier"],
     );
-    const pm = resolveIncluded(
+    const pm = firstIncluded(
+      expense,
       included,
-      "PaymentMethod",
-      relId(expense, "paymentMethod"),
+      ["paymentMethod", "payment-method"],
+      ["PaymentMethod", "payment-method"],
     );
 
     const categoria = asString(cat?.attributes?.name);
-    const descripcion = asString(attrs.description);
-    const concepto =
-      [categoria, descripcion].filter(Boolean).join(" — ") ||
-      "Sin concepto";
+    const comentario =
+      asString(attrs.comment) || asString(attrs.description);
+    const amount =
+      asNumber(attrs.importe) || asNumber(attrs.amount);
+
+    if (amount <= 0) continue;
 
     rows.push({
       Id: expense.id,
       Fecha: toDateOnly(asString(attrs.date)),
       Sucursal: branch,
-      Origen: branch,
-      Concepto: concepto,
-      Descripción: descripcion,
+      Origen: fudoGastoOrigen(branch),
+      Concepto: categoria || "Sin categoría",
+      Descripción: comentario,
       "Cheques / Cargos": amount,
       "Medio de Pago":
         asString(pm?.attributes?.name) ||

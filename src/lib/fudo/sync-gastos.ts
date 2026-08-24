@@ -4,7 +4,7 @@ import { chunk } from "@/lib/array-chunk";
 import { logAudit } from "@/lib/audit";
 import { getActiveFudoSucursales } from "@/lib/fudo/branches";
 import { FudoClient } from "@/lib/fudo/client";
-import { mapExpensesToGastoRows } from "@/lib/fudo/map";
+import { fudoGastoOrigen, mapExpensesToGastoRows } from "@/lib/fudo/map";
 import type { GastoExcelRow } from "@/lib/fudo/types";
 import { gastosFudoDedupeHash } from "@/lib/gastos-fudo-dedupe-hash";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
@@ -41,6 +41,7 @@ export type SyncGastosFudoResult = {
   duplicates: number;
   skippedLocked: number;
   skippedExistingId: number;
+  updated: number;
   apiRows: number;
   branches: SyncGastosBranchStat[];
   errors: string[];
@@ -70,6 +71,7 @@ type GastoMovement = {
   amount: number;
   description: string;
   account_name: string;
+  branchLabel: string;
   category_name: string;
   source_id: string;
   external_ref: string;
@@ -82,13 +84,15 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
   const date = String(row.Fecha ?? "").slice(0, 10);
   const source_id = String(row.Id ?? "").trim();
   const amount = Number(row["Cheques / Cargos"]) || 0;
-  const account_name = String(row.Sucursal ?? row.Origen ?? "").trim() || "Sin sucursal";
+  const branchLabel = String(row.Sucursal ?? "").trim() || "Sin sucursal";
+  const account_name =
+    String(row.Origen ?? "").trim() || fudoGastoOrigen(branchLabel);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !source_id || amount <= 0) {
     return null;
   }
   const description = String(row.Descripción ?? "").trim();
   const counterparty = String(row.Proveedor ?? "").trim();
-  const category_name = String(row.Concepto ?? "").trim() || "Sin categoria";
+  const category_name = String(row.Concepto ?? "").trim() || "Sin categoría";
   const entry = {
     source_id,
     date,
@@ -107,6 +111,7 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
     amount,
     description,
     account_name,
+    branchLabel,
     category_name,
     source_id,
     external_ref: "",
@@ -116,21 +121,26 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
   };
 }
 
-async function fetchExistingFudoExpenseIds(
+async function fetchExistingFudoExpenseRows(
   supabase: SupabaseClient,
   organizationId: string,
   sourceIds: string[],
   branchLabels: string[],
-): Promise<Set<string>> {
-  const out = new Set<string>();
+): Promise<Map<string, { id: string; source: string }>> {
+  const out = new Map<string, { id: string; source: string }>();
   const rawUnique = [...new Set(sourceIds.map((s) => s.trim()).filter(Boolean))];
   if (!rawUnique.length) return out;
-  const labels = new Set(branchLabels.map((l) => l.trim().toLowerCase()));
+  const labels = new Set(
+    branchLabels.flatMap((l) => {
+      const t = l.trim().toLowerCase();
+      return t ? [t, `fudo ${t}`] : [];
+    }),
+  );
 
   for (const idChunk of chunk(rawUnique, 80)) {
     const { data, error } = await supabase
       .from("transactions")
-      .select("source_id, source, origen_cuenta")
+      .select("id, source_id, source, origen_cuenta")
       .eq("organization_id", organizationId)
       .in("type", ["expense", "gasto", "egreso"])
       .in("source_id", idChunk);
@@ -138,12 +148,13 @@ async function fetchExistingFudoExpenseIds(
     for (const row of data ?? []) {
       const source = String(row.source ?? "").trim().toLowerCase();
       const origen = String(row.origen_cuenta ?? "").trim().toLowerCase();
-      if (source !== "fudo_gastos" && !labels.has(origen)) continue;
+      if (source !== FUDO_GASTOS_SOURCE && !labels.has(origen)) continue;
       const key = String(row.source_id ?? "")
         .trim()
         .replace(/\s+/g, "")
         .toUpperCase();
-      if (key) out.add(key);
+      if (!key || out.has(key)) continue;
+      out.set(key, { id: String(row.id), source });
     }
   }
   return out;
@@ -206,29 +217,21 @@ export async function syncGastosFudoFromRange(
   );
 
   let skippedLocked = 0;
-  const unlocked: GastoMovement[] = [];
+  const seenHash = new Set<string>();
+  const unique: GastoMovement[] = [];
   for (const m of movements) {
-    if (blocked.has(m.date)) {
-      skippedLocked += 1;
-      continue;
-    }
-    unlocked.push(m);
+    if (seenHash.has(m.dedupe_hash)) continue;
+    seenHash.add(m.dedupe_hash);
+    unique.push(m);
   }
 
-  const seenHash = new Set<string>();
-  const unique = unlocked.filter((m) => {
-    if (seenHash.has(m.dedupe_hash)) return false;
-    seenHash.add(m.dedupe_hash);
-    return true;
-  });
-
-  const [existingHashes, existingIds] = await Promise.all([
+  const [existingHashes, existingRows] = await Promise.all([
     fetchExistingDedupeHashesForOrg(
       params.supabase,
       params.organizationId,
       unique.map((m) => m.dedupe_hash),
     ),
-    fetchExistingFudoExpenseIds(
+    fetchExistingFudoExpenseRows(
       params.supabase,
       params.organizationId,
       unique.map((m) => m.source_id),
@@ -237,18 +240,29 @@ export async function syncGastosFudoFromRange(
   ]);
 
   let skippedExistingId = 0;
-  const uniqueToInsert = unique.filter((m) => {
-    if (existingHashes.has(m.dedupe_hash)) return false;
+  const uniqueToInsert: GastoMovement[] = [];
+  const uniqueToUpdate: { txId: string; m: GastoMovement }[] = [];
+  for (const m of unique) {
     const idKey = m.source_id.trim().replace(/\s+/g, "").toUpperCase();
-    if (idKey && existingIds.has(idKey)) {
-      skippedExistingId += 1;
-      return false;
+    const existing = idKey ? existingRows.get(idKey) : undefined;
+    if (existing?.source === FUDO_GASTOS_SOURCE) {
+      uniqueToUpdate.push({ txId: existing.id, m });
+      continue;
     }
-    return true;
-  });
+    if (existingHashes.has(m.dedupe_hash)) continue;
+    if (existing) {
+      skippedExistingId += 1;
+      continue;
+    }
+    if (blocked.has(m.date)) {
+      skippedLocked += 1;
+      continue;
+    }
+    uniqueToInsert.push(m);
+  }
 
   let batchId: string | null = null;
-  if (uniqueToInsert.length) {
+  if (uniqueToInsert.length || uniqueToUpdate.length) {
     batchId = randomUUID();
     const { error: batchError } = await params.supabase.from("import_batches").insert({
       id: batchId,
@@ -263,6 +277,7 @@ export async function syncGastosFudoFromRange(
         totalRows: movements.length,
         validRows: unique.length,
         inserted: uniqueToInsert.length,
+        updated: uniqueToUpdate.length,
       },
       created_by: params.actorUserId,
     });
@@ -271,8 +286,8 @@ export async function syncGastosFudoFromRange(
     const insertedByBranch = new Map<string, number>();
     const tx = uniqueToInsert.map((m) => {
       insertedByBranch.set(
-        m.account_name,
-        (insertedByBranch.get(m.account_name) ?? 0) + 1,
+        m.branchLabel,
+        (insertedByBranch.get(m.branchLabel) ?? 0) + 1,
       );
       return {
         id: randomUUID(),
@@ -322,6 +337,28 @@ export async function syncGastosFudoFromRange(
       if (upsertError) throw new Error(upsertError.message);
     }
 
+    for (const { txId, m } of uniqueToUpdate) {
+      const { error: updateError } = await params.supabase
+        .from("transactions")
+        .update({
+          date: m.date,
+          amount: m.amount,
+          description: m.description,
+          counterparty: m.counterparty,
+          payment_method: m.payment_method,
+          origen_cuenta: m.account_name,
+          concepto: m.category_name,
+          dedupe_hash: m.dedupe_hash,
+        })
+        .eq("id", txId)
+        .eq("organization_id", params.organizationId);
+      if (updateError) throw new Error(updateError.message);
+      insertedByBranch.set(
+        m.branchLabel,
+        (insertedByBranch.get(m.branchLabel) ?? 0) + 1,
+      );
+    }
+
     for (const b of branches) {
       b.inserted = insertedByBranch.get(b.branch) ?? 0;
     }
@@ -339,7 +376,8 @@ export async function syncGastosFudoFromRange(
       trigger: params.trigger,
       fetched: movements.length,
       inserted: uniqueToInsert.length,
-      duplicates: unique.length - uniqueToInsert.length,
+      updated: uniqueToUpdate.length,
+      duplicates: unique.length - uniqueToInsert.length - uniqueToUpdate.length,
       skippedLocked,
       skippedExistingId,
       errors,
@@ -351,9 +389,10 @@ export async function syncGastosFudoFromRange(
     toDate: params.toDate,
     fetched: movements.length,
     inserted: uniqueToInsert.length,
-    duplicates: unique.length - uniqueToInsert.length,
+    duplicates: unique.length - uniqueToInsert.length - uniqueToUpdate.length,
     skippedLocked,
     skippedExistingId,
+    updated: uniqueToUpdate.length,
     apiRows,
     branches,
     errors,

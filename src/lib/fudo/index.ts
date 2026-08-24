@@ -14,6 +14,7 @@ export {
   summarizeMix,
   summarizeVentas,
   toDateOnly,
+  fudoGastoOrigen,
 } from "@/lib/fudo/map";
 export {
   writeCatalogoXlsx,
