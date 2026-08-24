@@ -48,6 +48,7 @@ export async function GET() {
     return (
       k === "excel_ventas" ||
       k === "fudo_ventas" ||
+      k === "fudo_gastos" ||
       k === "excel_egresos" ||
       k === "excel_egresos_bancoestado_servicios" ||
       k === "excel_otros_ingresos"
@@ -86,7 +87,8 @@ export async function GET() {
       totalOtrosIngresos += c.income;
     } else if (
       kind === "excel_egresos" ||
-      kind === "excel_egresos_bancoestado_servicios"
+      kind === "excel_egresos_bancoestado_servicios" ||
+      kind === "fudo_gastos"
     ) {
       totalGastosEgresos += c.expense;
     }

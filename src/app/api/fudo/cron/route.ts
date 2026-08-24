@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  assertGastosSyncRange,
+  syncGastosFudoFromRange,
+} from "@/lib/fudo/sync-gastos";
+import {
   assertVentasSyncRange,
   syncVentasFudoFromRange,
 } from "@/lib/fudo/sync-ventas";
@@ -42,7 +46,7 @@ async function resolveOrganizationId(): Promise<string> {
 }
 
 /**
- * Cron diario: sincroniza el día anterior (America/Santiago) hacia Finanzas.
+ * Cron diario: sincroniza ventas y gastos del día anterior (America/Santiago).
  * Auth: Authorization Bearer CRON_SECRET o header x-cron-secret.
  */
 export async function GET(request: Request) {
@@ -57,7 +61,8 @@ export async function GET(request: Request) {
   const today = todaySantiago();
   const from = addDays(today, -1);
   const to = from;
-  const rangeErr = assertVentasSyncRange(from, to);
+  const rangeErr =
+    assertVentasSyncRange(from, to) || assertGastosSyncRange(from, to);
   if (rangeErr) {
     return NextResponse.json({ error: rangeErr }, { status: 400 });
   }
@@ -65,7 +70,7 @@ export async function GET(request: Request) {
   try {
     const organizationId = await resolveOrganizationId();
     const supabase = createAdminClient();
-    const result = await syncVentasFudoFromRange({
+    const ventas = await syncVentasFudoFromRange({
       supabase,
       organizationId,
       fromDate: from,
@@ -73,10 +78,25 @@ export async function GET(request: Request) {
       actorUserId: null,
       trigger: "cron",
     });
-    if (result.errors.length && result.fetched === 0 && result.inserted === 0) {
-      return NextResponse.json(result, { status: 502 });
+    const gastos = await syncGastosFudoFromRange({
+      supabase,
+      organizationId,
+      fromDate: from,
+      toDate: to,
+      actorUserId: null,
+      trigger: "cron",
+    });
+    const bothFailed =
+      ventas.errors.length &&
+      ventas.fetched === 0 &&
+      ventas.inserted === 0 &&
+      gastos.errors.length &&
+      gastos.fetched === 0 &&
+      gastos.inserted === 0;
+    if (bothFailed) {
+      return NextResponse.json({ ventas, gastos }, { status: 502 });
     }
-    return NextResponse.json(result);
+    return NextResponse.json({ ventas, gastos });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

@@ -71,6 +71,7 @@ export default function ImportarPage() {
   const [loadingOtrosIngresos, setLoadingOtrosIngresos] = useState(false);
   const [loadingVentas, setLoadingVentas] = useState(false);
   const [loadingFudoVentas, setLoadingFudoVentas] = useState(false);
+  const [loadingFudoGastos, setLoadingFudoGastos] = useState(false);
   const [fudoDesde, setFudoDesde] = useState(() => addDaysYmd(ymdLocal(), -1));
   const [fudoHasta, setFudoHasta] = useState(() => ymdLocal());
   const [loadingResetTodo, setLoadingResetTodo] = useState(false);
@@ -340,8 +341,7 @@ export default function ImportarPage() {
     }
   };
 
-  const submitFudoVentas = async (e: FormEvent) => {
-    e.preventDefault();
+  const submitFudoVentas = async () => {
     if (!authenticated) return;
     setLoadingFudoVentas(true);
     setStatus("");
@@ -393,6 +393,59 @@ export default function ImportarPage() {
       );
     } finally {
       setLoadingFudoVentas(false);
+    }
+  };
+
+  const submitFudoGastos = async () => {
+    if (!authenticated) return;
+    setLoadingFudoGastos(true);
+    setStatus("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/fudo/sync-gastos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: fudoDesde, to: fudoHasta }),
+      });
+      const text = await res.text();
+      const data = parseApiBody(text);
+      if (!res.ok) {
+        setStatus(mensajeApi(data) || "Error al sincronizar gastos de Fudo");
+        return;
+      }
+      const inserted = Number(data.inserted ?? 0);
+      const duplicates = Number(data.duplicates ?? 0);
+      const fetched = Number(data.fetched ?? 0);
+      const skippedLocked = Number(data.skippedLocked ?? 0);
+      const skippedId = Number(data.skippedExistingId ?? 0);
+      const errs = Array.isArray(data.errors)
+        ? (data.errors as unknown[]).map(String).filter(Boolean)
+        : [];
+      const extra = [
+        skippedLocked > 0 ? `${skippedLocked} en período cerrado` : "",
+        skippedId > 0 ? `${skippedId} ya importados (mismo Id)` : "",
+        errs.length ? errs.join(" · ") : "",
+      ]
+        .filter(Boolean)
+        .join(". ");
+      setStatus(
+        `Fudo: ${inserted} gasto(s) nuevo(s) de ${fetched} leídos (${duplicates} ya estaban).${
+          extra ? ` ${extra}` : ""
+        }`,
+      );
+      invalidateMainNavCaches();
+      if (inserted > 0) {
+        setSuccessMessage("Los gastos de Fudo se actualizaron.");
+        setShowSuccessModal(true);
+      }
+    } catch (error) {
+      setStatus(
+        `Error inesperado al sincronizar gastos de Fudo: ${
+          error instanceof Error ? error.message : "desconocido"
+        }`,
+      );
+    } finally {
+      setLoadingFudoGastos(false);
     }
   };
 
@@ -714,15 +767,12 @@ export default function ImportarPage() {
       </section>
 
       <section className="ui-card p-6">
-        <h1 className="page-title">Actualizar ventas desde Fudo</h1>
+        <h1 className="page-title">Actualizar desde Fudo</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Trae las ventas cerradas de Rg y Happy. Las que ya están (Excel o Fudo)
-          no se duplican.
+          Trae ventas y gastos de Rg y Happy. Lo que ya está (Excel o Fudo) no
+          se duplica. El cron diario también actualiza ambos.
         </p>
-        <form
-          onSubmit={submitFudoVentas}
-          className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
-        >
+        <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="text-sm text-slate-700">
             Desde
             <input
@@ -730,7 +780,7 @@ export default function ImportarPage() {
               className="ui-field mt-1"
               value={fudoDesde}
               onChange={(e) => setFudoDesde(e.target.value)}
-              disabled={!authenticated || loadingFudoVentas}
+              disabled={!authenticated || loadingFudoVentas || loadingFudoGastos}
             />
           </label>
           <label className="text-sm text-slate-700">
@@ -740,22 +790,40 @@ export default function ImportarPage() {
               className="ui-field mt-1"
               value={fudoHasta}
               onChange={(e) => setFudoHasta(e.target.value)}
-              disabled={!authenticated || loadingFudoVentas}
+              disabled={!authenticated || loadingFudoVentas || loadingFudoGastos}
             />
           </label>
           <button
-            type="submit"
+            type="button"
+            onClick={() => void submitFudoVentas()}
             disabled={
               !authenticated ||
               !canWrite ||
               capsLoading ||
               loadingFudoVentas ||
+              loadingFudoGastos ||
               !fudoDesde ||
               !fudoHasta
             }
             className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
           >
-            {loadingFudoVentas ? "Sincronizando…" : "Actualizar desde Fudo"}
+            {loadingFudoVentas ? "Sincronizando…" : "Actualizar ventas"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void submitFudoGastos()}
+            disabled={
+              !authenticated ||
+              !canWrite ||
+              capsLoading ||
+              loadingFudoVentas ||
+              loadingFudoGastos ||
+              !fudoDesde ||
+              !fudoHasta
+            }
+            className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
+          >
+            {loadingFudoGastos ? "Sincronizando…" : "Actualizar gastos"}
           </button>
         </form>
       </section>

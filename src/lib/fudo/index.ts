@@ -25,6 +25,10 @@ export {
   syncVentasFudoFromRange,
   assertVentasSyncRange,
 } from "@/lib/fudo/sync-ventas";
+export {
+  syncGastosFudoFromRange,
+  assertGastosSyncRange,
+} from "@/lib/fudo/sync-gastos";
 export type {
   FudoBranch,
   FudoCredentials,
