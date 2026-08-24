@@ -72,7 +72,8 @@ export default function ImportarPage() {
   const [loadingVentas, setLoadingVentas] = useState(false);
   const [loadingFudoVentas, setLoadingFudoVentas] = useState(false);
   const [loadingFudoGastos, setLoadingFudoGastos] = useState(false);
-  const [fudoDesde, setFudoDesde] = useState(() => addDaysYmd(ymdLocal(), -1));
+  const [fudoGastosNote, setFudoGastosNote] = useState("");
+  const [fudoDesde, setFudoDesde] = useState(() => addDaysYmd(ymdLocal(), -6));
   const [fudoHasta, setFudoHasta] = useState(() => ymdLocal());
   const [loadingResetTodo, setLoadingResetTodo] = useState(false);
   const [loadingResetVentas, setLoadingResetVentas] = useState(false);
@@ -400,6 +401,7 @@ export default function ImportarPage() {
     if (!authenticated) return;
     setLoadingFudoGastos(true);
     setStatus("");
+    setFudoGastosNote("");
     setResult(null);
     try {
       const res = await fetch("/api/fudo/sync-gastos", {
@@ -410,12 +412,15 @@ export default function ImportarPage() {
       const text = await res.text();
       const data = parseApiBody(text);
       if (!res.ok) {
-        setStatus(mensajeApi(data) || "Error al sincronizar gastos de Fudo");
+        const msg = mensajeApi(data) || "Error al sincronizar gastos de Fudo";
+        setFudoGastosNote(msg);
+        setStatus(msg);
         return;
       }
       const inserted = Number(data.inserted ?? 0);
       const duplicates = Number(data.duplicates ?? 0);
       const fetched = Number(data.fetched ?? 0);
+      const apiRows = Number(data.apiRows ?? 0);
       const skippedLocked = Number(data.skippedLocked ?? 0);
       const skippedId = Number(data.skippedExistingId ?? 0);
       const errs = Array.isArray(data.errors)
@@ -423,27 +428,33 @@ export default function ImportarPage() {
         : [];
       const extra = [
         skippedLocked > 0 ? `${skippedLocked} en período cerrado` : "",
-        skippedId > 0 ? `${skippedId} ya importados (mismo Id)` : "",
+        skippedId > 0 ? `${skippedId} ya estaban (mismo Id Fudo)` : "",
         errs.length ? errs.join(" · ") : "",
       ]
         .filter(Boolean)
         .join(". ");
-      setStatus(
-        `Fudo: ${inserted} gasto(s) nuevo(s) de ${fetched} leídos (${duplicates} ya estaban).${
-          extra ? ` ${extra}` : ""
-        }`,
-      );
-      invalidateMainNavCaches();
-      if (inserted > 0) {
+      let note = `Se leyeron ${fetched} gasto(s) válido(s) de ${apiRows} filas Fudo. Se insertaron ${inserted}. ${duplicates} ya estaban.`;
+      if (extra) note += ` ${extra}`;
+      if (inserted === 0 && fetched === 0 && apiRows === 0 && !errs.length) {
+        note =
+          "Fudo no devolvió gastos en ese rango. Amplía Desde/Hasta (máx. 31 días) y vuelve a intentar.";
+      } else if (inserted === 0 && skippedLocked > 0 && skippedLocked >= fetched) {
+        note =
+          `Hay ${skippedLocked} gasto(s) en un período cerrado, por eso no se cargaron. Reabre el período en Períodos cerrados o elige fechas abiertas.`;
+      } else if (inserted > 0) {
+        note += " Ya deberían verse en Gastos (origen Rg / Happy).";
         setSuccessMessage("Los gastos de Fudo se actualizaron.");
         setShowSuccessModal(true);
       }
+      setFudoGastosNote(note);
+      setStatus(note);
+      invalidateMainNavCaches();
     } catch (error) {
-      setStatus(
-        `Error inesperado al sincronizar gastos de Fudo: ${
-          error instanceof Error ? error.message : "desconocido"
-        }`,
-      );
+      const msg = `Error inesperado al sincronizar gastos de Fudo: ${
+        error instanceof Error ? error.message : "desconocido"
+      }`;
+      setFudoGastosNote(msg);
+      setStatus(msg);
     } finally {
       setLoadingFudoGastos(false);
     }
@@ -826,6 +837,11 @@ export default function ImportarPage() {
             {loadingFudoGastos ? "Sincronizando…" : "Actualizar gastos"}
           </button>
         </form>
+        {fudoGastosNote ? (
+          <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+            {fudoGastosNote}
+          </p>
+        ) : null}
       </section>
 
       <section className="ui-card p-6">

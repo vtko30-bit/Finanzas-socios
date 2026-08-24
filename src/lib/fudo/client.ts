@@ -195,12 +195,6 @@ export class FudoClient {
       "filter[date]": `and(gte.${fromDate},lte.${toDate})`,
       "filter[canceled]": "neq.true",
       include: "expenseCategory,paymentMethod,provider,cashRegister",
-      "fields[expense]":
-        "amount,canceled,date,description,status,receiptNumber,createdAt,useInCashCount",
-      "fields[expenseCategory]": "name",
-      "fields[paymentMethod]": "name,code",
-      "fields[provider]": "name",
-      "fields[cashRegister]": "name",
     });
   }
 

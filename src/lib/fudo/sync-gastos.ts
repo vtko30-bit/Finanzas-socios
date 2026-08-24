@@ -8,7 +8,6 @@ import { mapExpensesToGastoRows } from "@/lib/fudo/map";
 import type { GastoExcelRow } from "@/lib/fudo/types";
 import { gastosFudoDedupeHash } from "@/lib/gastos-fudo-dedupe-hash";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
-import { fetchExistingSourceIdKeysForOrg } from "@/lib/import-existing-source-ids";
 import {
   collectBlockedImportDates,
   fetchImportPeriodLocks,
@@ -42,6 +41,7 @@ export type SyncGastosFudoResult = {
   duplicates: number;
   skippedLocked: number;
   skippedExistingId: number;
+  apiRows: number;
   branches: SyncGastosBranchStat[];
   errors: string[];
   batchId: string | null;
@@ -116,6 +116,39 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
   };
 }
 
+async function fetchExistingFudoExpenseIds(
+  supabase: SupabaseClient,
+  organizationId: string,
+  sourceIds: string[],
+  branchLabels: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  const rawUnique = [...new Set(sourceIds.map((s) => s.trim()).filter(Boolean))];
+  if (!rawUnique.length) return out;
+  const labels = new Set(branchLabels.map((l) => l.trim().toLowerCase()));
+
+  for (const idChunk of chunk(rawUnique, 80)) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("source_id, source, origen_cuenta")
+      .eq("organization_id", organizationId)
+      .in("type", ["expense", "gasto", "egreso"])
+      .in("source_id", idChunk);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      const source = String(row.source ?? "").trim().toLowerCase();
+      const origen = String(row.origen_cuenta ?? "").trim().toLowerCase();
+      if (source !== "fudo_gastos" && !labels.has(origen)) continue;
+      const key = String(row.source_id ?? "")
+        .trim()
+        .replace(/\s+/g, "")
+        .toUpperCase();
+      if (key) out.add(key);
+    }
+  }
+  return out;
+}
+
 export function assertGastosSyncRange(fromDate: string, toDate: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
     return "Fechas inválidas";
@@ -140,11 +173,13 @@ export async function syncGastosFudoFromRange(
   const movements: GastoMovement[] = [];
   const branches: SyncGastosBranchStat[] = [];
   const errors: string[] = [];
+  let apiRows = 0;
 
   for (const s of sucursales) {
     try {
       const client = new FudoClient(s.credentials);
       const expenses = await client.fetchExpenses(expFrom, expTo);
+      apiRows += expenses.data?.length ?? 0;
       const gastos = mapExpensesToGastoRows(s.label, expenses).filter((r) =>
         inRange(r.Fecha, params.fromDate, params.toDate),
       );
@@ -193,11 +228,11 @@ export async function syncGastosFudoFromRange(
       params.organizationId,
       unique.map((m) => m.dedupe_hash),
     ),
-    fetchExistingSourceIdKeysForOrg(
+    fetchExistingFudoExpenseIds(
       params.supabase,
       params.organizationId,
       unique.map((m) => m.source_id),
-      "expense",
+      sucursales.map((s) => s.label),
     ),
   ]);
 
@@ -319,6 +354,7 @@ export async function syncGastosFudoFromRange(
     duplicates: unique.length - uniqueToInsert.length,
     skippedLocked,
     skippedExistingId,
+    apiRows,
     branches,
     errors,
     batchId,
