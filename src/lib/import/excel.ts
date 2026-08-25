@@ -1000,6 +1000,54 @@ export const parseExpensesEgresosExcel = (
     return "";
   };
 
+  const esOrigenCartolaGenerico = (o: string) => {
+    const n = normalizeKey(o);
+    return (
+      !n ||
+      n === "movimientos" ||
+      n === "movimiento" ||
+      n === "cartola" ||
+      n === "movimientoscompletos" ||
+      n === "egresos"
+    );
+  };
+
+  /** Evita "1.3569e+11" y conserva el entero que Excel guardó. */
+  const formatExcelSourceId = (raw: unknown): string => {
+    if (raw == null || raw === "") return "";
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      const rounded = Math.round(raw);
+      if (Math.abs(raw - rounded) < 0.001) return String(rounded);
+      return String(raw);
+    }
+    const text = String(raw).trim();
+    if (!text) return "";
+    const sci = text.replace(",", ".").replace(/\s/g, "");
+    if (/[eE][+-]?\d+$/.test(sci)) {
+      const n = Number(sci);
+      if (Number.isFinite(n)) return String(Math.round(n));
+    }
+    return text;
+  };
+
+  const usedSourceIds = new Set<string>();
+  const uniquifySourceId = (base: string, date: string, amount: number): string => {
+    const key = base.trim();
+    if (!key) return "";
+    if (!usedSourceIds.has(key)) {
+      usedSourceIds.add(key);
+      return key;
+    }
+    let alt = `${key}|${date}|${amount}`;
+    let n = 2;
+    while (usedSourceIds.has(alt)) {
+      alt = `${key}|${date}|${amount}|${n}`;
+      n += 1;
+    }
+    usedSourceIds.add(alt);
+    return alt;
+  };
+
   const wb = XLSX.read(file, { type: "buffer", cellDates: true });
   const availableSheets = wb.SheetNames;
   const egresosSheets = selectEgresosExpenseSheets(wb, fileNameKey);
@@ -1078,16 +1126,17 @@ export const parseExpensesEgresosExcel = (
     const origenNormalizado = normalizeOrigen(origen, sheetName);
     const accountName =
       origenNormalizado ||
-      (origen && sucursal && normalizeKey(origen) !== normalizeKey(sucursal)
-        ? `${origen} - ${sucursal}`
-        : origen || sucursal || "Sin origen");
+      (esOrigenCartolaGenerico(origen) && sucursal
+        ? sucursal
+        : origen && sucursal && normalizeKey(origen) !== normalizeKey(sucursal)
+          ? `${origen} - ${sucursal}`
+          : origen || sucursal || "Sin origen");
 
-    const sourceIdRaw = String(
-      getField(row, ["id", "id movimiento", "idmovimiento", "id. gastos", "id gastos"]) ||
-        "",
-    ).trim();
+    const sourceIdRaw = formatExcelSourceId(
+      getField(row, ["id", "id movimiento", "idmovimiento", "id. gastos", "id gastos"]),
+    );
     const sourceId =
-      sourceIdRaw ||
+      uniquifySourceId(sourceIdRaw, date, monto) ||
       (esArchivoAnticipos
         ? [
             "anticipo",

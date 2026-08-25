@@ -9,6 +9,7 @@ import { supabaseErrorMessage } from "@/lib/supabase-error-message";
 import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
 import {
+  SOURCE_EXCEL_EGRESOS,
   claveEmparejarCartolaTransferenciasMismoBanco,
   claveEmparejarTefEspejoOpAmount,
   claveEmparejarTefTransferenciasBe,
@@ -22,7 +23,7 @@ import {
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 import {
-  fetchExistingSourceIdKeysForOrg,
+  fetchExistingExpenseRowsBySourceId,
   normalizeSourceIdKey,
 } from "@/lib/import-existing-source-ids";
 import {
@@ -44,6 +45,10 @@ function normalizarEtiquetaConcepto(raw: string): string {
 function etiquetaExcluidaParaAutoVinculo(raw: string): boolean {
   const n = normalizarEtiquetaConcepto(raw);
   return !n || n === "sin categoria" || n === "otros";
+}
+
+function esFuenteExcelEgresos(source: string): boolean {
+  return source.trim().toLowerCase() === SOURCE_EXCEL_EGRESOS;
 }
 
 function clavePreferirOrigen(m: {
@@ -108,36 +113,6 @@ export async function POST(request: Request) {
   const fileName = file instanceof File ? file.name : "import.xlsx";
   const fileHash = createHash("sha256").update(buffer).digest("hex");
 
-  const { data: previousBatch, error: previousBatchError } = await supabase
-    .from("import_batches")
-    .select("id, created_at")
-    .eq("organization_id", orgId)
-    .eq("status", "imported")
-    .eq("summary_json->>importKind", "excel_egresos")
-    .eq("summary_json->>fileHash", fileHash)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (previousBatchError) {
-    return NextResponse.json(
-      { error: supabaseErrorMessage(previousBatchError) },
-      { status: 500 },
-    );
-  }
-
-  if (previousBatch) {
-    return NextResponse.json(
-      {
-        error:
-          "Este archivo de gastos/egresos ya fue importado. Si hiciste cambios, exporta un nuevo archivo antes de subirlo.",
-        duplicateFile: true,
-        previousBatchId: previousBatch.id,
-      },
-      { status: 409 },
-    );
-  }
-
     let parsed: ReturnType<typeof parseExpensesEgresosExcel>;
     try {
       parsed = parseExpensesEgresosExcel(buffer, { fileName });
@@ -170,9 +145,11 @@ export async function POST(request: Request) {
     const sourceIdsInFile = parsed.valid
       .map((m) => String(m.source_id ?? "").trim())
       .filter(Boolean);
-    let existingSourceIds: Set<string>;
+    let existingBySourceId: Awaited<
+      ReturnType<typeof fetchExistingExpenseRowsBySourceId>
+    >;
     try {
-      existingSourceIds = await fetchExistingSourceIdKeysForOrg(
+      existingBySourceId = await fetchExistingExpenseRowsBySourceId(
         supabase,
         orgId,
         sourceIdsInFile,
@@ -190,15 +167,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const newMovements = parsed.valid.filter((m) => {
-      if (existing.has(m.dedupe_hash)) return false;
-      const sid = normalizeSourceIdKey(String(m.source_id ?? ""));
-      if (sid && existingSourceIds.has(sid)) return false;
-      return true;
-    });
     const seenInFile = new Set<string>();
     const seenSourceIdsInFile = new Set<string>();
-    const uniqueByHash = newMovements.filter((m) => {
+    const uniqueByHash = parsed.valid.filter((m) => {
       if (seenInFile.has(m.dedupe_hash)) return false;
       const sid = normalizeSourceIdKey(String(m.source_id ?? ""));
       if (sid) {
@@ -296,8 +267,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const uniqueToUpdate: { txId: string; m: (typeof afterPrefer)[number] }[] =
+      [];
+    const insertPool: typeof afterPrefer = [];
+    for (const m of afterPrefer) {
+      const sid = normalizeSourceIdKey(String(m.source_id ?? ""));
+      const existingRow = sid ? existingBySourceId.get(sid) : undefined;
+      if (existingRow && esFuenteExcelEgresos(existingRow.source)) {
+        uniqueToUpdate.push({ txId: existingRow.id, m });
+        continue;
+      }
+      if (existingRow) continue;
+      if (existing.has(m.dedupe_hash)) continue;
+      insertPool.push(m);
+    }
+
     const uniqueToInsert = omitMirroredExpenseDuplicates(
-      afterPrefer.map((m) => ({
+      insertPool.map((m) => ({
         ...m,
         origen_cuenta: m.account_name,
         source: "excel_egresos",
@@ -390,7 +376,7 @@ export async function POST(request: Request) {
       }
     }
 
-  if (uniqueToInsert.length) {
+  if (uniqueToInsert.length || uniqueToUpdate.length) {
     const { data: catalogRows, error: catalogErr } = await supabase
       .from("concept_catalog")
       .select("id, label")
@@ -405,18 +391,21 @@ export async function POST(request: Request) {
       conceptByLabel.set(key, { id: row.id, label: row.label });
     }
 
+    const conceptoDesdeExcel = (categoryName: string) => {
+      const rawConcepto = String(categoryName ?? "").trim();
+      const key = normalizarEtiquetaConcepto(rawConcepto);
+      const fromCatalog = etiquetaExcluidaParaAutoVinculo(key)
+        ? undefined
+        : conceptByLabel.get(key);
+      return {
+        concept_id: fromCatalog?.id ?? null,
+        concepto: fromCatalog?.label ?? rawConcepto,
+      };
+    };
+
+    if (uniqueToInsert.length) {
     const tx = uniqueToInsert.map((m) => ({
-      ...(() => {
-        const rawConcepto = String(m.category_name ?? "").trim();
-        const key = normalizarEtiquetaConcepto(rawConcepto);
-        const fromCatalog = etiquetaExcluidaParaAutoVinculo(key)
-          ? undefined
-          : conceptByLabel.get(key);
-        return {
-          concept_id: fromCatalog?.id ?? null,
-          concepto: fromCatalog?.label ?? rawConcepto,
-        };
-      })(),
+      ...conceptoDesdeExcel(String(m.category_name ?? "")),
       id: randomUUID(),
       organization_id: orgId,
       account_id: null,
@@ -461,6 +450,32 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: supabaseErrorMessage(upsertError) }, { status: 500 });
       }
     }
+    }
+
+    for (const { txId, m } of uniqueToUpdate) {
+      const mapped = conceptoDesdeExcel(String(m.category_name ?? ""));
+      const patch: Record<string, unknown> = {
+        date: m.date,
+        amount: m.amount,
+        description: m.description,
+        counterparty: m.counterparty,
+        payment_method: m.payment_method,
+        origen_cuenta: m.account_name ?? "",
+        concepto: mapped.concepto,
+        external_ref: m.external_ref,
+        import_batch_id: batchId,
+        dedupe_hash: m.dedupe_hash,
+      };
+      if (mapped.concept_id) patch.concept_id = mapped.concept_id;
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update(patch)
+        .eq("id", txId)
+        .eq("organization_id", orgId);
+      if (updateError) {
+        return NextResponse.json({ error: supabaseErrorMessage(updateError) }, { status: 500 });
+      }
+    }
   }
 
   await supabase
@@ -478,7 +493,8 @@ export async function POST(request: Request) {
       validRows: parsed.validRows,
       invalidRows: parsed.invalidRows,
       inserted: uniqueToInsert.length,
-      duplicates: parsed.validRows - uniqueToInsert.length,
+      updated: uniqueToUpdate.length,
+      duplicates: parsed.validRows - uniqueToInsert.length - uniqueToUpdate.length,
     },
   });
 
@@ -486,7 +502,8 @@ export async function POST(request: Request) {
       batchId,
       ...parsed,
       inserted: uniqueToInsert.length,
-      duplicates: parsed.validRows - uniqueToInsert.length,
+      updated: uniqueToUpdate.length,
+      duplicates: parsed.validRows - uniqueToInsert.length - uniqueToUpdate.length,
     });
   } catch (error) {
     return NextResponse.json(

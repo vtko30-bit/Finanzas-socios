@@ -11,6 +11,7 @@ type ImportResult = {
   invalidRows: number;
   inserted: number;
   duplicates: number;
+  updated?: number;
   detectedGroupedByDay?: boolean;
   groupedDailyRows?: number;
   skippedVentasDuplicateRows?: number;
@@ -164,14 +165,22 @@ export default function ImportarPage() {
         );
         return;
       }
-      if (importData.inserted === 0 && importData.validRows > 0) {
+      if (importData.inserted === 0 && (importData.updated ?? 0) === 0 && importData.validRows > 0) {
         setStatus(
           "No se agregaron movimientos nuevos: todas las filas válidas ya existen (duplicadas) o repetidas dentro del mismo archivo.",
         );
         return;
       }
-      setStatus("Importación de gastos y egresos finalizada.");
-      setSuccessMessage("La importación de gastos y egresos terminó correctamente.");
+      setStatus(
+        (importData.updated ?? 0) > 0 && importData.inserted === 0
+          ? "Se actualizaron los movimientos que ya existían (mismo Id)."
+          : "Importación de gastos y egresos finalizada.",
+      );
+      setSuccessMessage(
+        (importData.updated ?? 0) > 0 && importData.inserted === 0
+          ? "Se actualizaron los gastos y egresos con el Excel."
+          : "La importación de gastos y egresos terminó correctamente.",
+      );
       invalidateMainNavCaches();
       setShowSuccessModal(true);
     } catch (error) {
@@ -771,15 +780,14 @@ export default function ImportarPage() {
         <h2 className="font-semibold text-sky-950">Archivos repetidos y datos nuevos</h2>
         <ul className="mt-2 list-inside list-disc space-y-1 text-slate-700">
           <li>
-            La app reconoce si el Excel es <strong className="font-medium text-slate-900">idéntico</strong> al que ya
-            importaste (por el contenido del archivo, no solo por el nombre). En ese caso no se importa de nuevo.
+            Si vuelves a subir el mismo Excel o uno con los mismos Id, las filas{" "}
+            <strong className="font-medium text-slate-900">no se duplican</strong>: se actualizan
+            concepto, origen, descripción, monto y destino.
           </li>
           <li>
-            Si <strong className="font-medium text-slate-900">agregaste filas o cambiaste datos</strong> y guardaste el
-            archivo, el contenido cambia: se puede importar otra vez. Las filas con el mismo Id de origen se omiten; si
-            una fila es <strong className="font-medium text-slate-900">idéntica en datos</strong> a un movimiento ya
-            cargado pero con Id distinto, la app te pedirá confirmar si es duplicado o un pago nuevo (p. ej. transferencias
-            por lote con el mismo monto y proveedor).
+            Si <strong className="font-medium text-slate-900">agregaste filas nuevas</strong>, esas sí se
+            insertan. Si una fila es idéntica en datos a un movimiento ya cargado pero con Id distinto, la app te
+            pedirá confirmar si es duplicado o un pago nuevo (p. ej. transferencias por lote).
           </li>
           <li>
             Puedes volver a subir un archivo con el <strong className="font-medium text-slate-900">mismo nombre</strong>{" "}
@@ -1010,7 +1018,8 @@ export default function ImportarPage() {
             <li>Filas válidas: {result.validRows}</li>
             <li>Filas inválidas: {result.invalidRows}</li>
             <li>Nuevas insertadas: {result.inserted}</li>
-            <li>Duplicadas omitidas (mismo Id en base): {result.duplicates}</li>
+            <li>Actualizadas (mismo Id): {result.updated ?? 0}</li>
+            <li>Duplicadas omitidas: {result.duplicates}</li>
             {result.detectedGroupedByDay ? (
               <li>
                 Formato detectado: ventas agrupadas por día ({result.groupedDailyRows ?? 0} fila(s)).
