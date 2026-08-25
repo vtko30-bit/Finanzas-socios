@@ -2,6 +2,7 @@ import {
   relId,
   relIds,
   resolveIncluded,
+  resolveRel,
 } from "@/lib/fudo/client";
 import type {
   FudoBranch,
@@ -212,23 +213,6 @@ export function mapProductsToCatalogoRows(
   return rows.sort((a, b) => a.Nombre.localeCompare(b.Nombre, "es"));
 }
 
-function firstIncluded(
-  resource: FudoJsonApiResource,
-  included: FudoJsonApiResource[] | undefined,
-  relNames: string[],
-  types: string[],
-) {
-  for (const name of relNames) {
-    const id = relId(resource, name);
-    if (!id) continue;
-    for (const t of types) {
-      const found = resolveIncluded(included, t, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 export function mapExpensesToGastoRows(
   branch: FudoBranch,
   response: FudoListResponse,
@@ -240,23 +224,23 @@ export function mapExpensesToGastoRows(
     const attrs = expense.attributes ?? {};
     if (attrs.canceled === true) continue;
 
-    const cat = firstIncluded(
+    const cat = resolveRel(
       expense,
       included,
       ["expenseCategory", "expense-category", "category"],
-      ["ExpenseCategory", "expense-category"],
+      "ExpenseCategory",
     );
-    const provider = firstIncluded(
+    const provider = resolveRel(
       expense,
       included,
       ["provider", "supplier"],
-      ["Provider", "provider", "supplier"],
+      "Provider",
     );
-    const pm = firstIncluded(
+    const pm = resolveRel(
       expense,
       included,
       ["paymentMethod", "payment-method"],
-      ["PaymentMethod", "payment-method"],
+      "PaymentMethod",
     );
 
     const categoria = asString(cat?.attributes?.name);

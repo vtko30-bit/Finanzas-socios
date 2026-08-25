@@ -148,7 +148,11 @@ async function fetchExistingFudoExpenseRows(
     for (const row of data ?? []) {
       const source = String(row.source ?? "").trim().toLowerCase();
       const origen = String(row.origen_cuenta ?? "").trim().toLowerCase();
-      if (source !== FUDO_GASTOS_SOURCE && !labels.has(origen)) continue;
+      const looksFudo =
+        source === FUDO_GASTOS_SOURCE ||
+        labels.has(origen) ||
+        origen.startsWith("fudo ");
+      if (!looksFudo) continue;
       const key = String(row.source_id ?? "")
         .trim()
         .replace(/\s+/g, "")
@@ -245,15 +249,11 @@ export async function syncGastosFudoFromRange(
   for (const m of unique) {
     const idKey = m.source_id.trim().replace(/\s+/g, "").toUpperCase();
     const existing = idKey ? existingRows.get(idKey) : undefined;
-    if (existing?.source === FUDO_GASTOS_SOURCE) {
+    if (existing) {
       uniqueToUpdate.push({ txId: existing.id, m });
       continue;
     }
     if (existingHashes.has(m.dedupe_hash)) continue;
-    if (existing) {
-      skippedExistingId += 1;
-      continue;
-    }
     if (blocked.has(m.date)) {
       skippedLocked += 1;
       continue;
@@ -348,6 +348,7 @@ export async function syncGastosFudoFromRange(
           payment_method: m.payment_method,
           origen_cuenta: m.account_name,
           concepto: m.category_name,
+          source: FUDO_GASTOS_SOURCE,
           dedupe_hash: m.dedupe_hash,
         })
         .eq("id", txId)

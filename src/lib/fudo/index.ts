@@ -1,4 +1,10 @@
-export { FudoClient, relId, relIds, resolveIncluded } from "@/lib/fudo/client";
+export {
+  FudoClient,
+  relId,
+  relIds,
+  resolveIncluded,
+  resolveRel,
+} from "@/lib/fudo/client";
 export {
   getActiveFudoSucursales,
   loadFudoSucursales,

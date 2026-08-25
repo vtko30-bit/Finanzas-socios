@@ -12,10 +12,15 @@ type TokenState = {
   expMs: number;
 };
 
+function normalizeType(t: string) {
+  return t.replace(/[-_\s]/g, "").toLowerCase();
+}
+
 function includedIndex(included: FudoJsonApiResource[] | undefined) {
   const map = new Map<string, FudoJsonApiResource>();
   for (const item of included ?? []) {
     map.set(`${item.type}:${item.id}`, item);
+    map.set(`${normalizeType(item.type)}:${item.id}`, item);
   }
   return map;
 }
@@ -26,26 +31,72 @@ export function resolveIncluded(
   id: string | undefined | null,
 ): FudoJsonApiResource | null {
   if (!id) return null;
-  return includedIndex(included).get(`${type}:${id}`) ?? null;
+  const idx = includedIndex(included);
+  return (
+    idx.get(`${type}:${id}`) ??
+    idx.get(`${normalizeType(type)}:${id}`) ??
+    null
+  );
+}
+
+function relationshipData(
+  resource: FudoJsonApiResource,
+  name: string,
+) {
+  const rels = resource.relationships;
+  if (!rels) return undefined;
+  if (rels[name]) return rels[name].data;
+  const wanted = normalizeType(name);
+  for (const [key, rel] of Object.entries(rels)) {
+    if (normalizeType(key) === wanted) return rel.data;
+  }
+  return undefined;
+}
+
+export function relRef(
+  resource: FudoJsonApiResource,
+  name: string,
+): { type: string; id: string } | null {
+  const data = relationshipData(resource, name);
+  if (!data || Array.isArray(data) || !data.id) return null;
+  return { type: data.type, id: data.id };
 }
 
 export function relId(
   resource: FudoJsonApiResource,
   name: string,
 ): string | null {
-  const data = resource.relationships?.[name]?.data;
-  if (!data || Array.isArray(data)) return null;
-  return data.id ?? null;
+  return relRef(resource, name)?.id ?? null;
 }
 
 export function relIds(
   resource: FudoJsonApiResource,
   name: string,
 ): string[] {
-  const data = resource.relationships?.[name]?.data;
+  const data = relationshipData(resource, name);
   if (!data) return [];
   if (Array.isArray(data)) return data.map((d) => d.id);
-  return [data.id];
+  return data.id ? [data.id] : [];
+}
+
+/** Resuelve un include usando el type que manda Fudo en la relación. */
+export function resolveRel(
+  resource: FudoJsonApiResource,
+  included: FudoJsonApiResource[] | undefined,
+  names: string[],
+  fallbackType?: string,
+): FudoJsonApiResource | null {
+  for (const name of names) {
+    const ref = relRef(resource, name);
+    if (!ref) continue;
+    const hit =
+      resolveIncluded(included, ref.type, ref.id) ??
+      (fallbackType
+        ? resolveIncluded(included, fallbackType, ref.id)
+        : null);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 export class FudoClient {
@@ -195,6 +246,12 @@ export class FudoClient {
       "filter[date]": `and(gte.${fromDate},lte.${toDate})`,
       "filter[canceled]": "neq.true",
       include: "expenseCategory,paymentMethod,provider,cashRegister",
+      "fields[expense]":
+        "amount,canceled,date,description,comment,status,receiptNumber,createdAt,useInCashCount,expenseCategory,provider,paymentMethod,cashRegister",
+      "fields[expenseCategory]": "name",
+      "fields[paymentMethod]": "name,code",
+      "fields[provider]": "name",
+      "fields[cashRegister]": "name",
     });
   }
 
