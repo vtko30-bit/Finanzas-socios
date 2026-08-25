@@ -62,7 +62,10 @@ export async function POST(request: Request) {
       trigger: "manual",
     });
     if (result.errors.length && result.fetched === 0 && result.inserted === 0) {
-      return NextResponse.json(result, { status: 502 });
+      return NextResponse.json(
+        { ...result, error: result.errors.join(" · ") },
+        { status: 502 },
+      );
     }
     return NextResponse.json(result);
   } catch (e) {

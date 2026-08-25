@@ -247,7 +247,7 @@ export class FudoClient {
       "filter[canceled]": "neq.true",
       include: "expenseCategory,paymentMethod,provider,cashRegister",
       "fields[expense]":
-        "amount,canceled,date,description,comment,status,receiptNumber,createdAt,useInCashCount,expenseCategory,provider,paymentMethod,cashRegister",
+        "amount,canceled,date,description,status,receiptNumber,createdAt,useInCashCount,expenseCategory,provider,paymentMethod,cashRegister",
       "fields[expenseCategory]": "name",
       "fields[paymentMethod]": "name,code",
       "fields[provider]": "name",

@@ -105,6 +105,11 @@ export default function ImportarPage() {
     const parts = [data.error, data.details, data.hint]
       .map((x) => (typeof x === "string" ? x.trim() : ""))
       .filter(Boolean);
+    if (Array.isArray(data.errors)) {
+      for (const e of data.errors) {
+        if (typeof e === "string" && e.trim()) parts.push(e.trim());
+      }
+    }
     const base = parts.join(" — ");
     const code =
       typeof data.code === "string" && data.code.trim()
