@@ -7,6 +7,7 @@ import type {
   ResumenPivotPorSucursalPayload,
 } from "@/lib/resumen-pivot-core";
 import { medioPagoResumenParaExport } from "@/lib/forma-pago";
+import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
 import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
@@ -151,6 +152,7 @@ export async function fetchTransaccionesParaExporte(args: {
     const page = (data ?? []) as TxExportRow[];
 
     for (const row of page) {
+      if (!fudoCuentaEnResultado(row.source, row.payment_method)) continue;
       if (args.vista === "excluidos") {
         const fid = familyIdDesdeRawTx({
           concept_catalog: row.concept_catalog ?? null,

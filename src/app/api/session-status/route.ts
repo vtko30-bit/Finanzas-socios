@@ -19,7 +19,7 @@ export async function GET() {
   if (!member) {
     return NextResponse.json({
       level: "yellow",
-      message: "Autenticado, pero sin organización. Crea la organización inicial.",
+      message: "Autenticado, pero sin organización. Configura la empresa en el menú Empresa.",
     });
   }
 

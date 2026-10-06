@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
+import * as XLSX from "xlsx";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 import {
@@ -83,6 +84,47 @@ function fechaMovilCorta(iso: string): string {
   const s = String(iso).trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return iso;
   return `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}`;
+}
+
+function exportarGastosFiltradosXlsx(
+  rows: GastoRow[],
+  catalogo: CatalogFamily[],
+) {
+  const data = rows.map((r) => ({
+    Fecha: String(r.fecha ?? "").slice(0, 10),
+    Origen: r.origen || "",
+    "Id origen": r.idOrigen || "",
+    "Nro operación": r.nroOperacion || "",
+    "Nombre destino": r.nombreDestino || "",
+    Descripción: r.descripcion || "",
+    Monto: Number(r.monto) || 0,
+    Familia: (r.familia ?? "").trim() || "",
+    Categoría: categoriaDisplayLabel(r, catalogo),
+    Source: r.source || "",
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(
+    data.length
+      ? data
+      : [
+          {
+            Fecha: "",
+            Origen: "",
+            "Id origen": "",
+            "Nro operación": "",
+            "Nombre destino": "",
+            Descripción: "",
+            Monto: 0,
+            Familia: "",
+            Categoría: "",
+            Source: "",
+          },
+        ],
+  );
+  XLSX.utils.book_append_sheet(wb, ws, "Gastos");
+  const stamp = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `gastos-filtrados-${stamp}.xlsx`);
 }
 
 function esConceptoVacioOPlaceholder(texto: string) {
@@ -1679,6 +1721,7 @@ function GastosPageContent() {
         error?: string;
         expected_total?: number;
         transaction_amount?: number;
+        late_fee_amount?: number;
       };
       if (!res.ok) {
         mostrarAviso(data.error || "No se pudo registrar");
@@ -1686,11 +1729,15 @@ function GastosPageContent() {
       }
       if (reconcileModal.alreadyPaid) {
         mostrarAviso(
-          "Movimiento vinculado a una cuota ya pagada. No se modificaron montos, solo la trazabilidad.",
+          "Movimiento vinculado a una cuota ya pagada. Dejó de aparecer en Gastos.",
+        );
+      } else if (data.late_fee_amount && data.late_fee_amount > 0) {
+        mostrarAviso(
+          `Movimiento conciliado. Diferencia por atraso (${formatClp(data.late_fee_amount)}) registrada como mora operativa.`,
         );
       } else {
         mostrarAviso(
-          "Movimiento conciliado: se registró el pago de la cuota y se eliminó el egreso importado.",
+          "Movimiento conciliado: se registró el pago de la cuota y el egreso importado dejó de aparecer en Gastos.",
         );
       }
       setReconcileModal(null);
@@ -1945,6 +1992,29 @@ function GastosPageContent() {
               </span>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="ui-btn-soft-2xs"
+                disabled={filasTrasSeleccion.length === 0}
+                title={
+                  filasTrasSeleccion.length === 0
+                    ? "No hay gastos para exportar con el filtro actual"
+                    : `Exportar ${filasTrasSeleccion.length} gasto(s) filtrado(s) a Excel`
+                }
+                onClick={() => {
+                  exportarGastosFiltradosXlsx(filasTrasSeleccion, catalogo);
+                  mostrarAviso(
+                    `Excel exportado: ${filasTrasSeleccion.length} gasto(s).`,
+                  );
+                }}
+              >
+                Exportar Excel
+                {filasTrasSeleccion.length > 0 ? (
+                  <span className="ml-0.5 text-[10px] opacity-90">
+                    ({filasTrasSeleccion.length})
+                  </span>
+                ) : null}
+              </button>
               <button
                 type="button"
                 className="ui-btn-soft-2xs"
@@ -2507,7 +2577,7 @@ function GastosPageContent() {
                   type="button"
                   className="rounded border border-indigo-700 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
                   disabled={uiBloqueadoGuardado}
-                  title="Marcar este egreso importado como correspondiente a una cuota ya pagada (no modifica montos, solo vincula)"
+                  title="Marcar este egreso importado como correspondiente a una cuota ya pagada. Deja de aparecer en Gastos."
                   onClick={() => {
                     setReconcileModal({
                       transactionId: detailRow.id,
@@ -2562,14 +2632,15 @@ function GastosPageContent() {
                   {reconcileModal.alreadyPaid ? (
                     <>
                       {" "}
-                      No se modifican montos: el movimiento se marcará como relacionado a una
-                      cuota ya pagada del crédito para trazabilidad.
+                      No se modifican montos: el movimiento se marca como cuota ya pagada y deja de aparecer en Gastos.
                     </>
                   ) : (
                     <>
                       {" "}
-                      El movimiento se eliminará y se crearán interés, comisión y capital con la
-                      misma fecha y referencias. El monto debe coincidir con el total de la cuota.
+                      Se registrará el pago (interés, comisión y capital) y el
+                      egreso de la cartola dejará de aparecer en Gastos. Si
+                      pagaste con atraso y el banco cobró de más, la diferencia
+                      se registra como mora operativa.
                     </>
                   )}
                 </p>
@@ -2632,14 +2703,25 @@ function GastosPageContent() {
                   ) : null}
                   {cuotaPreviewTotal != null &&
                   reconcileModal &&
-                  Math.abs(
-                    Math.round(cuotaPreviewTotal) -
-                      Math.round(reconcileModal.monto),
-                  ) > 1 ? (
+                  Math.round(reconcileModal.monto) <
+                    Math.round(cuotaPreviewTotal) - 1 ? (
+                    <p className="mt-2 rounded border border-rose-300 bg-rose-50 px-2 py-1.5 text-xs text-rose-900">
+                      El movimiento es menor que la cuota; no se puede
+                      conciliar un pago incompleto por esta vía.
+                    </p>
+                  ) : null}
+                  {cuotaPreviewTotal != null &&
+                  reconcileModal &&
+                  Math.round(reconcileModal.monto) >
+                    Math.round(cuotaPreviewTotal) + 1 ? (
                     <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-                      El total de la cuota no coincide con el monto del
-                      movimiento; la conciliación será rechazada hasta que
-                      coincidan.
+                      El movimiento es mayor que la cuota (
+                      {formatClp(
+                        Math.round(reconcileModal.monto) -
+                          Math.round(cuotaPreviewTotal),
+                      )}{" "}
+                      de diferencia). Se asumirá mora/atraso y se conciliará
+                      igual.
                     </p>
                   ) : null}
                 </div>

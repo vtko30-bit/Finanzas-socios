@@ -13,12 +13,14 @@ type Capabilities = {
   /** Usuario autenticado con organización y rol owner (puede importar, editar, borrar). */
   canWrite: boolean;
   role: string | null;
+  refresh: () => void;
 };
 
 const defaultValue: Capabilities = {
   loading: true,
   canWrite: false,
   role: null,
+  refresh: () => {},
 };
 
 const OrgCapabilitiesContext = createContext<Capabilities>(defaultValue);
@@ -44,11 +46,12 @@ export function OrgCapabilitiesProvider({
             loading: false,
             canWrite: ok && data.canWrite === true,
             role: typeof data.role === "string" ? data.role : null,
+            refresh,
           });
         },
       )
       .catch(() =>
-        setState({ loading: false, canWrite: false, role: null }),
+        setState({ loading: false, canWrite: false, role: null, refresh }),
       );
   }, []);
 

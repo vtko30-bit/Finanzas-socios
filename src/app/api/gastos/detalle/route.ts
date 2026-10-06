@@ -6,6 +6,8 @@ import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
 } from "@/lib/org-excluded-families-db";
+import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
+import { esEgresoImportadoConciliadoConCredito } from "@/lib/reconcilable-import-source";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
@@ -107,7 +109,14 @@ export async function GET(request: Request) {
     if (!uniqueById.has(tx.id)) uniqueById.set(tx.id, raw);
   }
 
-  const merged = Array.from(uniqueById.values());
+  const merged = Array.from(uniqueById.values()).filter(
+    (raw) =>
+      !esEgresoImportadoConciliadoConCredito(raw) &&
+      fudoCuentaEnResultado(
+        (raw as { source?: unknown }).source,
+        (raw as { payment_method?: unknown }).payment_method,
+      ),
+  );
   const deduped =
     sourceExact.length > 0
       ? merged

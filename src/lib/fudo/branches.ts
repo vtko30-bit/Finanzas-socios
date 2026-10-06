@@ -1,14 +1,20 @@
 import type { FudoCredentials } from "@/lib/fudo/types";
 
-/** Nombre visible en Excel / Finanzas (ej. Rg, Happy). */
+/** Nombre visible en Excel / Finanzas (ej. Rg, Happy, Evento Ramadas 2026). */
 export type FudoBranch = string;
 
+export type FudoSourceKind = "branch" | "event";
+
 export type FudoSucursal = {
-  /** id técnico en env: rg, happy, … */
+  /** id técnico en env: rg, happy, ramadasrg2026… */
   id: string;
   /** Etiqueta estable para reportes */
   label: FudoBranch;
+  /** Sucursal fija vs evento puntual (Ramadas, Exponor, …). */
+  kind: FudoSourceKind;
   active: boolean;
+  /** Si está definido (YYYY-MM-DD Chile), deja de sincronizarse después de esa fecha. */
+  until: string | null;
   credentials: FudoCredentials;
 };
 
@@ -26,17 +32,52 @@ function defaultLabel(id: string): string {
   return id.charAt(0).toUpperCase() + id.slice(1).toLowerCase();
 }
 
+function parseKind(
+  raw: string | undefined,
+  id: string,
+  label: string,
+): FudoSourceKind {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "event" || v === "evento" || v === "events") return "event";
+  if (v === "branch" || v === "sucursal" || v === "fixed") return "branch";
+  const hint = `${id} ${label}`.toLowerCase();
+  if (
+    hint.includes("evento") ||
+    hint.includes("event") ||
+    hint.includes("ramadas") ||
+    hint.includes("exponor")
+  ) {
+    return "event";
+  }
+  return "branch";
+}
+
+function todaySantiago(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function isWithinUntil(until: string | null, today = todaySantiago()): boolean {
+  if (!until) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) return true;
+  return today <= until;
+}
+
 /**
- * Lee sucursales desde env.
+ * Lee sucursales/eventos desde env.
  *
- * - `FUDO_BRANCHES=rg,happy` (activas a considerar; default rg,happy)
+ * - `FUDO_BRANCHES=rg,happy,ramadasrg2026`
  * - Por cada id `X`:
- *   - `FUDO_X_API_KEY` / `FUDO_X_API_SECRET` (obligatorias si active)
- *   - `FUDO_X_LABEL` (opcional; default Rg/Happy/…)
- *   - `FUDO_X_ACTIVE=true|false` (default true)
+ *   - `FUDO_X_API_KEY` / `FUDO_X_API_SECRET`
+ *   - `FUDO_X_LABEL` / `FUDO_X_ACTIVE`
+ *   - `FUDO_X_KIND=branch|event`
+ *   - `FUDO_X_UNTIL=YYYY-MM-DD` (apaga el evento después)
  *
- * Dar de baja: `FUDO_HAPPY_ACTIVE=false` (o quitarla de FUDO_BRANCHES).
- * Alta: agregar id a FUDO_BRANCHES + key/secret.
+ * El cron diario solo sincroniza `kind=branch`. Los eventos se sync manual.
  */
 export function loadFudoSucursales(
   env: NodeJS.ProcessEnv = process.env,
@@ -55,16 +96,21 @@ export function loadFudoSucursales(
     if (seen.has(id)) continue;
     seen.add(id);
     const prefix = `FUDO_${id.toUpperCase()}`;
-    const active = envFlag(env[`${prefix}_ACTIVE`], true);
+    const label = env[`${prefix}_LABEL`]?.trim() || defaultLabel(id);
+    const kind = parseKind(env[`${prefix}_KIND`], id, label);
+    const untilRaw = env[`${prefix}_UNTIL`]?.trim() || "";
+    const until = /^\d{4}-\d{2}-\d{2}$/.test(untilRaw) ? untilRaw : null;
+    const flaggedActive = envFlag(env[`${prefix}_ACTIVE`], true);
+    const active = flaggedActive && isWithinUntil(until);
     const apiKey = env[`${prefix}_API_KEY`]?.trim() ?? "";
     const apiSecret = env[`${prefix}_API_SECRET`]?.trim() ?? "";
-    const label =
-      env[`${prefix}_LABEL`]?.trim() || defaultLabel(id);
 
     out.push({
       id,
       label,
+      kind,
       active,
+      until,
       credentials: { apiKey, apiSecret },
     });
   }
@@ -72,11 +118,21 @@ export function loadFudoSucursales(
   return out;
 }
 
+export type GetActiveFudoOptions = {
+  includeEvents?: boolean;
+};
+
 export function getActiveFudoSucursales(
   env: NodeJS.ProcessEnv = process.env,
+  options: GetActiveFudoOptions = {},
 ): FudoSucursal[] {
+  const includeEvents = options.includeEvents !== false;
   const all = loadFudoSucursales(env);
-  const active = all.filter((s) => s.active);
+  const active = all.filter((s) => {
+    if (!s.active) return false;
+    if (!includeEvents && s.kind === "event") return false;
+    return true;
+  });
   const missing = active.filter(
     (s) => !s.credentials.apiKey || !s.credentials.apiSecret,
   );
@@ -89,7 +145,7 @@ export function getActiveFudoSucursales(
   }
   if (!active.length) {
     throw new Error(
-      "No hay sucursales Fudo activas. Revisa FUDO_BRANCHES y FUDO_*_ACTIVE.",
+      "No hay sucursales/eventos Fudo activos. Revisa FUDO_BRANCHES y FUDO_*_ACTIVE.",
     );
   }
   return active;

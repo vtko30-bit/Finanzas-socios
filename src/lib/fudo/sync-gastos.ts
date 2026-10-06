@@ -181,7 +181,9 @@ export async function syncGastosFudoFromRange(
   const rangeErr = assertGastosSyncRange(params.fromDate, params.toDate);
   if (rangeErr) throw new Error(rangeErr);
 
-  const sucursales = getActiveFudoSucursales();
+  const sucursales = getActiveFudoSucursales(process.env, {
+    includeEvents: params.trigger !== "cron",
+  });
   const expFrom = addDays(params.fromDate, -1);
   const expTo = addDays(params.toDate, 1);
 

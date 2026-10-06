@@ -1339,9 +1339,9 @@ export default function CreditosPage() {
                 Conciliar con egreso importado
               </h3>
               <p className="mt-1 text-xs text-slate-600">
-                Use el mismo <strong>número de cuota</strong> que en «Pagar cuota». Se listan
-                egresos de planilla (origen <code className="text-[11px]">excel_…</code>) sin
-                vincular a crédito y con el mismo total que la cuota pendiente.
+                Use el mismo <strong>número de cuota</strong> que en «Pagar cuota».
+                Se listan egresos de planilla sin vincular, con el mismo total o
+                un poco mayor (mora por atraso).
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button

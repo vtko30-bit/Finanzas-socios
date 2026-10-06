@@ -8,8 +8,8 @@ const EXPENSE_TYPES = new Set(["expense", "gasto", "egreso"]);
 
 /**
  * Marca un egreso existente (normalmente importado) como cuota ya pagada de un crédito.
- * No crea ni elimina transacciones, solo setea credit_id y credit_component = 'cuota'
- * para trazabilidad, validando que la cuota ya está pagada.
+ * No crea ni elimina transacciones: setea credit_id, credit_component = 'cuota'
+ * y flow_kind = financiamiento para que deje de aparecer en Gastos.
  */
 export async function POST(
   request: Request,
@@ -130,6 +130,7 @@ export async function POST(
     .update({
       credit_id: creditId,
       credit_component: "cuota",
+      flow_kind: "financiamiento",
     })
     .eq("id", transactionId)
     .eq("organization_id", orgId);

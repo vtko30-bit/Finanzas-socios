@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { isMissingRpcError } from "@/lib/supabase-rpc-fallback";
+import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
 
 function lastDayOfCalendarMonth(yearMonth: string): string {
   const [ys, ms] = yearMonth.split("-");
@@ -15,12 +16,13 @@ function lastDayOfCalendarMonth(yearMonth: string): string {
 
 /** Misma lógica que `dashboard_metrics` en SQL (ingreso vs resto). */
 function aggregateAmounts(
-  rows: { amount: unknown; type: string }[] | null,
+  rows: { amount: unknown; type: string; source?: unknown; payment_method?: unknown }[] | null,
 ): { income: number; expense: number; count: number } {
   let income = 0;
   let expense = 0;
   let count = 0;
   for (const r of rows ?? []) {
+    if (!fudoCuentaEnResultado(r.source, r.payment_method)) continue;
     count++;
     const amt = Number(r.amount) || 0;
     if (r.type === "income") income += amt;
@@ -29,30 +31,44 @@ function aggregateAmounts(
   return { income, expense, count };
 }
 
+async function fetchOperativoPaged(
+  supabase: SupabaseClient,
+  orgId: string,
+  range?: { from: string; to: string },
+) {
+  const out: { amount: unknown; type: string; source?: unknown; payment_method?: unknown }[] = [];
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    let q = supabase
+      .from("transactions")
+      .select("amount, type, source, payment_method")
+      .eq("organization_id", orgId)
+      .eq("flow_kind", "operativo")
+      .or("credit_id.is.null,source.eq.creditos")
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (range) q = q.gte("date", range.from).lte("date", range.to);
+    const { data, error } = await q;
+    if (error) throw error;
+    const page = data ?? [];
+    out.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+  return out;
+}
+
 async function dashboardMetricsFallback(
   supabase: SupabaseClient,
   orgId: string,
   monthStart: string,
   monthEnd: string,
 ) {
-  const { data: monthRows, error: e1 } = await supabase
-    .from("transactions")
-    .select("amount, type")
-    .eq("organization_id", orgId)
-    .eq("flow_kind", "operativo")
-    .gte("date", monthStart)
-    .lte("date", monthEnd);
-
-  if (e1) throw e1;
-
-  const { data: totalRows, error: e2 } = await supabase
-    .from("transactions")
-    .select("amount, type")
-    .eq("organization_id", orgId)
-    .eq("flow_kind", "operativo");
-
-  if (e2) throw e2;
-
+  const [monthRows, totalRows] = await Promise.all([
+    fetchOperativoPaged(supabase, orgId, { from: monthStart, to: monthEnd }),
+    fetchOperativoPaged(supabase, orgId),
+  ]);
   return {
     month: aggregateAmounts(monthRows),
     total: aggregateAmounts(totalRows),
@@ -79,11 +95,17 @@ export async function GET() {
   const monthStart = `${yearMonth}-01`;
   const monthEnd = lastDayOfCalendarMonth(yearMonth);
 
-  const rpc = await supabase.rpc("dashboard_metrics", {
-    p_org_id: member.organization_id,
-    p_month_start: monthStart,
-    p_month_end: monthEnd,
+  const reglaFudo = await supabase.rpc("fudo_cuenta_en_resultado", {
+    p_source: "banco",
+    p_payment_method: "transferencia",
   });
+  const rpc = reglaFudo.error
+    ? { data: null, error: reglaFudo.error }
+    : await supabase.rpc("dashboard_metrics", {
+        p_org_id: member.organization_id,
+        p_month_start: monthStart,
+        p_month_end: monthEnd,
+      });
 
   let raw: unknown = rpc.data;
   if (rpc.error) {

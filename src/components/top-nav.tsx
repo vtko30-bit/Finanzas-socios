@@ -20,8 +20,10 @@ const NAV_BASE: NavItem[] = [
   { href: "/analisis", label: "Análisis" },
   { href: "/gastos-pago-servicios", label: "Pago de Servicios" },
   { href: "/creditos", label: "Créditos" },
+  { href: "/pagos-recurrentes", label: "Pagos recurrentes" },
   { href: "/prestamos-otorgados", label: "Préstamos" },
   { href: "/inversiones", label: "Inversiones" },
+  { href: "/empresa", label: "Empresa" },
   { href: "/categorias", label: "Categorías" },
   { href: "/familias", label: "Familias" },
   { href: "/movimientos-excluidos", label: "Excluidos" },
@@ -72,19 +74,19 @@ export function TopNav() {
 
   return (
     <header className="w-full bg-[#0056ff] text-white shadow-md">
-      <div className="mx-auto flex w-full max-w-5xl min-w-0 items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="mx-auto flex w-full max-w-5xl min-w-0 items-center justify-between gap-2 px-3 py-1.5 sm:gap-4 sm:px-6 sm:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
           <div ref={rootRef} className="relative shrink-0">
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/20"
+              className="inline-flex items-center gap-1 rounded-lg border border-white/25 bg-white/10 px-1.5 py-1 text-sm font-medium text-white transition hover:bg-white/20 sm:gap-2 sm:px-3 sm:py-1.5"
               aria-expanded={open}
               aria-haspopup="true"
               aria-controls="top-nav-menu"
               onClick={() => setOpen((v) => !v)}
             >
-              <Menu className="h-4 w-4" aria-hidden />
-              Menú
+              <Menu className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+              <span className="hidden sm:inline">Menú</span>
             </button>
 
             {open ? (
@@ -122,10 +124,10 @@ export function TopNav() {
             ) : null}
           </div>
 
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
             <Link
               href="/"
-              className="min-w-0 truncate text-lg font-bold tracking-tight text-white hover:text-white/90"
+              className="whitespace-nowrap text-[15px] font-bold leading-tight tracking-tight text-white hover:text-white/90 sm:text-lg"
             >
               Finanzas Rg
             </Link>
@@ -133,14 +135,14 @@ export function TopNav() {
               href={RG_SUITE_URL}
               title="Volver al inicio — aplicaciones"
               aria-label="Volver al inicio"
-              className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-white/85 transition hover:bg-white/15 hover:text-white"
+              className="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-white/85 transition hover:bg-white/15 hover:text-white sm:p-1.5"
             >
-              <Home className="h-4 w-4" aria-hidden />
+              <Home className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
             </a>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {authReady && authenticated ? (
             <>
               <span
@@ -152,20 +154,22 @@ export function TopNav() {
               <button
                 type="button"
                 onClick={() => void signOut()}
-                className="rounded-lg border border-white/30 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/15"
+                className="rounded-lg border border-white/30 px-2 py-1 text-[10px] font-medium text-white transition hover:bg-white/15 sm:px-3 sm:py-1.5 sm:text-sm"
               >
-                Cerrar sesión
+                <span className="sm:hidden">Salir</span>
+                <span className="hidden sm:inline">Cerrar sesión</span>
               </button>
             </>
           ) : authReady ? (
             <Link
               href="/login"
-              className="rounded-lg border border-white/30 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/15"
+              className="rounded-lg border border-white/30 px-2 py-1 text-[10px] font-medium text-white transition hover:bg-white/15 sm:px-3 sm:py-1.5 sm:text-sm"
             >
-              Iniciar sesión
+              <span className="sm:hidden">Entrar</span>
+              <span className="hidden sm:inline">Iniciar sesión</span>
             </Link>
           ) : (
-            <span className="text-sm text-white/70">Verificando sesión…</span>
+            <span className="text-xs text-white/70 sm:text-sm">Verificando…</span>
           )}
         </div>
       </div>

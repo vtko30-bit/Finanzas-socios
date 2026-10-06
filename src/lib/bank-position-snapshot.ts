@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sumOutstandingCreditDebt } from "@/lib/credit-outstanding-debt";
 import {
   emptyBankPositionRows,
   mergeBankPositionRows,
@@ -12,6 +13,7 @@ export type BankPositionSnapshot = {
   updatedAt: string | null;
   rows: BankPositionRow[];
   totals: { saldoCtaCte: number; ahorro: number; efectivo: number; total: number };
+  deudaCreditos: number;
 };
 
 export async function loadLatestBankPosition(
@@ -29,6 +31,8 @@ export async function loadLatestBankPosition(
 
   if (snapErr) throw new Error(snapErr.message);
 
+  const deudaCreditos = await sumOutstandingCreditDebt(supabase, organizationId);
+
   if (!snapshot) {
     const rows = emptyBankPositionRows();
     return {
@@ -36,6 +40,7 @@ export async function loadLatestBankPosition(
       updatedAt: null,
       rows,
       totals: sumBankPositionRows(rows),
+      deudaCreditos,
     };
   }
 
@@ -67,5 +72,6 @@ export async function loadLatestBankPosition(
     updatedAt: snapshot.updated_at ?? null,
     rows,
     totals: sumBankPositionRows(rows),
+    deudaCreditos,
   };
 }

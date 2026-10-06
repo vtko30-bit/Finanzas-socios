@@ -104,6 +104,72 @@ body {
     @apply rounded border border-slate-900/20 bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-900;
   }
 
+  @media (max-width: 639px) {
+    .resumen-page {
+      @apply gap-1.5 px-2 pt-2 pb-5;
+    }
+
+    .resumen-page .page-title {
+      @apply text-[0.95rem];
+    }
+
+    .resumen-page .ui-filter-bar {
+      @apply rounded-lg p-2;
+    }
+
+    .resumen-page .ui-filter-bar select,
+    .resumen-page .ui-filter-bar input[type="date"],
+    .resumen-page .ui-filter-bar input[type="week"],
+    .resumen-page .ui-filter-bar input[type="month"],
+    .resumen-page .ui-filter-bar input[type="number"],
+    .resumen-page .ui-filter-bar button {
+      @apply h-7 text-[11px];
+    }
+
+    .resumen-page .ui-card-panel {
+      @apply overflow-visible rounded-lg;
+    }
+
+    .resumen-page .resumen-tabla-scroll {
+      @apply min-w-0 overflow-x-auto;
+    }
+
+    .resumen-page .resumen-tabla-scroll table {
+      @apply border-separate border-spacing-0;
+    }
+
+    .resumen-page .resumen-tabla-scroll th[class*="sticky"],
+    .resumen-page .resumen-tabla-scroll td[class*="sticky"] {
+      background-clip: padding-box;
+    }
+
+    .resumen-page .ui-card-panel > h2,
+    .resumen-page .ui-card-panel > div.border-b > h2,
+    .resumen-page section.overflow-x-auto > h2 {
+      @apply px-2 py-1.5 text-sm;
+    }
+
+    .resumen-page section h3 {
+      @apply px-2 py-1.5 text-xs;
+    }
+
+    .resumen-page section.overflow-x-auto > p {
+      @apply px-2 py-1 text-[10px] leading-snug;
+    }
+
+    .resumen-page .flex.flex-col.gap-5 {
+      @apply gap-2;
+    }
+
+    .resumen-page table {
+      @apply text-[10px] leading-tight;
+    }
+
+    .resumen-page .ui-btn-soft-xs {
+      @apply px-1.5 py-px text-[10px];
+    }
+  }
+
   .ui-toolbar {
     @apply rounded-xl border border-[#0046d9] bg-[#0056ff] text-white shadow-sm;
   }

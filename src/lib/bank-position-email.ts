@@ -44,6 +44,9 @@ export function bankPositionEmailHtml(
     <h1 style="margin:0 0 4px;font-size:20px;color:#1e293b;">Balance General</h1>
     <p style="margin:0 0 8px;color:#64748b;font-size:14px;">Total Balance</p>
     <p style="margin:0 0 12px;font-size:32px;font-weight:700;letter-spacing:-0.03em;">${formatCLP(t.total)}</p>
+    <p style="margin:0 0 12px;display:inline-block;background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:6px 12px;font-size:13px;color:#9f1239;">
+      Deuda (Créditos) <strong style="color:#0f172a;">${formatCLP(data.deudaCreditos ?? 0)}</strong>
+    </p>
     <p style="margin:0 0 22px;display:inline-block;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:6px 12px;font-size:13px;color:#155e75;">
       Fecha de actualización <strong style="color:#0f172a;">${fecha}</strong>
     </p>
@@ -95,6 +98,7 @@ export function bankPositionEmailText(data: BankPositionSnapshot) {
     `Fecha de actualización: ${fecha}`,
     "",
     `Total Balance: ${formatCLP(t.total)}`,
+    `Deuda (Créditos): ${formatCLP(data.deudaCreditos)}`,
     `Cta. Principal: ${formatCLP(t.saldoCtaCte)}`,
     `Ahorro Mensual: ${formatCLP(t.ahorro)}`,
     `Efectivo Disponible: ${formatCLP(t.efectivo)}`,

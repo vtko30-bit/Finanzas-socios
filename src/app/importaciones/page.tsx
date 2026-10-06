@@ -2,8 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { PeriodDuplicatesReview } from "@/components/import/period-duplicates-review";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
+
+function ymdLocal(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function firstDayOfMonthYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
 
 type HistorialItem = {
   id: string;
@@ -64,6 +74,12 @@ export default function ImportacionesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [limpiandoDups, setLimpiandoDups] = useState(false);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
+  const [dupDesde, setDupDesde] = useState(() => firstDayOfMonthYmd());
+  const [dupHasta, setDupHasta] = useState(() => ymdLocal());
+  const [periodDupReview, setPeriodDupReview] = useState<{
+    desde: string;
+    hasta: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!authenticated) return;
@@ -206,6 +222,20 @@ export default function ImportacionesPage() {
     }
   };
 
+  const abrirRevisarDuplicadosPeriodo = () => {
+    setError(null);
+    setInfoMsg(null);
+    if (!dupDesde || !dupHasta) {
+      setError("Indica fecha desde y hasta para revisar duplicados.");
+      return;
+    }
+    if (dupDesde > dupHasta) {
+      setError("La fecha «desde» no puede ser posterior a «hasta».");
+      return;
+    }
+    setPeriodDupReview({ desde: dupDesde, hasta: dupHasta });
+  };
+
   if (!ready) {
     return (
       <main className="page-main page-main--xl">
@@ -269,6 +299,46 @@ export default function ImportacionesPage() {
         <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
           {infoMsg}
         </p>
+      ) : null}
+
+      {canWrite ? (
+        <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+          <h2 className="text-sm font-semibold text-amber-950">
+            Revisar duplicados por período
+          </h2>
+          <p className="mt-1 text-xs text-amber-900/90">
+            Busca egresos con la misma fecha, monto, origen, beneficiario y cuenta (huella
+            lógica). Útil tras reimportar movimientos sin Id Origen.
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-xs text-amber-950">
+              Desde
+              <input
+                type="date"
+                value={dupDesde}
+                onChange={(e) => setDupDesde(e.target.value)}
+                className="mt-1 rounded border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+            <label className="text-xs text-amber-950">
+              Hasta
+              <input
+                type="date"
+                value={dupHasta}
+                onChange={(e) => setDupHasta(e.target.value)}
+                className="mt-1 rounded border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={abrirRevisarDuplicadosPeriodo}
+              disabled={loading || limpiandoDups}
+              className="rounded border border-amber-600 bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              Revisar duplicados
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {data && !error ? (
@@ -413,11 +483,28 @@ export default function ImportacionesPage() {
             del Excel. El ID de lote sirve para localizar movimientos (detalle de gasto). Si
             reimportaste porque un lote estaba incompleto, no elimines el lote nuevo completo: usa
             «Limpiar duplicados (Id Origen)» (conserva clasificados y filas únicas; respalda antes de
-            borrar).
+            borrar) o «Revisar duplicados por período» cuando no hay Id Origen o el hash cambió.
           </p>
         </>
       ) : !error && loading ? (
         <p className="mt-8 text-slate-600">Cargando historial…</p>
+      ) : null}
+
+      {periodDupReview ? (
+        <PeriodDuplicatesReview
+          open
+          desde={periodDupReview.desde}
+          hasta={periodDupReview.hasta}
+          onClose={() => setPeriodDupReview(null)}
+          onDeleted={(deleted) => {
+            setInfoMsg(
+              deleted > 0
+                ? `Se eliminaron ${deleted.toLocaleString("es-CL")} egreso(s) duplicado(s) del período.`
+                : "No se eliminaron movimientos.",
+            );
+            void load();
+          }}
+        />
       ) : null}
     </main>
   );

@@ -293,6 +293,66 @@ function filtrarGastosPorFamilia(
   return rows.filter((r) => seleccion.has(r.familia));
 }
 
+function filtrarCreditosPorMarcados(
+  rows: PivotRowCredito[],
+  marcados: Set<string>,
+  solo: boolean,
+): PivotRowCredito[] {
+  if (!solo || marcados.size === 0) return rows;
+  return rows.filter((r) => marcados.has(r.credito));
+}
+
+function toggleValorEnSet(prev: Set<string>, value: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function todasMarcadasEnSet(values: string[], set: Set<string>): boolean {
+  return values.length > 0 && values.every((v) => set.has(v));
+}
+
+function toggleValoresEnSet(prev: Set<string>, values: string[]): Set<string> {
+  const next = new Set(prev);
+  const all = todasMarcadasEnSet(values, prev);
+  if (all) values.forEach((v) => next.delete(v));
+  else values.forEach((v) => next.add(v));
+  return next;
+}
+
+type ResumenSeccionFiltroSeleccionadosProps = {
+  checked: boolean;
+  disabled: boolean;
+  count: number;
+  onChange: (checked: boolean) => void;
+};
+
+function ResumenSeccionFiltroSeleccionados({
+  checked,
+  disabled,
+  count,
+  onChange,
+}: ResumenSeccionFiltroSeleccionadosProps) {
+  return (
+    <label className="ui-filter-chip shrink-0">
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 accent-sky-700"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        Seleccionados
+        {count > 0 ? (
+          <span className="ml-0.5 text-xs opacity-80">({count})</span>
+        ) : null}
+      </span>
+    </label>
+  );
+}
+
 function toggleSeleccionMulti(
   value: string,
   seleccion: FiltroMultiSeleccion,
@@ -378,7 +438,7 @@ function ResumenMultiSelect({
   };
 
   return (
-    <div className="relative min-w-[200px] max-w-xs flex-1">
+    <div className="relative min-w-0 w-full sm:min-w-[200px] sm:max-w-xs sm:flex-1">
       <span className="mb-0.5 block text-xs font-medium text-slate-600">{label}</span>
       <button
         type="button"
@@ -455,10 +515,30 @@ export default function ResumenPage() {
   const [status, setStatus] = useState("");
   const [familiasSeleccionadas, setFamiliasSeleccionadas] =
     useState<FiltroMultiSeleccion>(null);
+  const [familiasMarcadas, setFamiliasMarcadas] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [soloSeleccionadosFamilias, setSoloSeleccionadosFamilias] =
+    useState(false);
+  const [creditosMarcados, setCreditosMarcados] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [soloSeleccionadosCreditos, setSoloSeleccionadosCreditos] =
+    useState(false);
   const [formasPagoSeleccionadas, setFormasPagoSeleccionadas] =
     useState<FiltroMultiSeleccion>(null);
   const [sucursalesSeleccionadas, setSucursalesSeleccionadas] =
     useState<FiltroMultiSeleccion>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const [familiaDetalleCtx, setFamiliaDetalleCtx] = useState<{
     familia: string;
@@ -505,50 +585,95 @@ export default function ResumenPage() {
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
   }, [data]);
 
-  const dataFiltrada = useMemo((): PivotResponse | null => {
-    if (!data) return null;
+  const opcionesCredito = useMemo(() => {
+    if (!data?.creditos?.rows) return [];
+    return [...data.creditos.rows.map((r) => r.credito)].sort((a, b) =>
+      a.localeCompare(b, "es"),
+    );
+  }, [data]);
 
-    const ventasBloques = filtrarBloquesPorSucursal(
-      (data.ventasPorSucursalLista ?? []).map((b) => ({
-        ...b,
-        rows: filtrarVentasPorFormaPago(b.rows, formasPagoSeleccionadas),
-      })),
+  const seleccionFamiliaEfectiva = useMemo((): FiltroMultiSeleccion => {
+    if (!soloSeleccionadosFamilias || familiasMarcadas.size === 0) return null;
+    return familiasMarcadas;
+  }, [soloSeleccionadosFamilias, familiasMarcadas]);
+
+  const buildPivotConFiltros = useCallback(
+    (seleccionFamilia: FiltroMultiSeleccion, filtrarCreditos: boolean) => {
+      if (!data) return null;
+
+      const ventasBloques = filtrarBloquesPorSucursal(
+        (data.ventasPorSucursalLista ?? []).map((b) => ({
+          ...b,
+          rows: filtrarVentasPorFormaPago(b.rows, formasPagoSeleccionadas),
+        })),
+        sucursalesSeleccionadas,
+        listaSucursales,
+      );
+      const gastosBloques = filtrarBloquesPorSucursal(
+        (data.gastosPorSucursalLista ?? []).map((b) => ({
+          ...b,
+          rows: filtrarGastosPorFamilia(b.rows, seleccionFamilia),
+        })),
+        sucursalesSeleccionadas,
+        listaSucursales,
+      );
+
+      const desgloseVentasPorSucursal =
+        sucursalesSeleccionadas !== null && sucursalesSeleccionadas.size >= 2;
+
+      const creditosRows = data.creditos?.rows ?? [];
+      const creditosFiltrados = filtrarCreditosPorMarcados(
+        creditosRows,
+        creditosMarcados,
+        filtrarCreditos,
+      );
+
+      return {
+        ...data,
+        desgloseVentasPorSucursal,
+        ventasPorSucursalLista: ventasBloques,
+        gastosPorSucursalLista: gastosBloques,
+        ventas: {
+          rows: mergePivotVentasRows(ventasBloques.flatMap((b) => b.rows)),
+        },
+        gastos: {
+          rows: mergePivotGastosRows(gastosBloques.flatMap((b) => b.rows)),
+        },
+        gastosSocios: data.gastosSocios
+          ? {
+              rows: filtrarGastosPorFamilia(
+                data.gastosSocios.rows,
+                seleccionFamilia,
+              ),
+            }
+          : data.gastosSocios,
+        creditos: data.creditos
+          ? { rows: creditosFiltrados }
+          : data.creditos,
+      };
+    },
+    [
+      data,
+      formasPagoSeleccionadas,
       sucursalesSeleccionadas,
       listaSucursales,
-    );
-    const gastosBloques = filtrarBloquesPorSucursal(
-      (data.gastosPorSucursalLista ?? []).map((b) => ({
-        ...b,
-        rows: filtrarGastosPorFamilia(b.rows, familiasSeleccionadas),
-      })),
-      sucursalesSeleccionadas,
-      listaSucursales,
-    );
+      creditosMarcados,
+    ],
+  );
 
-    const desgloseVentasPorSucursal =
-      sucursalesSeleccionadas !== null && sucursalesSeleccionadas.size >= 2;
+  const dataSinFiltroFamilia = useMemo(
+    () => buildPivotConFiltros(null, false),
+    [buildPivotConFiltros],
+  );
 
-    return {
-      ...data,
-      desgloseVentasPorSucursal,
-      ventasPorSucursalLista: ventasBloques,
-      gastosPorSucursalLista: gastosBloques,
-      ventas: {
-        rows: mergePivotVentasRows(ventasBloques.flatMap((b) => b.rows)),
-      },
-      gastos: {
-        rows: mergePivotGastosRows(gastosBloques.flatMap((b) => b.rows)),
-      },
-      gastosSocios: data.gastosSocios
-        ? {
-            rows: filtrarGastosPorFamilia(
-              data.gastosSocios.rows,
-              familiasSeleccionadas,
-            ),
-          }
-        : data.gastosSocios,
-    };
-  }, [data, familiasSeleccionadas, formasPagoSeleccionadas, sucursalesSeleccionadas, listaSucursales]);
+  const dataFiltrada = useMemo(
+    () =>
+      buildPivotConFiltros(
+        seleccionFamiliaEfectiva,
+        soloSeleccionadosCreditos,
+      ),
+    [buildPivotConFiltros, seleccionFamiliaEfectiva, soloSeleccionadosCreditos],
+  );
 
   const rangoEfectivo = useMemo(() => {
     if (modo === "anual") return yearRange(anio);
@@ -743,13 +868,25 @@ export default function ResumenPage() {
   }, [modo, anio, mes, dia, semana, rangoDesde, rangoHasta, cerrarFamiliaDetalle]);
 
   useEffect(() => {
+    setFamiliasMarcadas((prev) => {
+      const validas = new Set(opcionesFamilia);
+      const next = new Set([...prev].filter((v) => validas.has(v)));
+      if (next.size === prev.size) return prev;
+      return next;
+    });
+    setCreditosMarcados((prev) => {
+      const validas = new Set(opcionesCredito);
+      const next = new Set([...prev].filter((v) => validas.has(v)));
+      if (next.size === prev.size) return prev;
+      return next;
+    });
     setFamiliasSeleccionadas((prev) =>
       podarSeleccion(prev, new Set(opcionesFamilia)),
     );
     setFormasPagoSeleccionadas((prev) =>
       podarSeleccion(prev, new Set(opcionesFormaPago)),
     );
-  }, [opcionesFamilia, opcionesFormaPago]);
+  }, [opcionesFamilia, opcionesCredito, opcionesFormaPago]);
 
   useEffect(() => {
     setSucursalesSeleccionadas((prev) =>
@@ -759,7 +896,52 @@ export default function ResumenPage() {
 
   useEffect(() => {
     cerrarFamiliaDetalle();
-  }, [familiasSeleccionadas, formasPagoSeleccionadas, sucursalesSeleccionadas, cerrarFamiliaDetalle]);
+  }, [
+    familiasSeleccionadas,
+    familiasMarcadas,
+    soloSeleccionadosFamilias,
+    creditosMarcados,
+    soloSeleccionadosCreditos,
+    formasPagoSeleccionadas,
+    sucursalesSeleccionadas,
+    cerrarFamiliaDetalle,
+  ]);
+
+  const toggleFamiliaMarcada = useCallback((familia: string) => {
+    setFamiliasMarcadas((prev) => toggleValorEnSet(prev, familia));
+  }, []);
+
+  const toggleTodasFamiliasMarcadas = useCallback((familias: string[]) => {
+    setFamiliasMarcadas((prev) => toggleValoresEnSet(prev, familias));
+  }, []);
+
+  const toggleCreditoMarcado = useCallback((credito: string) => {
+    setCreditosMarcados((prev) => toggleValorEnSet(prev, credito));
+  }, []);
+
+  const toggleTodosCreditosMarcados = useCallback((creditos: string[]) => {
+    setCreditosMarcados((prev) => toggleValoresEnSet(prev, creditos));
+  }, []);
+
+  const handleFamiliasDropdownChange = useCallback(
+    (next: FiltroMultiSeleccion) => {
+      setFamiliasSeleccionadas(next);
+      if (next === null) {
+        setFamiliasMarcadas(new Set());
+        setSoloSeleccionadosFamilias(false);
+      } else {
+        setFamiliasMarcadas(new Set(next));
+        setSoloSeleccionadosFamilias(true);
+      }
+    },
+    [],
+  );
+
+  const quitarFiltroFamilia = useCallback(() => {
+    setFamiliasSeleccionadas(null);
+    setFamiliasMarcadas(new Set());
+    setSoloSeleccionadosFamilias(false);
+  }, []);
 
   const familiaDetalleTotalesPorMes = useMemo(() => {
     if (!familiaDetalleData?.monthKeys.length) return {};
@@ -855,22 +1037,22 @@ export default function ResumenPage() {
   }, [dataFiltrada]);
 
   const totalesPorMesCreditos = useMemo(() => {
-    if (!data?.monthKeys.length) return {};
-    const rows = data.creditos?.rows ?? [];
+    if (!dataFiltrada?.monthKeys.length) return {};
+    const rows = dataFiltrada.creditos?.rows ?? [];
     const acc: Record<string, number> = {};
-    for (const mk of data.monthKeys) acc[mk] = 0;
+    for (const mk of dataFiltrada.monthKeys) acc[mk] = 0;
     for (const r of rows) {
-      for (const mk of data.monthKeys) {
+      for (const mk of dataFiltrada.monthKeys) {
         acc[mk] += r.byMonth[mk] ?? 0;
       }
     }
     return acc;
-  }, [data]);
+  }, [dataFiltrada]);
 
   const totalCreditos = useMemo(() => {
-    const rows = data?.creditos?.rows ?? [];
+    const rows = dataFiltrada?.creditos?.rows ?? [];
     return rows.reduce((s, r) => s + r.total, 0);
-  }, [data]);
+  }, [dataFiltrada]);
 
   /** Ingresos (ventas) agregados por mes y total: sirve con vista única o desglose por sucursal. */
   const ingresosAgregados = useMemo(() => {
@@ -966,24 +1148,75 @@ export default function ResumenPage() {
     };
   }, [data, ingresoCreditosAgregado, resultadoIngresosMenosEgresos]);
 
-  const filtroFamiliaActivo = familiasSeleccionadas !== null;
+  const filtroFamiliaActivo =
+    soloSeleccionadosFamilias && familiasMarcadas.size > 0;
+  const filtroCreditosActivo =
+    soloSeleccionadosCreditos && creditosMarcados.size > 0;
   const filtroFormaPagoActivo = formasPagoSeleccionadas !== null;
   const filtroSucursalActivo = sucursalesSeleccionadas !== null;
+  const gastosTablaPivot = soloSeleccionadosFamilias
+    ? dataFiltrada
+    : dataSinFiltroFamilia;
+  const creditosTablaRows = soloSeleccionadosCreditos
+    ? (dataFiltrada?.creditos?.rows ?? [])
+    : (dataSinFiltroFamilia?.creditos?.rows ?? data?.creditos?.rows ?? []);
+  const totalesCreditosTabla = useMemo(() => {
+    if (!data?.monthKeys.length) return { porMes: {} as Record<string, number>, total: 0 };
+    const acc: Record<string, number> = {};
+    for (const mk of data.monthKeys) acc[mk] = 0;
+    let total = 0;
+    for (const r of creditosTablaRows) {
+      total += r.total;
+      for (const mk of data.monthKeys) {
+        acc[mk] += r.byMonth[mk] ?? 0;
+      }
+    }
+    return { porMes: acc, total };
+  }, [data, creditosTablaRows]);
   const sucursalUnicaLabel =
     sucursalesSeleccionadas?.size === 1 ? [...sucursalesSeleccionadas][0] : null;
 
-  const thCls = "px-2 py-2 text-left text-xs font-medium text-white";
+  const textoPeriodoResumen = useMemo(() => {
+    switch (modo) {
+      case "diario":
+        return `Día ${dia}`;
+      case "semanal":
+        return `Semana ${semana}`;
+      case "mensual":
+        return mes;
+      case "anual":
+        return `Año ${anio}`;
+      case "rango":
+        return rangoDesde && rangoHasta
+          ? `${rangoDesde} – ${rangoHasta}`
+          : "Rango de fechas";
+      default:
+        return "";
+    }
+  }, [modo, dia, semana, mes, anio, rangoDesde, rangoHasta]);
+
+  const thCls =
+    "px-1 py-0.5 sm:px-2 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-white";
   const thNum = `${thCls} text-right tabular-nums`;
-  const tdCls = "border-t border-slate-200 px-2 py-2 text-xs text-slate-800";
+  const tdCls =
+    "border-t border-slate-200 px-1 py-0.5 sm:px-2 sm:py-2 text-[10px] sm:text-xs text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
   const trTotal = "bg-sky-100/70 ring-1 ring-inset ring-sky-200";
+  const resumenTarjetaTitulo =
+    "border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900 max-sm:px-2 max-sm:py-1.5 max-sm:text-sm";
+  const resumenTarjetaTituloBarra =
+    "flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 max-sm:px-2 max-sm:py-1.5";
+  const resumenTarjetaTituloTexto =
+    "text-base font-semibold text-slate-900 max-sm:text-sm";
   /** Primera columna fija al hacer scroll horizontal en cualquier tamaño. */
-  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[150px] bg-[#0056ff] border-r border-sky-700/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
-  const tdStickyFirst = `${tdCls} sticky left-0 z-10 min-w-[150px] bg-slate-50 border-r border-slate-200 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
-  const tdStickyFirstTotal = `${tdCls} sticky left-0 z-10 min-w-[150px] bg-sky-100/70 border-r border-slate-200`;
-  const COL_FIRST = 150;
-  const COL_MONTH = 100;
-  const COL_TOTAL = 120;
+  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[112px] sm:min-w-[150px] bg-[#0056ff] border-r border-sky-700/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
+  const tdStickyFirst = `${tdCls} sticky left-0 z-10 min-w-[112px] sm:min-w-[150px] bg-slate-50 border-r border-slate-200 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
+  const tdStickyFirstTotal = `${tdCls} sticky left-0 z-10 min-w-[112px] sm:min-w-[150px] bg-sky-100/70 border-r border-slate-200`;
+  const COL_FIRST = isMobile ? 112 : 150;
+  const COL_MONTH = isMobile ? 70 : 100;
+  const COL_TOTAL = isMobile ? 88 : 120;
+  const resumenTableCls =
+    "w-full border-separate border-spacing-0 text-xs table-fixed";
   const tableMinWidth = (monthCount: number) =>
     `${COL_FIRST + monthCount * COL_MONTH + COL_TOTAL}px`;
   const renderResumenColgroup = (monthCount: number) => (
@@ -997,7 +1230,7 @@ export default function ResumenPage() {
   );
 
   return (
-    <main className="page-main page-main--2xl gap-2 pt-3 sm:pt-4">
+    <main className="resumen-page page-main page-main--2xl gap-2 pt-3 sm:gap-4 sm:pt-4">
       <header>
         <h1 className="page-title text-[1.05rem] sm:text-[1.3rem]">Resumen</h1>
       </header>
@@ -1012,8 +1245,40 @@ export default function ResumenPage() {
         <>
           <section aria-label="Filtros" className="ui-filter-bar">
             <div className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5">
-                <div className="relative shrink-0">
+              {isMobile ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg py-0.5 text-left text-sm font-medium text-slate-900"
+                  onClick={() => setFiltrosAbiertos((v) => !v)}
+                  aria-expanded={filtrosAbiertos}
+                >
+                  <span>
+                    Filtros
+                    {filtroSucursalActivo ||
+                    filtroFamiliaActivo ||
+                    filtroFormaPagoActivo ? (
+                      <span className="ml-1 text-xs font-normal text-sky-700">
+                        (activos)
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-slate-500" aria-hidden>
+                    {filtrosAbiertos ? "▲" : "▼"}
+                  </span>
+                </button>
+              ) : null}
+              {isMobile && !filtrosAbiertos ? (
+                <p className="text-xs text-slate-600">{textoPeriodoResumen}</p>
+              ) : null}
+              <div
+                className={
+                  isMobile && !filtrosAbiertos
+                    ? "hidden"
+                    : "flex flex-col gap-1.5"
+                }
+              >
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-x-2 sm:gap-y-1.5">
+                <div className="relative col-span-2 shrink-0 sm:col-span-1">
                   <span className="mb-0.5 block text-xs font-medium text-slate-600">
                     Período
                   </span>
@@ -1097,7 +1362,7 @@ export default function ResumenPage() {
                   label="Familia"
                   opciones={opcionesFamilia}
                   seleccion={familiasSeleccionadas}
-                  onChange={setFamiliasSeleccionadas}
+                  onChange={handleFamiliasDropdownChange}
                   placeholder="Todas las familias"
                 />
 
@@ -1125,7 +1390,7 @@ export default function ResumenPage() {
                   <button
                     type="button"
                     className="ui-btn-soft-xs"
-                    onClick={() => setFamiliasSeleccionadas(null)}
+                    onClick={quitarFiltroFamilia}
                   >
                     Quitar filtro familia
                   </button>
@@ -1140,6 +1405,7 @@ export default function ResumenPage() {
                   </button>
                 ) : null}
               </div>
+              </div>
             </div>
           </section>
 
@@ -1153,7 +1419,7 @@ export default function ResumenPage() {
             <>
               {dataFiltrada.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
-                  <h2 className="text-lg font-semibold text-slate-900">
+                  <h2 className={resumenTarjetaTitulo}>
                     Resumen de ventas por sucursal
                   </h2>
                   {(dataFiltrada.ventasPorSucursalLista ?? []).length === 0 ? (
@@ -1170,13 +1436,15 @@ export default function ResumenPage() {
                       return (
                         <section
                           key={bloque.sucursal}
-                          className="overflow-x-auto rounded-xl border border-slate-300 bg-slate-50 shadow-sm"
+                          className="rounded-xl border border-slate-300 bg-slate-50 shadow-sm"
                         >
-                          <h3 className="border-b border-slate-200 bg-white/80 px-4 py-3 text-base font-semibold text-sky-900">
+                          <h3 className={resumenTarjetaTitulo}>
                             {bloque.sucursal}
                           </h3>
-                          <table
-                            className="w-full border-collapse text-xs table-fixed"
+
+
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                             style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                           >
                             {renderResumenColgroup(data.monthKeys.length)}
@@ -1228,21 +1496,22 @@ export default function ResumenPage() {
                                 </tr>
                               )}
                             </tbody>
-                          </table>
+                          </table></div>
                         </section>
                       );
                     })
                   )}
                 </div>
               ) : (
-                <section className="ui-card-panel overflow-x-auto">
-                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
+                <section className="ui-card-panel">
+                  <h2 className={resumenTarjetaTitulo}>
                     {sucursalUnicaLabel
                       ? `Resumen de ventas ${sucursalUnicaLabel}`
                       : "Resumen de ventas"}
                   </h2>
-                  <table
-                    className="w-full border-collapse text-xs table-fixed"
+
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
@@ -1310,16 +1579,24 @@ export default function ResumenPage() {
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </table></div>
                 </section>
               )}
 
-              {dataFiltrada.desgloseVentasPorSucursal === true ? (
+              {gastosTablaPivot?.desgloseVentasPorSucursal === true ? (
                 <div className="flex flex-col gap-5">
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Resumen de gastos por sucursal
-                  </h2>
-                  {(dataFiltrada.gastosPorSucursalLista ?? []).length === 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className={resumenTarjetaTitulo}>
+                      Resumen de gastos por sucursal
+                    </h2>
+                    <ResumenSeccionFiltroSeleccionados
+                      checked={soloSeleccionadosFamilias}
+                      disabled={familiasMarcadas.size === 0}
+                      count={familiasMarcadas.size}
+                      onChange={setSoloSeleccionadosFamilias}
+                    />
+                  </div>
+                  {(gastosTablaPivot.gastosPorSucursalLista ?? []).length === 0 ? (
                     <p className="ui-card px-4 py-6 text-center text-sm text-slate-500">
                             Sin gastos en este período
                             {filtroSucursalActivo ? " con ese filtro de sucursal" : ""}
@@ -1327,25 +1604,46 @@ export default function ResumenPage() {
                             .
                     </p>
                   ) : (
-                    (dataFiltrada.gastosPorSucursalLista ?? []).map((bloque) => {
+                    (gastosTablaPivot.gastosPorSucursalLista ?? []).map((bloque) => {
                       const tpmG = totalesPorMesGastosDesdeRows(bloque.rows, data.monthKeys);
                       const totG = totalGastosDesdeRows(bloque.rows);
+                      const familiasBloque = bloque.rows.map((r) => r.familia);
+                      const todasFamBloque = todasMarcadasEnSet(
+                        familiasBloque,
+                        familiasMarcadas,
+                      );
                       return (
                         <section
                           key={`g-${bloque.sucursal}`}
-                          className="overflow-x-auto rounded-xl border border-slate-300 bg-slate-50 shadow-sm"
+                          className="rounded-xl border border-slate-300 bg-slate-50 shadow-sm"
                         >
-                          <h3 className="border-b border-slate-200 bg-white/80 px-4 py-3 text-base font-semibold text-rose-900">
+                          <h3 className={resumenTarjetaTitulo}>
                             {bloque.sucursal}
                           </h3>
-                          <table
-                            className="w-full border-collapse text-xs table-fixed"
+
+
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                             style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                           >
                             {renderResumenColgroup(data.monthKeys.length)}
                             <thead>
                               <tr className="ui-table-header">
-                                <th className={thStickyFirst}>Familia</th>
+                                <th className={thStickyFirst}>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                                      checked={todasFamBloque}
+                                      disabled={familiasBloque.length === 0}
+                                      aria-label="Seleccionar todas las familias de esta sucursal"
+                                      onChange={() =>
+                                        toggleTodasFamiliasMarcadas(familiasBloque)
+                                      }
+                                    />
+                                    <span>Familia</span>
+                                  </div>
+                                </th>
                                 {data.monthLabels.map((label, i) => (
                                   <th key={data.monthKeys[i]} className={thNum}>
                                     {label}
@@ -1372,7 +1670,19 @@ export default function ResumenPage() {
                                     }
                                   }}
                                 >
-                                  <td className={tdStickyFirst}>{r.familia}</td>
+                                  <td className={tdStickyFirst}>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                        checked={familiasMarcadas.has(r.familia)}
+                                        aria-label={`Seleccionar familia ${r.familia}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={() => toggleFamiliaMarcada(r.familia)}
+                                      />
+                                      <span>{r.familia}</span>
+                                    </div>
+                                  </td>
                                   {data.monthKeys.map((mk) => (
                                     <td key={mk} className={tdNum}>
                                       {formatClp(r.byMonth[mk] ?? 0)}
@@ -1406,27 +1716,55 @@ export default function ResumenPage() {
                                 </tr>
                               )}
                             </tbody>
-                          </table>
+                          </table></div>
                         </section>
                       );
                     })
                   )}
                 </div>
               ) : (
-                <section className="ui-card-panel overflow-x-auto">
-                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
-                    {sucursalUnicaLabel
-                      ? `Resumen de gastos ${sucursalUnicaLabel}`
-                      : "Resumen de gastos"}
-                  </h2>
-                  <table
-                    className="w-full border-collapse text-xs table-fixed"
+                <section className="ui-card-panel">
+                  <div className={resumenTarjetaTituloBarra}>
+                    <h2 className={resumenTarjetaTituloTexto}>
+                      {sucursalUnicaLabel
+                        ? `Resumen de gastos ${sucursalUnicaLabel}`
+                        : "Resumen de gastos"}
+                    </h2>
+                    <ResumenSeccionFiltroSeleccionados
+                      checked={soloSeleccionadosFamilias}
+                      disabled={familiasMarcadas.size === 0}
+                      count={familiasMarcadas.size}
+                      onChange={setSoloSeleccionadosFamilias}
+                    />
+                  </div>
+
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
                       <tr className="ui-table-header">
-                        <th className={thStickyFirst}>Familia</th>
+                        <th className={thStickyFirst}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                              checked={todasMarcadasEnSet(
+                                (gastosTablaPivot?.gastos.rows ?? []).map((r) => r.familia),
+                                familiasMarcadas,
+                              )}
+                              disabled={(gastosTablaPivot?.gastos.rows ?? []).length === 0}
+                              aria-label="Seleccionar todas las familias"
+                              onChange={() =>
+                                toggleTodasFamiliasMarcadas(
+                                  (gastosTablaPivot?.gastos.rows ?? []).map((r) => r.familia),
+                                )
+                              }
+                            />
+                            <span>Familia</span>
+                          </div>
+                        </th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
                             {label}
@@ -1436,7 +1774,7 @@ export default function ResumenPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {dataFiltrada.gastos.rows.map((r) => (
+                      {(gastosTablaPivot?.gastos.rows ?? []).map((r) => (
                         <tr
                           key={r.familia}
                           role="button"
@@ -1451,7 +1789,19 @@ export default function ResumenPage() {
                             }
                           }}
                         >
-                          <td className={tdStickyFirst}>{r.familia}</td>
+                          <td className={tdStickyFirst}>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                checked={familiasMarcadas.has(r.familia)}
+                                aria-label={`Seleccionar familia ${r.familia}`}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleFamiliaMarcada(r.familia)}
+                              />
+                              <span>{r.familia}</span>
+                            </div>
+                          </td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
                               {formatClp(r.byMonth[mk] ?? 0)}
@@ -1462,7 +1812,7 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {dataFiltrada.gastos.rows.length === 0 ? (
+                      {(gastosTablaPivot?.gastos.rows ?? []).length === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}
@@ -1479,33 +1829,67 @@ export default function ResumenPage() {
                           <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
-                              {formatClp(totalesPorMesGastos[mk] ?? 0)}
+                              {formatClp(
+                                totalesPorMesGastosDesdeRows(
+                                  gastosTablaPivot?.gastos.rows ?? [],
+                                  data.monthKeys,
+                                )[mk] ?? 0,
+                              )}
                             </td>
                           ))}
                           <td className={`${tdNum} font-semibold text-rose-800`}>
-                            {formatClp(totalGastos)}
+                            {formatClp(
+                              totalGastosDesdeRows(gastosTablaPivot?.gastos.rows ?? []),
+                            )}
                           </td>
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </table></div>
                 </section>
               )}
 
               {data.creditos ? (
-                <section className="ui-card-panel overflow-x-auto">
-                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
-                    Resumen de pagos de créditos
-                  </h2>
-                  
-                  <table
-                    className="w-full border-collapse text-xs table-fixed"
+                <section className="ui-card-panel">
+                  <div className={resumenTarjetaTituloBarra}>
+                    <h2 className={resumenTarjetaTituloTexto}>
+                      Resumen de créditos
+                    </h2>
+                    <ResumenSeccionFiltroSeleccionados
+                      checked={soloSeleccionadosCreditos}
+                      disabled={creditosMarcados.size === 0}
+                      count={creditosMarcados.size}
+                      onChange={setSoloSeleccionadosCreditos}
+                    />
+                  </div>
+
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
                       <tr className="ui-table-header">
-                        <th className={thStickyFirst}>Crédito</th>
+                        <th className={thStickyFirst}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                              checked={todasMarcadasEnSet(
+                                creditosTablaRows.map((r) => r.credito),
+                                creditosMarcados,
+                              )}
+                              disabled={creditosTablaRows.length === 0}
+                              aria-label="Seleccionar todos los créditos"
+                              onChange={() =>
+                                toggleTodosCreditosMarcados(
+                                  creditosTablaRows.map((r) => r.credito),
+                                )
+                              }
+                            />
+                            <span>Crédito</span>
+                          </div>
+                        </th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
                             {label}
@@ -1515,9 +1899,20 @@ export default function ResumenPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(data.creditos.rows ?? []).map((r) => (
+                      {creditosTablaRows.map((r) => (
                         <tr key={r.credito}>
-                          <td className={tdStickyFirst}>{r.credito}</td>
+                          <td className={tdStickyFirst}>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                checked={creditosMarcados.has(r.credito)}
+                                aria-label={`Seleccionar crédito ${r.credito}`}
+                                onChange={() => toggleCreditoMarcado(r.credito)}
+                              />
+                              <span>{r.credito}</span>
+                            </div>
+                          </td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
                               {formatClp(r.byMonth[mk] ?? 0)}
@@ -1528,13 +1923,15 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {(data.creditos.rows ?? []).length === 0 ? (
+                      {creditosTablaRows.length === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}
                             className="px-4 py-6 text-center text-slate-500"
                           >
-                            Sin pagos de créditos en este período.
+                            Sin pagos de créditos en este período
+                            {filtroCreditosActivo ? " con ese filtro de créditos" : ""}
+                            .
                           </td>
                         </tr>
                       ) : (
@@ -1544,33 +1941,60 @@ export default function ResumenPage() {
                           </td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
-                              {formatClp(totalesPorMesCreditos[mk] ?? 0)}
+                              {formatClp(totalesCreditosTabla.porMes[mk] ?? 0)}
                             </td>
                           ))}
                           <td className={`${tdNum} font-semibold text-indigo-800`}>
-                            {formatClp(totalCreditos)}
+                            {formatClp(totalesCreditosTabla.total)}
                           </td>
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </table></div>
                 </section>
               ) : null}
 
-              {dataFiltrada.gastosSocios ? (
-                <section className="ui-card-panel overflow-x-auto">
-                  <h2 className="border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900">
-                    Resumen de gastos socios  
-                  </h2>
-                 
-                  <table
-                    className="w-full border-collapse text-xs table-fixed"
+              {data.gastosSocios ? (
+                <section className="ui-card-panel">
+                  <div className={resumenTarjetaTituloBarra}>
+                    <h2 className={resumenTarjetaTituloTexto}>
+                      Resumen de gastos socios
+                    </h2>
+                    <ResumenSeccionFiltroSeleccionados
+                      checked={soloSeleccionadosFamilias}
+                      disabled={familiasMarcadas.size === 0}
+                      count={familiasMarcadas.size}
+                      onChange={setSoloSeleccionadosFamilias}
+                    />
+                  </div>
+
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                     style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                   >
                     {renderResumenColgroup(data.monthKeys.length)}
                     <thead>
                       <tr className="ui-table-header">
-                        <th className={thStickyFirst}>Familia</th>
+                        <th className={thStickyFirst}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                              checked={todasMarcadasEnSet(
+                                (gastosTablaPivot?.gastosSocios?.rows ?? []).map((r) => r.familia),
+                                familiasMarcadas,
+                              )}
+                              disabled={(gastosTablaPivot?.gastosSocios?.rows ?? []).length === 0}
+                              aria-label="Seleccionar todas las familias de socios"
+                              onChange={() =>
+                                toggleTodasFamiliasMarcadas(
+                                  (gastosTablaPivot?.gastosSocios?.rows ?? []).map((r) => r.familia),
+                                )
+                              }
+                            />
+                            <span>Familia</span>
+                          </div>
+                        </th>
                         {data.monthLabels.map((label, i) => (
                           <th key={data.monthKeys[i]} className={thNum}>
                             {label}
@@ -1580,7 +2004,7 @@ export default function ResumenPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(dataFiltrada.gastosSocios.rows ?? []).map((r) => (
+                      {(gastosTablaPivot?.gastosSocios?.rows ?? []).map((r) => (
                         <tr
                           key={r.familia}
                           role="button"
@@ -1595,7 +2019,19 @@ export default function ResumenPage() {
                             }
                           }}
                         >
-                          <td className={tdStickyFirst}>{r.familia}</td>
+                          <td className={tdStickyFirst}>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                checked={familiasMarcadas.has(r.familia)}
+                                aria-label={`Seleccionar familia ${r.familia}`}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleFamiliaMarcada(r.familia)}
+                              />
+                              <span>{r.familia}</span>
+                            </div>
+                          </td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={tdNum}>
                               {formatClp(r.byMonth[mk] ?? 0)}
@@ -1606,13 +2042,15 @@ export default function ResumenPage() {
                           </td>
                         </tr>
                       ))}
-                      {(dataFiltrada.gastosSocios.rows ?? []).length === 0 ? (
+                      {(gastosTablaPivot?.gastosSocios?.rows ?? []).length === 0 ? (
                         <tr>
                           <td
                             colSpan={data.monthKeys.length + 2}
                             className="px-4 py-6 text-center text-slate-500"
                           >
-                            Sin gastos de socios en este período.
+                            Sin gastos de socios en este período
+                            {filtroFamiliaActivo ? " con ese filtro de familia" : ""}
+                            .
                           </td>
                         </tr>
                       ) : (
@@ -1620,29 +2058,36 @@ export default function ResumenPage() {
                           <td className={`${tdStickyFirstTotal} font-medium text-slate-900`}>Total</td>
                           {data.monthKeys.map((mk) => (
                             <td key={mk} className={`${tdNum} font-medium text-slate-900`}>
-                              {formatClp(totalesPorMesGastosSocios[mk] ?? 0)}
+                              {formatClp(
+                                totalesPorMesGastosDesdeRows(
+                                  gastosTablaPivot?.gastosSocios?.rows ?? [],
+                                  data.monthKeys,
+                                )[mk] ?? 0,
+                              )}
                             </td>
                           ))}
                           <td className={`${tdNum} font-semibold text-violet-800`}>
-                            {formatClp(totalGastosSocios)}
+                            {formatClp(
+                              totalGastosDesdeRows(gastosTablaPivot?.gastosSocios?.rows ?? []),
+                            )}
                           </td>
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </table></div>
                 </section>
               ) : null}
 
-              <section className="overflow-x-auto rounded-xl border-2 border-slate-400 bg-slate-100 shadow-sm">
-                <h2 className="border-b border-slate-300 bg-slate-200/90 px-4 py-3 text-base font-semibold text-slate-900">
+              <section className="ui-card-panel">
+                <h2 className={resumenTarjetaTitulo}>
                   Resultado operativo y caja
                 </h2>
                 <p className="border-b border-slate-200 px-4 py-2 text-xs text-slate-600">
-                  Muestra el resultado operativo (ventas menos egresos) y además el efecto del
-                  desembolso de créditos para ver la caja mensual.
+                  Ingresos menos egresos. De Fudo solo entra el efectivo; la tarjeta y la
+                  transferencia se toman del banco. Abajo, el efecto del crédito en la caja.
                 </p>
-                <table
-                  className="w-full border-collapse text-xs table-fixed"
+
+<div className="resumen-tabla-scroll"><table className={resumenTableCls}
                   style={{ minWidth: tableMinWidth(data.monthKeys.length) }}
                 >
                   {renderResumenColgroup(data.monthKeys.length)}
@@ -1726,7 +2171,7 @@ export default function ResumenPage() {
                       </td>
                     </tr>
                   </tbody>
-                </table>
+                </table></div>
               </section>
             </>
           ) : data && data.monthKeys.length === 0 ? (
@@ -1779,9 +2224,8 @@ export default function ResumenPage() {
                   ) : familiaDetalleError ? (
                     <p className="py-8 text-center text-sm text-red-700">{familiaDetalleError}</p>
                   ) : familiaDetalleData && familiaDetalleData.monthKeys.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table
-                        className="w-full border-collapse text-xs table-fixed"
+                    <div className="resumen-tabla-scroll">
+                      <table className={resumenTableCls}
                         style={{
                           minWidth: tableMinWidth(familiaDetalleData.monthKeys.length),
                         }}

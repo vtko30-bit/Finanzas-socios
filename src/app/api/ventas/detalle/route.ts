@@ -9,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { normalizeFormaPago } from "@/lib/forma-pago";
+import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
 
 const PAGE_SIZE = 1000;
 const INCOME_TYPES = ["income", "ingreso"] as const;
@@ -123,7 +124,14 @@ export async function GET(request: Request) {
     from += PAGE_SIZE;
   }
 
-  const rows = data.map((row) => {
+  const rows = data
+    .filter((row) =>
+      fudoCuentaEnResultado(
+        (row as { source?: unknown }).source,
+        (row as { payment_method?: unknown }).payment_method,
+      ),
+    )
+    .map((row) => {
     const txId = String((row as { id?: string }).id ?? "");
     const origenCuenta =
       (row as { origen_cuenta?: string }).origen_cuenta ?? "";

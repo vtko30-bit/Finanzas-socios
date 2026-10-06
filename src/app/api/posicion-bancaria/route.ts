@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { denyIfNotOwner } from "@/lib/org-permissions";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
+import { sumOutstandingCreditDebt } from "@/lib/credit-outstanding-debt";
 import {
   emptyBankPositionRows,
   mergeBankPositionRows,
@@ -43,12 +44,14 @@ function buildResponse(
   snapshotDate: string | null,
   updatedAt: string | null,
   rows: BankPositionRow[],
+  deudaCreditos = 0,
 ) {
   return {
     snapshotDate,
     updatedAt,
     rows,
     totals: sumBankPositionRows(rows),
+    deudaCreditos,
   };
 }
 
@@ -80,8 +83,15 @@ export async function GET() {
     return NextResponse.json({ error: dbErrorMessage(snapErr) }, { status: 500 });
   }
 
+  const deudaCreditos = await sumOutstandingCreditDebt(
+    supabase,
+    member.organization_id,
+  );
+
   if (!snapshot) {
-    return NextResponse.json(buildResponse(null, null, emptyBankPositionRows()));
+    return NextResponse.json(
+      buildResponse(null, null, emptyBankPositionRows(), deudaCreditos),
+    );
   }
 
   const { data: lines, error: linesErr } = await supabase
@@ -114,6 +124,7 @@ export async function GET() {
       String(snapshot.snapshot_date ?? "").slice(0, 10),
       snapshot.updated_at ?? null,
       rows,
+      deudaCreditos,
     ),
   );
 }
@@ -293,6 +304,6 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    buildResponse(snapshotDate, now, rows),
+    buildResponse(snapshotDate, now, rows, await sumOutstandingCreditDebt(supabase, orgId)),
   );
 }

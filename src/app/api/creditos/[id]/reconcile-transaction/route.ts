@@ -15,14 +15,11 @@ function isoDateOk(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-function amountsMatch(a: number, b: number): boolean {
-  return Math.abs(round2(a) - round2(b)) <= 0.02;
-}
-
 /**
  * Vincula un egreso existente (p. ej. importado desde planilla) con el pago de una cuota:
  * valida el monto total, crea el desglose interés/comisión/capital como en "Pagar cuota",
- * y elimina el movimiento original para no duplicar el efecto en caja.
+ * y marca el movimiento original como financiamiento (cuota) para no duplicarlo en Gastos
+ * ni reimportarlo desde la cartola.
  */
 export async function POST(
   request: Request,
@@ -146,11 +143,13 @@ export async function POST(
 
   const totalCuota = round2(Number(inst.total_amount) || 0);
   const txAmount = round2(Math.abs(Number(tx.amount) || 0));
+  const amountDiff = round2(txAmount - totalCuota);
 
-  if (!amountsMatch(txAmount, totalCuota)) {
+  // Pago menor: no. Exacto o mayor (atraso/mora Banco Estado, etc.): sí.
+  if (amountDiff < -0.02) {
     return NextResponse.json(
       {
-        error: `El monto del movimiento (${txAmount}) no coincide con el total de la cuota (${totalCuota})`,
+        error: `El monto del movimiento (${txAmount}) es menor que el total de la cuota (${totalCuota}). No se puede conciliar un pago incompleto por esta vía.`,
         expected_total: totalCuota,
         transaction_amount: txAmount,
       },
@@ -184,18 +183,73 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status });
   }
 
-  const { error: delErr } = await supabase
+  // Diferencia por atraso (mora / intereses bancarios): gasto operativo aparte.
+  let lateFeeTransactionId: string | null = null;
+  if (amountDiff > 0.02) {
+    const currency =
+      typeof credit.currency === "string" && credit.currency.trim()
+        ? credit.currency.trim().toUpperCase()
+        : "CLP";
+    const lender = String(credit.lender ?? "").trim() || "Prestamista";
+    const descCredit = String(credit.description ?? "").trim();
+    const { data: lateRow, error: lateErr } = await supabase
+      .from("transactions")
+      .insert({
+        organization_id: orgId,
+        date: paidAtRaw,
+        type: "expense",
+        amount: amountDiff,
+        currency,
+        description: `Mora / atraso — Cuota ${installmentNumber}${
+          descCredit ? ` — ${descCredit}` : ""
+        } — ${lender}`,
+        counterparty: lender,
+        payment_method: paymentMethod,
+        external_ref: externalRef,
+        origen_cuenta: origenCuenta,
+        concepto: "Mora / interés por atraso crédito",
+        source: "creditos",
+        source_id: String(inst.id),
+        dedupe_hash: `credit_late_fee:${orgId}:${creditId}:${inst.id}:${paidAtRaw}:${amountDiff}`,
+        flow_kind: "operativo",
+        credit_id: creditId,
+        credit_component: "pago_interes",
+      })
+      .select("id")
+      .single();
+    if (lateErr) {
+      return NextResponse.json(
+        {
+          error:
+            "Se registró el pago de la cuota pero falló al crear el gasto de mora por atraso.",
+          detail: lateErr.message,
+          transaction_ids: result.transactionIds,
+        },
+        { status: 500 },
+      );
+    }
+    lateFeeTransactionId = (lateRow?.id as string) ?? null;
+    if (lateFeeTransactionId) {
+      result.transactionIds.push(lateFeeTransactionId);
+    }
+  }
+
+  const { error: markErr } = await supabase
     .from("transactions")
-    .delete()
+    .update({
+      credit_id: creditId,
+      credit_component: "cuota",
+      flow_kind: "financiamiento",
+    })
     .eq("id", transactionId)
     .eq("organization_id", orgId);
 
-  if (delErr) {
+  if (markErr) {
     return NextResponse.json(
       {
         error:
-          "Se registró el pago de la cuota pero no se pudo eliminar el movimiento original. Revisa duplicados o elimina el movimiento manualmente.",
-        detail: delErr.message,
+          "Se registró el pago de la cuota pero no se pudo ocultar el movimiento original de Gastos. Revisa duplicados o marca el egreso como cuota ya pagada.",
+        detail: markErr.message,
         transaction_ids: result.transactionIds,
       },
       { status: 500 },
@@ -209,11 +263,15 @@ export async function POST(
     entity_type: "credit",
     entity_id: creditId,
     changes_json: {
-      removed_transaction_id: transactionId,
+      marked_transaction_id: transactionId,
       installment_id: result.installmentId,
       installment_number: installmentNumber,
       new_transaction_ids: result.transactionIds,
       paid_at: paidAtRaw,
+      transaction_amount: txAmount,
+      installment_total: totalCuota,
+      late_fee_amount: amountDiff > 0.02 ? amountDiff : 0,
+      late_fee_transaction_id: lateFeeTransactionId,
     },
   });
 
@@ -221,7 +279,8 @@ export async function POST(
     ok: true,
     installment_id: result.installmentId,
     transaction_ids: result.transactionIds,
-    removed_transaction_id: transactionId,
+    marked_transaction_id: transactionId,
     credit_closed: result.creditClosed,
+    late_fee_amount: amountDiff > 0.02 ? amountDiff : 0,
   });
 }

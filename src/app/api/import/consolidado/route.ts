@@ -23,6 +23,8 @@ import {
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
 import {
+  expenseLogicalKeyFromMovement,
+  fetchExistingExpenseRowsByLogicalKey,
   fetchExistingExpenseRowsBySourceId,
   normalizeSourceIdKey,
 } from "@/lib/import-existing-source-ids";
@@ -148,12 +150,20 @@ export async function POST(request: Request) {
     let existingBySourceId: Awaited<
       ReturnType<typeof fetchExistingExpenseRowsBySourceId>
     >;
+    let existingByLogicalKey: Awaited<
+      ReturnType<typeof fetchExistingExpenseRowsByLogicalKey>
+    >;
     try {
       existingBySourceId = await fetchExistingExpenseRowsBySourceId(
         supabase,
         orgId,
         sourceIdsInFile,
         "expense",
+      );
+      existingByLogicalKey = await fetchExistingExpenseRowsByLogicalKey(
+        supabase,
+        orgId,
+        parsed.valid.map((m) => m.date),
       );
     } catch (e) {
       return NextResponse.json(
@@ -274,10 +284,20 @@ export async function POST(request: Request) {
       const sid = normalizeSourceIdKey(String(m.source_id ?? ""));
       const existingRow = sid ? existingBySourceId.get(sid) : undefined;
       if (existingRow && esFuenteExcelEgresos(existingRow.source)) {
+        if (existingRow.credit_id) continue;
         uniqueToUpdate.push({ txId: existingRow.id, m });
         continue;
       }
       if (existingRow) continue;
+      if (!sid) {
+        const logicalKey = expenseLogicalKeyFromMovement(m);
+        const existingLogical = existingByLogicalKey.get(logicalKey);
+        if (existingLogical && esFuenteExcelEgresos(existingLogical.source)) {
+          if (existingLogical.credit_id) continue;
+          uniqueToUpdate.push({ txId: existingLogical.id, m });
+          continue;
+        }
+      }
       if (existing.has(m.dedupe_hash)) continue;
       insertPool.push(m);
     }
@@ -498,12 +518,26 @@ export async function POST(request: Request) {
     },
   });
 
+    const datesInFile = parsed.valid
+      .map((m) => String(m.date ?? "").trim())
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const periodDesde =
+      datesInFile.length > 0
+        ? datesInFile.reduce((min, d) => (d < min ? d : min))
+        : null;
+    const periodHasta =
+      datesInFile.length > 0
+        ? datesInFile.reduce((max, d) => (d > max ? d : max))
+        : null;
+
     return NextResponse.json({
       batchId,
       ...parsed,
       inserted: uniqueToInsert.length,
       updated: uniqueToUpdate.length,
       duplicates: parsed.validRows - uniqueToInsert.length - uniqueToUpdate.length,
+      periodDesde,
+      periodHasta,
     });
   } catch (error) {
     return NextResponse.json(

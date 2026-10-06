@@ -155,7 +155,9 @@ export async function syncVentasFudoFromRange(
   const rangeErr = assertVentasSyncRange(params.fromDate, params.toDate);
   if (rangeErr) throw new Error(rangeErr);
 
-  const sucursales = getActiveFudoSucursales();
+  const sucursales = getActiveFudoSucursales(process.env, {
+    includeEvents: params.trigger !== "cron",
+  });
   const salesFrom = `${addDays(params.fromDate, -1)}T00:00:00Z`;
   const salesTo = `${addDays(params.toDate, 2)}T00:00:00Z`;
 

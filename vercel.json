@@ -3,6 +3,10 @@
     {
       "path": "/api/balance-diario",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/pagos-recurrentes/cron",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

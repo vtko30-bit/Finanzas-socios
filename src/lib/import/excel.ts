@@ -1,6 +1,10 @@
 import { createHash } from "crypto";
 import * as XLSX from "xlsx";
 import { z } from "zod";
+import {
+  expenseDedupeHashFromParsed,
+  normalizeImportReference,
+} from "@/lib/import/expense-dedupe-keys";
 import { ventasDetalleDedupeHash } from "@/lib/ventas-dedupe-hash";
 
 const movementSchema = z.object({
@@ -390,34 +394,7 @@ const toAmount = (value: unknown) => {
 const hash = (payload: string) =>
   createHash("sha256").update(payload).digest("hex");
 
-const normalizeReference = (value: string) =>
-  value.trim().replace(/\s+/g, "").toUpperCase();
-
-const dedupeHashWithSourceContext = (entry: {
-  source_id: string;
-  date: string;
-  type: "income" | "expense";
-  amount: number;
-  account_name: string;
-  external_ref: string;
-  counterparty: string;
-  description: string;
-}) => {
-  const normalizedSourceId = normalizeReference(entry.source_id);
-  if (!normalizedSourceId) return "";
-  return hash(
-    [
-      normalizedSourceId,
-      entry.date,
-      entry.type,
-      Number(entry.amount).toFixed(2),
-      normalizeReference(entry.account_name),
-      normalizeReference(entry.external_ref),
-      normalizeReference(entry.counterparty),
-      normalizeReference(entry.description),
-    ].join("|"),
-  );
-};
+const normalizeReference = normalizeImportReference;
 
 export type ParseConsolidatedExcelOptions = {
   /**
@@ -1190,17 +1167,17 @@ export const parseExpensesEgresosExcel = (
     }
 
     const entry = parsed.data;
-    const normalizedExternalRef = normalizeReference(entry.external_ref);
-    const dedupeHashFromSource = dedupeHashWithSourceContext(entry);
-    const dedupe_hash = dedupeHashFromSource
-      ? dedupeHashFromSource
-      : normalizedExternalRef
-        ? hash(
-            `${normalizedExternalRef}|${entry.date}|${entry.type}|${entry.amount}`,
-          )
-        : hash(
-            `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}`,
-          );
+    const dedupe_hash = expenseDedupeHashFromParsed({
+      source_id: entry.source_id,
+      date: entry.date,
+      type: entry.type,
+      amount: entry.amount,
+      account_name: entry.account_name,
+      external_ref: entry.external_ref,
+      counterparty: entry.counterparty,
+      payment_method: entry.payment_method,
+      description: entry.description,
+    });
     valid.push({
       ...entry,
       dedupe_hash,
@@ -1361,12 +1338,17 @@ export const parseOtrosIngresosExcel = (file: Buffer) => {
     }
 
     const entry = parsed.data;
-    const dedupeHashFromSource = dedupeHashWithSourceContext(entry);
-    const dedupe_hash = dedupeHashFromSource
-      ? dedupeHashFromSource
-      : hash(
-          `${entry.date}|${entry.type}|${entry.amount}|${entry.account_name}|${entry.external_ref}`,
-        );
+    const dedupe_hash = expenseDedupeHashFromParsed({
+      source_id: entry.source_id,
+      date: entry.date,
+      type: entry.type,
+      amount: entry.amount,
+      account_name: entry.account_name,
+      external_ref: entry.external_ref,
+      counterparty: entry.counterparty,
+      payment_method: entry.payment_method,
+      description: entry.description,
+    });
     valid.push({
       ...entry,
       dedupe_hash,

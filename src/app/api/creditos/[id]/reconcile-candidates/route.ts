@@ -10,6 +10,14 @@ function amountsMatch(a: number, b: number): boolean {
   return Math.abs(round2(a) - round2(b)) <= 0.02;
 }
 
+/** Igual a la cuota o mayor por mora/atraso (hasta 20% o $50.000). */
+function isCandidateAmount(txAmount: number, installmentTotal: number): boolean {
+  if (txAmount < installmentTotal - 0.02) return false;
+  if (amountsMatch(txAmount, installmentTotal)) return true;
+  const maxOver = Math.max(50_000, round2(installmentTotal * 0.2));
+  return txAmount <= installmentTotal + maxOver + 0.02;
+}
+
 /**
  * Lista egresos importados (planilla) sin `credit_id` cuyo monto coincide con el total
  * de la cuota indicada — para elegir qué línea conciliar desde Créditos.
@@ -74,7 +82,8 @@ export async function GET(
     });
   }
 
-  const band = 2;
+  const bandLow = 2;
+  const bandHigh = Math.max(50_000, round2(totalCuota * 0.2));
   const { data: rows, error: qErr } = await supabase
     .from("transactions")
     .select(
@@ -84,8 +93,8 @@ export async function GET(
     .eq("flow_kind", "operativo")
     .in("type", EXPENSE_TYPES)
     .is("credit_id", null)
-    .gte("amount", totalCuota - band)
-    .lte("amount", totalCuota + band)
+    .gte("amount", totalCuota - bandLow)
+    .lte("amount", totalCuota + bandHigh)
     .order("date", { ascending: false })
     .limit(150);
 
@@ -98,7 +107,7 @@ export async function GET(
       const src = r.source as string | null;
       if (!isReconcilableImportSource(src)) return false;
       const amt = round2(Math.abs(Number(r.amount) || 0));
-      return amountsMatch(amt, totalCuota);
+      return isCandidateAmount(amt, totalCuota);
     })
     .map((r) => ({
       id: r.id as string,

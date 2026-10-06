@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familiaNombreDesdeRawTx, familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import { normalizeFormaPago } from "@/lib/forma-pago";
+import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
 import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
@@ -104,6 +105,7 @@ export async function fetchIncomeRowsPaged(args: {
         `
       date,
       amount,
+      source,
       payment_method,
       origen_cuenta,
       concepto,
@@ -135,6 +137,8 @@ export async function fetchIncomeRowsPaged(args: {
     const page = (data ?? []) as IncomeRow[];
     out.push(
       ...page.filter((r) => {
+        const row = r as IncomeRow & { source?: string | null };
+        if (!fudoCuentaEnResultado(row.source, row.payment_method)) return false;
         if (soloFijas && !esSucursalFija(r.origen_cuenta)) return false;
         if (filtroCanonico && sucursalResumenCanonica(r.origen_cuenta) !== sucursalTrim) {
           return false;
@@ -172,6 +176,7 @@ export async function fetchExpenseRowsPaged(args: {
       date,
       amount,
       source,
+      payment_method,
       description,
       external_ref,
       counterparty,
@@ -205,7 +210,12 @@ export async function fetchExpenseRowsPaged(args: {
     const page = (data ?? []) as unknown[];
     out.push(
       ...page.filter((raw) => {
-        const row = raw as { origen_cuenta?: string | null };
+        const row = raw as {
+          origen_cuenta?: string | null;
+          source?: string | null;
+          payment_method?: string | null;
+        };
+        if (!fudoCuentaEnResultado(row.source, row.payment_method)) return false;
         if (soloFijas && !esSucursalFija(row.origen_cuenta)) return false;
         if (filtroCanonico && sucursalResumenCanonica(row.origen_cuenta) !== sucursalTrim) {
           return false;
@@ -977,6 +987,11 @@ async function fetchResumenPivotOperativoAggOrNull(args: {
 }): Promise<ResumenPivotOperativoAggRow[] | null> {
   const sub =
     args.sucursal.length > 0 && args.sucursal.length <= 200 ? args.sucursal : null;
+  const probe = await args.supabase.rpc("fudo_cuenta_en_resultado", {
+    p_source: "banco",
+    p_payment_method: "transferencia",
+  });
+  if (probe.error) return null;
   const { data, error } = await args.supabase.rpc("resumen_pivot_operativo_agg", {
     p_organization_id: args.organizationId,
     p_desde: args.desde,
@@ -1103,6 +1118,7 @@ export async function loadResumenPivotMain(args: {
     monthKeys,
     (r) =>
       esMovimientoFinanciamiento(r) &&
+      String(r.credit_component ?? "").toLowerCase() !== "cuota" &&
       (String(r.type ?? "").toLowerCase() === "expense" ||
         String(r.type ?? "").toLowerCase() === "gasto" ||
         String(r.type ?? "").toLowerCase() === "egreso"),
@@ -1406,6 +1422,7 @@ export async function loadResumenPivotPorSucursal(args: {
     monthKeys,
     (r) =>
       esMovimientoFinanciamiento(r) &&
+      String(r.credit_component ?? "").toLowerCase() !== "cuota" &&
       (String(r.type ?? "").toLowerCase() === "expense" ||
         String(r.type ?? "").toLowerCase() === "gasto" ||
         String(r.type ?? "").toLowerCase() === "egreso"),
