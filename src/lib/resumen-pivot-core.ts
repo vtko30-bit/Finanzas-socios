@@ -3,6 +3,7 @@ import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familiaNombreDesdeRawTx, familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import { normalizeFormaPago } from "@/lib/forma-pago";
 import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
+import { fetchRgSuiteSalePayments } from "@/lib/rg-suite-sale-payments";
 import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
@@ -75,6 +76,7 @@ export type IncomeRow = {
   amount: number | string;
   payment_method: string | null;
   origen_cuenta: string | null;
+  source?: string | null;
   concepto?: string | null;
   concept_catalog?: {
     label?: string | null;
@@ -230,6 +232,100 @@ export async function fetchExpenseRowsPaged(args: {
     data: omitMirroredExpenseDuplicates(out as { source?: unknown }[]),
     error: null,
   };
+}
+
+function listaVentasPorEtiqueta(
+  rows: IncomeRow[],
+  monthKeys: string[],
+): Array<{ sucursal: string; rows: ReturnType<typeof ventasRowsFromIncome> }> {
+  const byLoc = new Map<string, IncomeRow[]>();
+  for (const raw of rows) {
+    const loc = String(raw.origen_cuenta ?? "").trim() || "Sin sucursal";
+    if (!byLoc.has(loc)) byLoc.set(loc, []);
+    byLoc.get(loc)!.push(raw);
+  }
+  return Array.from(byLoc.entries())
+    .map(([sucursal, incomeRows]) => ({
+      sucursal,
+      rows: ventasRowsFromIncome(incomeRows, monthKeys),
+    }))
+    .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
+}
+
+/** Desde esta fecha el Resumen usa los pagos de Fudo (RG Suite), igual que Ventas. */
+const VENTAS_FUDO_DESDE = "2026-08-01";
+
+/**
+ * Antes de agosto: Excel y el resto de ingresos locales.
+ * Desde agosto: solo los pagos de Fudo en RG Suite.
+ * Devuelve null si RG Suite no está configurado o no responde.
+ */
+async function loadVentasAlineadasConModulo(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+  sucursal?: string;
+  soloSucursalesFijas?: boolean;
+  excludedFamilyIds: Set<string>;
+  monthKeys: string[];
+}): Promise<{
+  lista: Array<{ sucursal: string; rows: ReturnType<typeof ventasRowsFromIncome> }>;
+  filas: IncomeRow[];
+} | null> {
+  const fudoDesde = args.desde > VENTAS_FUDO_DESDE ? args.desde : VENTAS_FUDO_DESDE;
+  const payments =
+    args.hasta < VENTAS_FUDO_DESDE
+      ? []
+      : await fetchRgSuiteSalePayments(fudoDesde, args.hasta);
+  if (payments === null) return null;
+
+  const sucursalTrim = args.sucursal?.trim() ?? "";
+  const soloFijas = effectiveSoloSucursalesFijas(sucursalTrim, args.soloSucursalesFijas);
+  const hastaLocal =
+    args.hasta < VENTAS_FUDO_DESDE ? args.hasta : "2026-07-31";
+  const locales: IncomeRow[] = [];
+  if (args.desde <= hastaLocal) {
+    const { data, error } = await fetchIncomeRowsPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: hastaLocal,
+      sucursal: sucursalTrim,
+      soloSucursalesFijas: args.soloSucursalesFijas,
+    });
+    if (error) return null;
+    locales.push(
+      ...filterIncomeRowsByExcludedFamilies(data ?? [], args.excludedFamilyIds).filter(
+        (row) => String(row.source ?? "") !== "fudo_ventas",
+      ),
+    );
+  }
+
+  const pagos = payments.filter((p) => {
+    if (soloFijas && esEventoSucursal(p.sucursal)) return false;
+    if (!sucursalTrim) return true;
+    if (p.sucursal === sucursalTrim) return true;
+    if (esSucursalResumenCanonica(sucursalTrim)) {
+      return sucursalResumenCanonica(p.sucursal) === sucursalTrim;
+    }
+    return p.sucursal.toLowerCase().includes(sucursalTrim.toLowerCase());
+  });
+
+  const filas: IncomeRow[] = [
+    ...locales.map((row) => ({
+      ...row,
+      origen_cuenta: sucursalResumenCanonica(row.origen_cuenta),
+    })),
+    ...pagos.map((p) => ({
+      date: p.date,
+      amount: p.amount,
+      payment_method: p.paymentMethod,
+      origen_cuenta: p.sucursal,
+    })),
+  ];
+
+  return { lista: listaVentasPorEtiqueta(filas, args.monthKeys), filas };
 }
 
 export function ventasRowsFromIncome(
@@ -1064,7 +1160,8 @@ export async function loadResumenPivotMain(args: {
   const omitirAggPorFiltroCanonico =
     sucursal.length > 0 && sucursal.length <= 200 && esSucursalResumenCanonica(sucursal);
 
-  const [aggRows, creditRes, financingRes, creditDisburseRes] = await Promise.all([
+  const [aggRows, creditRes, financingRes, creditDisburseRes, ventasAlineadas] =
+    await Promise.all([
     omitirAggPorFiltroCanonico
       ? Promise.resolve(null)
       : fetchResumenPivotOperativoAggOrNull({
@@ -1093,6 +1190,16 @@ export async function loadResumenPivotMain(args: {
       organizationId: args.organizationId,
       desde: args.desde,
       hasta: args.hasta,
+    }),
+    loadVentasAlineadasConModulo({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+      sucursal,
+      soloSucursalesFijas: soloFijasEfectivo,
+      excludedFamilyIds,
+      monthKeys,
     }),
   ]);
 
@@ -1180,6 +1287,10 @@ export async function loadResumenPivotMain(args: {
     );
     gastosRows = gastosRowsFromExpenseRows(expenseNegocio, monthKeys);
     gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
+  }
+  if (ventasAlineadas) {
+    ventasRows = ventasRowsFromIncome(ventasAlineadas.filas, monthKeys);
+    ventasEventosRows = [];
   }
   const ingresoCreditosDesdeCredits = sumCreditDisbursementsByMonth(
     creditDisburseRows ?? [],
@@ -1361,7 +1472,7 @@ export async function loadResumenPivotPorSucursal(args: {
     };
   }
 
-  const [origenMensualRows, expenseRes, creditRes, financingRes, creditDisburseRes] =
+  const [origenMensualRows, expenseRes, creditRes, financingRes, creditDisburseRes, ventasAlineadas] =
     await Promise.all([
       fetchResumenIncomePorOrigenMensualAggOrNull({
         supabase: args.supabase,
@@ -1395,6 +1506,15 @@ export async function loadResumenPivotPorSucursal(args: {
         organizationId: args.organizationId,
         desde: args.desde,
         hasta: args.hasta,
+      }),
+      loadVentasAlineadasConModulo({
+        supabase: args.supabase,
+        organizationId: args.organizationId,
+        desde: args.desde,
+        hasta: args.hasta,
+        soloSucursalesFijas: args.soloSucursalesFijas,
+        excludedFamilyIds,
+        monthKeys,
       }),
     ]);
 
@@ -1447,7 +1567,9 @@ export async function loadResumenPivotPorSucursal(args: {
     rows: ReturnType<typeof ventasRowsFromIncome>;
   }>;
 
-  if (origenMensualRows) {
+  if (ventasAlineadas) {
+    ventasPorSucursalLista = ventasAlineadas.lista;
+  } else if (origenMensualRows) {
     ventasPorSucursalLista = ventasPorSucursalListaDesdeOrigenMensual(
       origenMensualRows,
       monthKeys,
