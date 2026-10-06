@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
+import { PeriodDuplicatesReview } from "@/components/import/period-duplicates-review";
 import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
 
 type ImportResult = {
@@ -27,6 +28,8 @@ type ImportResult = {
   heldForDuplicateReview?: number;
   skippedByHashDuplicate?: number;
   skippedDuplicateRowInFile?: number;
+  periodDesde?: string | null;
+  periodHasta?: string | null;
 };
 
 type DuplicateReviewItem = {
@@ -48,16 +51,6 @@ type DuplicateReviewItem = {
   }>;
 };
 
-function ymdLocal(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDaysYmd(ymd: string, days: number) {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const dt = new Date(y ?? 0, (m ?? 1) - 1, (d ?? 1) + days);
-  return ymdLocal(dt);
-}
-
 export default function ImportarPage() {
   const { ready, authenticated } = useAuthState();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
@@ -71,11 +64,6 @@ export default function ImportarPage() {
   const [loadingPagoServicios, setLoadingPagoServicios] = useState(false);
   const [loadingOtrosIngresos, setLoadingOtrosIngresos] = useState(false);
   const [loadingVentas, setLoadingVentas] = useState(false);
-  const [loadingFudoVentas, setLoadingFudoVentas] = useState(false);
-  const [loadingFudoGastos, setLoadingFudoGastos] = useState(false);
-  const [fudoGastosNote, setFudoGastosNote] = useState("");
-  const [fudoDesde, setFudoDesde] = useState(() => addDaysYmd(ymdLocal(), -6));
-  const [fudoHasta, setFudoHasta] = useState(() => ymdLocal());
   const [loadingResetTodo, setLoadingResetTodo] = useState(false);
   const [loadingResetVentas, setLoadingResetVentas] = useState(false);
   const [loadingBackup, setLoadingBackup] = useState(false);
@@ -91,6 +79,12 @@ export default function ImportarPage() {
     Record<string, "insert" | "skip">
   >({});
   const [confirmingDupes, setConfirmingDupes] = useState(false);
+  const [periodDupReview, setPeriodDupReview] = useState<{
+    desde: string;
+    hasta: string;
+  } | null>(null);
+  const [pendingSuccessAfterPeriodDup, setPendingSuccessAfterPeriodDup] =
+    useState(false);
 
   const parseApiBody = (text: string): { error?: string; [k: string]: unknown } => {
     if (!text) return {};
@@ -101,7 +95,6 @@ export default function ImportarPage() {
     }
   };
 
-  /** Une error/details/hint/code por si la API solo rellena parte de los campos (p. ej. PostgREST). */
   const mensajeApi = (data: Record<string, unknown>) => {
     const parts = [data.error, data.details, data.hint]
       .map((x) => (typeof x === "string" ? x.trim() : ""))
@@ -117,6 +110,40 @@ export default function ImportarPage() {
         ? ` (código ${data.code.trim()})`
         : "";
     return (base + code).trim();
+  };
+
+  const finishConsolidadoSuccess = async (
+    importData: ImportResult,
+    successMsg: string,
+  ) => {
+    setSuccessMessage(successMsg);
+    invalidateMainNavCaches();
+    const desde = importData.periodDesde?.trim() ?? "";
+    const hasta = importData.periodHasta?.trim() ?? "";
+    if (desde && hasta) {
+      try {
+        const res = await fetch(
+          `/api/import/duplicados-periodo?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+        );
+        const data = (await res.json()) as { groups?: unknown[] };
+        if (res.ok && Array.isArray(data.groups) && data.groups.length > 0) {
+          setPendingSuccessAfterPeriodDup(true);
+          setPeriodDupReview({ desde, hasta });
+          return;
+        }
+      } catch {
+        // Si falla la consulta, seguimos con el modal de éxito.
+      }
+    }
+    setShowSuccessModal(true);
+  };
+
+  const closePeriodDupReview = () => {
+    setPeriodDupReview(null);
+    if (pendingSuccessAfterPeriodDup) {
+      setPendingSuccessAfterPeriodDup(false);
+      setShowSuccessModal(true);
+    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -169,6 +196,10 @@ export default function ImportarPage() {
         setStatus(
           "No se agregaron movimientos nuevos: todas las filas válidas ya existen (duplicadas) o repetidas dentro del mismo archivo.",
         );
+        await finishConsolidadoSuccess(
+          importData,
+          "No hubo movimientos nuevos; puedes revisar duplicados del período si lo necesitas.",
+        );
         return;
       }
       setStatus(
@@ -176,13 +207,12 @@ export default function ImportarPage() {
           ? "Se actualizaron los movimientos que ya existían (mismo Id)."
           : "Importación de gastos y egresos finalizada.",
       );
-      setSuccessMessage(
+      await finishConsolidadoSuccess(
+        importData,
         (importData.updated ?? 0) > 0 && importData.inserted === 0
           ? "Se actualizaron los gastos y egresos con el Excel."
           : "La importación de gastos y egresos terminó correctamente.",
       );
-      invalidateMainNavCaches();
-      setShowSuccessModal(true);
     } catch (error) {
       setStatus(
         `Error inesperado al importar: ${
@@ -353,130 +383,6 @@ export default function ImportarPage() {
       );
     } finally {
       setLoadingVentas(false);
-    }
-  };
-
-  const submitFudoVentas = async () => {
-    if (!authenticated) return;
-    setLoadingFudoVentas(true);
-    setStatus("");
-    setResult(null);
-    try {
-      const res = await fetch("/api/fudo/sync-ventas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: fudoDesde, to: fudoHasta }),
-      });
-      const text = await res.text();
-      const data = parseApiBody(text);
-      if (!res.ok) {
-        setStatus(mensajeApi(data) || "Error al sincronizar ventas de Fudo");
-        return;
-      }
-      const inserted = Number(data.inserted ?? 0);
-      const duplicates = Number(data.duplicates ?? 0);
-      const fetched = Number(data.fetched ?? 0);
-      const skippedLocked = Number(data.skippedLocked ?? 0);
-      const skippedResumen = Number(data.skippedResumenDays ?? 0);
-      const errs = Array.isArray(data.errors)
-        ? (data.errors as unknown[]).map(String).filter(Boolean)
-        : [];
-      const extra = [
-        skippedLocked > 0 ? `${skippedLocked} en período cerrado` : "",
-        skippedResumen > 0
-          ? `${skippedResumen} omitidas (ese día ya tiene ventas resumidas)`
-          : "",
-        errs.length ? errs.join(" · ") : "",
-      ]
-        .filter(Boolean)
-        .join(". ");
-      setStatus(
-        `Fudo: ${inserted} venta(s) nueva(s) de ${fetched} leídas (${duplicates} ya estaban).${
-          extra ? ` ${extra}` : ""
-        }`,
-      );
-      invalidateMainNavCaches();
-      if (inserted > 0) {
-        setSuccessMessage("Las ventas de Fudo se actualizaron.");
-        setShowSuccessModal(true);
-      }
-    } catch (error) {
-      setStatus(
-        `Error inesperado al sincronizar Fudo: ${
-          error instanceof Error ? error.message : "desconocido"
-        }`,
-      );
-    } finally {
-      setLoadingFudoVentas(false);
-    }
-  };
-
-  const submitFudoGastos = async () => {
-    if (!authenticated) return;
-    setLoadingFudoGastos(true);
-    setStatus("");
-    setFudoGastosNote("");
-    setResult(null);
-    try {
-      const res = await fetch("/api/fudo/sync-gastos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: fudoDesde, to: fudoHasta }),
-      });
-      const text = await res.text();
-      const data = parseApiBody(text);
-      if (!res.ok) {
-        const msg = mensajeApi(data) || "Error al sincronizar gastos de Fudo";
-        setFudoGastosNote(msg);
-        setStatus(msg);
-        return;
-      }
-      const inserted = Number(data.inserted ?? 0);
-      const duplicates = Number(data.duplicates ?? 0);
-      const fetched = Number(data.fetched ?? 0);
-      const apiRows = Number(data.apiRows ?? 0);
-      const skippedLocked = Number(data.skippedLocked ?? 0);
-      const skippedId = Number(data.skippedExistingId ?? 0);
-      const errs = Array.isArray(data.errors)
-        ? (data.errors as unknown[]).map(String).filter(Boolean)
-        : [];
-      const updated = Number(data.updated ?? 0);
-      const extra = [
-        updated > 0 ? `${updated} corregidos` : "",
-        skippedLocked > 0 ? `${skippedLocked} en período cerrado` : "",
-        skippedId > 0 ? `${skippedId} ya estaban (mismo Id Fudo)` : "",
-        errs.length ? errs.join(" · ") : "",
-      ]
-        .filter(Boolean)
-        .join(". ");
-      let note = `Se leyeron ${fetched} gasto(s) válido(s) de ${apiRows} filas Fudo. Se insertaron ${inserted}. ${duplicates} ya estaban.`;
-      if (extra) note += ` ${extra}`;
-      if (inserted === 0 && updated === 0 && fetched === 0 && apiRows === 0 && !errs.length) {
-        note =
-          "Fudo no devolvió gastos en ese rango. Amplía Desde/Hasta (máx. 31 días) y vuelve a intentar.";
-      } else if (inserted === 0 && skippedLocked > 0 && skippedLocked >= fetched) {
-        note =
-          `Hay ${skippedLocked} gasto(s) en un período cerrado, por eso no se cargaron. Reabre el período en Períodos cerrados o elige fechas abiertas.`;
-      } else if (inserted > 0 || updated > 0) {
-        note += " En Gastos el origen es Fudo Rg / Fudo Happy.";
-        setSuccessMessage(
-          updated > 0 && inserted === 0
-            ? "Se corrigió el mapeo de los gastos de Fudo."
-            : "Los gastos de Fudo se actualizaron.",
-        );
-        setShowSuccessModal(true);
-      }
-      setFudoGastosNote(note);
-      setStatus(note);
-      invalidateMainNavCaches();
-    } catch (error) {
-      const msg = `Error inesperado al sincronizar gastos de Fudo: ${
-        error instanceof Error ? error.message : "desconocido"
-      }`;
-      setFudoGastosNote(msg);
-      setStatus(msg);
-    } finally {
-      setLoadingFudoGastos(false);
     }
   };
 
@@ -797,73 +703,6 @@ export default function ImportarPage() {
       </section>
 
       <section className="ui-card p-6">
-        <h1 className="page-title">Actualizar desde Fudo</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Trae ventas y gastos de Rg y Happy. Lo que ya está (Excel o Fudo) no
-          se duplica. El cron diario también actualiza ambos.
-        </p>
-        <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <label className="text-sm text-slate-700">
-            Desde
-            <input
-              type="date"
-              className="ui-field mt-1"
-              value={fudoDesde}
-              onChange={(e) => setFudoDesde(e.target.value)}
-              disabled={!authenticated || loadingFudoVentas || loadingFudoGastos}
-            />
-          </label>
-          <label className="text-sm text-slate-700">
-            Hasta
-            <input
-              type="date"
-              className="ui-field mt-1"
-              value={fudoHasta}
-              onChange={(e) => setFudoHasta(e.target.value)}
-              disabled={!authenticated || loadingFudoVentas || loadingFudoGastos}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void submitFudoVentas()}
-            disabled={
-              !authenticated ||
-              !canWrite ||
-              capsLoading ||
-              loadingFudoVentas ||
-              loadingFudoGastos ||
-              !fudoDesde ||
-              !fudoHasta
-            }
-            className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
-          >
-            {loadingFudoVentas ? "Sincronizando…" : "Actualizar ventas"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void submitFudoGastos()}
-            disabled={
-              !authenticated ||
-              !canWrite ||
-              capsLoading ||
-              loadingFudoVentas ||
-              loadingFudoGastos ||
-              !fudoDesde ||
-              !fudoHasta
-            }
-            className="rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-60"
-          >
-            {loadingFudoGastos ? "Sincronizando…" : "Actualizar gastos"}
-          </button>
-        </form>
-        {fudoGastosNote ? (
-          <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-            {fudoGastosNote}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="ui-card p-6">
         <h1 className="page-title">Importar Excel de ventas</h1>
         <p className="mt-2 text-xs text-amber-800">
           Si este archivo corresponde a egresos, impórtalo en{" "}
@@ -1160,6 +999,23 @@ export default function ImportarPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {periodDupReview ? (
+        <PeriodDuplicatesReview
+          open
+          desde={periodDupReview.desde}
+          hasta={periodDupReview.hasta}
+          title="Revisar duplicados del período importado"
+          onClose={closePeriodDupReview}
+          onDeleted={(deleted) => {
+            setStatus(
+              deleted > 0
+                ? `Se eliminaron ${deleted.toLocaleString("es-CL")} egreso(s) duplicado(s) del período.`
+                : "Revisión de duplicados cerrada.",
+            );
+          }}
+        />
       ) : null}
 
       {showSuccessModal ? (
