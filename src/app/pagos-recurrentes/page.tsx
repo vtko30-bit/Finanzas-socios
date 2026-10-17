@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
 
@@ -167,6 +167,13 @@ export default function PagosRecurrentesPage() {
     if (authenticated) void load();
   }, [authenticated, load]);
 
+  useEffect(() => {
+    if (!reconcileFor) return;
+    document
+      .getElementById(`recurring-reconcile-${reconcileFor.id}`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [reconcileFor]);
+
   const startEdit = (row: ObligationConfig) => {
     setEditId(row.id);
     setName(row.name);
@@ -233,8 +240,18 @@ export default function PagosRecurrentesPage() {
     void load();
   };
 
+  const closeReconcile = () => {
+    setReconcileFor(null);
+    setReconcileCand([]);
+    setReconcilePickId(null);
+  };
+
   const openReconcile = async (item: ObligationMonthItem) => {
     if (!canWrite) return;
+    if (reconcileFor?.id === item.id) {
+      closeReconcile();
+      return;
+    }
     setReconcileFor(item);
     setReconcilePickId(null);
     setReconcileFilter(item.name || "");
@@ -295,9 +312,7 @@ export default function PagosRecurrentesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo marcar");
       setMsg("Pagado y asociado al movimiento.");
-      setReconcileFor(null);
-      setReconcileCand([]);
-      setReconcilePickId(null);
+      closeReconcile();
       void load();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Error");
@@ -518,7 +533,14 @@ export default function PagosRecurrentesPage() {
             </thead>
             <tbody>
               {[...overdue, ...dueSoon, ...upcoming].map((item) => (
-                <tr key={item.id} className="border-t border-slate-100">
+                <Fragment key={item.id}>
+                <tr
+                  className={
+                    reconcileFor?.id === item.id
+                      ? "border-t border-emerald-200 bg-emerald-50/40"
+                      : "border-t border-slate-100"
+                  }
+                >
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-900">{item.name}</div>
                     {item.familyName ? (
@@ -570,9 +592,11 @@ export default function PagosRecurrentesPage() {
                           className="text-xs font-medium text-cyan-600 hover:underline"
                           onClick={() => void openReconcile(item)}
                         >
-                          {item.paidViaImport && !item.markedPaid
-                            ? "Confirmar con movimiento"
-                            : "Marcar pagado"}
+                          {reconcileFor?.id === item.id
+                            ? "Cerrar"
+                            : item.paidViaImport && !item.markedPaid
+                              ? "Confirmar con movimiento"
+                              : "Marcar pagado"}
                         </button>
                       ) : item.markedPaid ? (
                         <button
@@ -586,6 +610,124 @@ export default function PagosRecurrentesPage() {
                     </td>
                   ) : null}
                 </tr>
+                {reconcileFor?.id === item.id ? (
+                  <tr
+                    id={`recurring-reconcile-${item.id}`}
+                    className="border-t border-emerald-100 bg-emerald-50/40"
+                  >
+                    <td colSpan={canWrite ? 5 : 4} className="px-3 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h2 className="text-sm font-semibold text-slate-800">
+                            Asociar movimiento — {reconcileFor.name}
+                          </h2>
+                          <p className="mt-1 text-xs text-slate-600">
+                            Elige un egreso importado (planilla) del mes. El monto puede
+                            variar (luz, agua, etc.): no se exige el estimado. A diferencia
+                            de los créditos, el movimiento <strong>sigue en Gastos</strong>.
+                            {reconcileFor.amountEstimate != null ? (
+                              <>
+                                {" "}
+                                Estimado orientativo:{" "}
+                                {formatClp(reconcileFor.amountEstimate)}.
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs text-slate-600 hover:underline"
+                          onClick={closeReconcile}
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <label className="text-xs text-slate-600">
+                          Filtrar por nombre / glosa
+                          <input
+                            type="text"
+                            className="ui-input mt-1 w-full"
+                            value={reconcileFilter}
+                            onChange={(e) => setReconcileFilter(e.target.value)}
+                            placeholder="Ej. ENEL, arriendo, lipigas"
+                          />
+                        </label>
+                        <label className="text-xs text-slate-600">
+                          Filtrar por monto exacto (opcional)
+                          <input
+                            type="number"
+                            min={0}
+                            className="ui-input mt-1 w-full"
+                            value={reconcileAmount}
+                            onChange={(e) => setReconcileAmount(e.target.value)}
+                            placeholder="Solo si querés acotar"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded border border-emerald-700 bg-white px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
+                          disabled={reconcileLoading || reconcileBusy}
+                          onClick={() => void searchReconcile()}
+                        >
+                          {reconcileLoading ? "Buscando…" : "Buscar egresos"}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+                          disabled={!reconcilePickId || reconcileBusy || reconcileLoading}
+                          onClick={() => void confirmMarkPaid()}
+                        >
+                          {reconcileBusy ? "Guardando…" : "Confirmar pagado"}
+                        </button>
+                      </div>
+                      {reconcileCand.length > 0 ? (
+                        <ul className="mt-3 max-h-56 space-y-2 overflow-auto text-sm">
+                          {reconcileCand.map((c) => (
+                            <li
+                              key={c.id}
+                              className="rounded border border-slate-100 bg-white px-2 py-1.5"
+                            >
+                              <label className="flex cursor-pointer gap-2">
+                                <input
+                                  type="radio"
+                                  name="recurring-reconcile"
+                                  className="mt-1"
+                                  checked={reconcilePickId === c.id}
+                                  onChange={() => setReconcilePickId(c.id)}
+                                />
+                                <span className="min-w-0">
+                                  <span className="font-medium text-slate-900">
+                                    {c.date} · {formatClp(c.amount)}
+                                  </span>
+                                  {c.counterparty ? (
+                                    <span className="block truncate text-slate-700">
+                                      {c.counterparty}
+                                    </span>
+                                  ) : null}
+                                  {c.description ? (
+                                    <span className="block truncate text-slate-700">
+                                      {c.description}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : reconcileLoading ? (
+                        <p className="mt-3 text-xs text-slate-500">Buscando movimientos…</p>
+                      ) : (
+                        <p className="mt-3 text-xs text-slate-500">
+                          No hay candidatos. Importá el egreso o ajustá los filtros.
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               ))}
               {statusItems.length === 0 ? (
                 <tr>
@@ -601,121 +743,6 @@ export default function PagosRecurrentesPage() {
           </table>
         </div>
       </section>
-
-      {reconcileFor ? (
-        <section className="mb-8 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800">
-                Asociar movimiento — {reconcileFor.name}
-              </h2>
-              <p className="mt-1 text-xs text-slate-600">
-                Elige un egreso importado (planilla) del mes. El monto puede
-                variar (luz, agua, etc.): no se exige el estimado. A diferencia
-                de los créditos, el movimiento <strong>sigue en Gastos</strong>.
-                {reconcileFor.amountEstimate != null ? (
-                  <>
-                    {" "}
-                    Estimado orientativo:{" "}
-                    {formatClp(reconcileFor.amountEstimate)}.
-                  </>
-                ) : null}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="text-xs text-slate-600 hover:underline"
-              onClick={() => {
-                setReconcileFor(null);
-                setReconcileCand([]);
-                setReconcilePickId(null);
-              }}
-            >
-              Cerrar
-            </button>
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <label className="text-xs text-slate-600">
-              Filtrar por nombre / glosa
-              <input
-                type="text"
-                className="ui-input mt-1 w-full"
-                value={reconcileFilter}
-                onChange={(e) => setReconcileFilter(e.target.value)}
-                placeholder="Ej. ENEL, arriendo, lipigas"
-              />
-            </label>
-            <label className="text-xs text-slate-600">
-              Filtrar por monto exacto (opcional)
-              <input
-                type="number"
-                min={0}
-                className="ui-input mt-1 w-full"
-                value={reconcileAmount}
-                onChange={(e) => setReconcileAmount(e.target.value)}
-                placeholder="Solo si querés acotar"
-              />
-            </label>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded border border-emerald-700 bg-white px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
-              disabled={reconcileLoading || reconcileBusy}
-              onClick={() => void searchReconcile()}
-            >
-              {reconcileLoading ? "Buscando…" : "Buscar egresos"}
-            </button>
-            <button
-              type="button"
-              className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
-              disabled={!reconcilePickId || reconcileBusy || reconcileLoading}
-              onClick={() => void confirmMarkPaid()}
-            >
-              {reconcileBusy ? "Guardando…" : "Confirmar pagado"}
-            </button>
-          </div>
-          {reconcileCand.length > 0 ? (
-            <ul className="mt-3 max-h-56 space-y-2 overflow-auto text-sm">
-              {reconcileCand.map((c) => (
-                <li
-                  key={c.id}
-                  className="rounded border border-slate-100 bg-white px-2 py-1.5"
-                >
-                  <label className="flex cursor-pointer gap-2">
-                    <input
-                      type="radio"
-                      name="recurring-reconcile"
-                      className="mt-1"
-                      checked={reconcilePickId === c.id}
-                      onChange={() => setReconcilePickId(c.id)}
-                    />
-                    <span className="min-w-0">
-                      <span className="font-medium text-slate-900">
-                        {c.date} · {formatClp(c.amount)}
-                      </span>
-                      {c.counterparty ? (
-                        <span className="block truncate text-slate-700">
-                          {c.counterparty}
-                        </span>
-                      ) : null}
-                      {c.description ? (
-                        <span className="block truncate text-slate-700">
-                          {c.description}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          ) : reconcileLoading ? null : (
-            <p className="mt-3 text-xs text-slate-500">
-              No hay candidatos. Importá el egreso o ajustá los filtros.
-            </p>
-          )}
-        </section>
-      ) : null}
 
       {creditDueSoon.length > 0 ? (
         <section className="mb-8">
