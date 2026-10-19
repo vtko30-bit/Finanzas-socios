@@ -1,6 +1,20 @@
 /** Familia bancaria para dedupe cartola ↔ transferencias (sin mezclar bancos). */
 export type OrigenFamiliaBanco = "be" | "bci" | "bdch";
 
+/** Nombre de carpeta que manda la aplicación local. No es una categoría contable. */
+const ETIQUETAS_CARPETA = [
+  "Movimientos Banco Estado",
+  "Transferencias Banco Estado",
+  "Movimientos Bci",
+  "Retiros Mercado Pago",
+] as const;
+
+export function esEtiquetaCarpetaBanco(value: string): boolean {
+  const n = normalizeKey(value);
+  if (!n) return false;
+  return ETIQUETAS_CARPETA.some((label) => normalizeKey(label) === n);
+}
+
 function normalizeKey(key: string): string {
   return key
     .toLowerCase()

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { expenseDedupeHashFromParsed } from "@/lib/import/expense-dedupe-keys";
+import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import {
   collectBlockedImportDates,
   fetchImportPeriodLocks,
@@ -18,9 +19,23 @@ type IncomingRow = {
   concepto?: string;
   origen?: string;
   descripcion?: string;
+  carpeta?: string;
   cargo?: number;
   abono?: number;
 };
+
+function conceptoDe(row: IncomingRow) {
+  const propio = String(row.concepto ?? "").trim();
+  if (propio) return propio;
+  const carpeta = String(row.carpeta ?? "").trim();
+  if (carpeta) return carpeta;
+  return "Sin categoria";
+}
+
+function conceptoVacio(value: unknown) {
+  const text = String(value ?? "").trim();
+  return !text || /^sin categor[ií]a$/i.test(text);
+}
 
 function authorize(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -136,7 +151,7 @@ export async function POST(request: Request) {
         payment_method: paymentMethod,
         external_ref: externalRef,
         origen_cuenta: accountName,
-        concepto: String(row.concepto || "Sin categoria").trim(),
+        concepto: conceptoDe(row),
         source_id: sourceId,
         dedupe_hash: expenseDedupeHashFromParsed({
           source_id: sourceId,
@@ -165,15 +180,35 @@ export async function POST(request: Request) {
     const open = drafts.filter((row) => !blocked.has(row.date));
 
     const knownHashes = new Set<string>();
+    const etiquetaPorHash = new Map<string, string>();
+    for (const row of open) {
+      if (esEtiquetaCarpetaBanco(row.concepto)) etiquetaPorHash.set(row.dedupe_hash, row.concepto);
+    }
     for (const group of chunk(open.map((row) => row.dedupe_hash), 100)) {
       const { data, error } = await admin
         .from("transactions")
-        .select("dedupe_hash")
+        .select("id, dedupe_hash, concepto")
         .eq("organization_id", organizationId)
         .in("dedupe_hash", group);
       if (error) throw new Error(error.message);
+      const porEtiqueta = new Map<string, string[]>();
       for (const row of data ?? []) {
-        if (row.dedupe_hash) knownHashes.add(String(row.dedupe_hash));
+        const hash = String(row.dedupe_hash ?? "");
+        if (!hash) continue;
+        knownHashes.add(hash);
+        const etiqueta = etiquetaPorHash.get(hash);
+        if (!etiqueta || !conceptoVacio(row.concepto) || !row.id) continue;
+        const ids = porEtiqueta.get(etiqueta) ?? [];
+        ids.push(String(row.id));
+        porEtiqueta.set(etiqueta, ids);
+      }
+      for (const [etiqueta, ids] of porEtiqueta) {
+        const { error: updateError } = await admin
+          .from("transactions")
+          .update({ concepto: etiqueta })
+          .eq("organization_id", organizationId)
+          .in("id", ids);
+        if (updateError) throw new Error(updateError.message);
       }
     }
 

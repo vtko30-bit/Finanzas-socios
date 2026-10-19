@@ -4,6 +4,7 @@ export const SOURCE_EXCEL_EGRESOS_SERVICIOS = "excel_egresos_banco_estado_servic
 export const SOURCE_EXCEL_EGRESOS = "excel_egresos";
 
 import {
+  esEtiquetaCarpetaBanco,
   esFilaTransferenciasBe,
   esOrigenTransferencias,
   esOrigenTransferenciasBancoEstado,
@@ -35,7 +36,10 @@ function normOrigenKey(origen: string): string {
 function origenDeFila(r: {
   origen_cuenta?: unknown;
   account_name?: unknown;
+  concepto?: unknown;
 }): string {
+  const concepto = String(r.concepto ?? "").trim();
+  if (esEtiquetaCarpetaBanco(concepto)) return concepto;
   return String(r.origen_cuenta ?? r.account_name ?? "").trim();
 }
 
