@@ -75,6 +75,31 @@ function sourceIdFor(row: IncomingRow, date: string, amount: number, side: strin
   return `carpeta:${createHash("sha256").update(payload).digest("hex").slice(0, 24)}`;
 }
 
+function normRef(value: unknown) {
+  let text = String(value ?? "")
+    .trim()
+    .replace(/\.0+$/, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  if (/^\d+$/.test(text)) text = text.replace(/^0+/, "") || "0";
+  return text;
+}
+
+function normText(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function addDays(ymd: string, days: number) {
+  const date = new Date(`${ymd}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function logicalKey(row: {
   date?: string;
   type?: string;
@@ -87,10 +112,34 @@ function logicalKey(row: {
     String(row.date ?? "").slice(0, 10),
     String(row.type ?? ""),
     Number(row.amount || 0).toFixed(2),
-    String(row.external_ref ?? "").trim().toLowerCase(),
+    normRef(row.external_ref),
     String(row.origen_cuenta ?? "").trim().toLowerCase(),
-    String(row.description ?? "").trim().toLowerCase(),
+    normText(row.description),
   ].join("|");
+}
+
+function clavesDeCruce(row: {
+  date?: string;
+  type?: string;
+  amount?: number;
+  external_ref?: string;
+  description?: string;
+}) {
+  const date = String(row.date ?? "").slice(0, 10);
+  const type = String(row.type ?? "");
+  const amount = Number(row.amount || 0).toFixed(2);
+  const keys = [logicalKey(row)];
+  const ref = normRef(row.external_ref);
+  if (ref && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    for (let delta = -5; delta <= 5; delta += 1) {
+      keys.push(`ref|${addDays(date, delta)}|${type}|${amount}|${ref}`);
+    }
+  }
+  const description = normText(row.description);
+  if (description.length >= 6) {
+    keys.push(`desc|${date}|${type}|${amount}|${description}`);
+  }
+  return keys;
 }
 
 function chunk<T>(items: T[], size: number) {
@@ -226,13 +275,15 @@ export async function POST(request: Request) {
           .range(from, from + pageSize - 1);
         if (error) throw new Error(error.message);
         for (const row of data ?? []) {
-          existingKeys.add(logicalKey(row));
+          for (const key of clavesDeCruce(row)) existingKeys.add(key);
         }
         if (!data || data.length < pageSize) break;
       }
     }
     const fresh = open.filter(
-      (row) => !knownHashes.has(row.dedupe_hash) && !existingKeys.has(logicalKey(row)),
+      (row) =>
+        !knownHashes.has(row.dedupe_hash) &&
+        !clavesDeCruce(row).some((key) => existingKeys.has(key)),
     );
 
     const { data: batch, error: batchError } = await admin
