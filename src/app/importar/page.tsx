@@ -60,6 +60,10 @@ export default function ImportarPage() {
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [fileOtrosIngresos, setFileOtrosIngresos] = useState<File | null>(null);
+  const [bancoFrom, setBancoFrom] = useState("");
+  const [bancoTo, setBancoTo] = useState("");
+  const [loadingBanco, setLoadingBanco] = useState(false);
+  const [bancoStatus, setBancoStatus] = useState("");
   const [loadingConsolidado, setLoadingConsolidado] = useState(false);
   const [loadingPagoServicios, setLoadingPagoServicios] = useState(false);
   const [loadingOtrosIngresos, setLoadingOtrosIngresos] = useState(false);
@@ -143,6 +147,42 @@ export default function ImportarPage() {
     if (pendingSuccessAfterPeriodDup) {
       setPendingSuccessAfterPeriodDup(false);
       setShowSuccessModal(true);
+    }
+  };
+
+  const submitBanco = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!authenticated) return;
+    setLoadingBanco(true);
+    setBancoStatus("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/banco-chile/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: bancoFrom || undefined,
+          to: bancoTo || undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        inserted?: number;
+        skipped?: number;
+        locked?: number;
+        from?: string;
+        to?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el banco");
+      const locked = data.locked ? ` ${data.locked} quedaron en un período cerrado.` : "";
+      setBancoStatus(
+        `Banco de Chile ${data.from} a ${data.to}: ${data.inserted ?? 0} movimientos nuevos, ${data.skipped ?? 0} ya estaban.${locked}`,
+      );
+      invalidateMainNavCaches();
+    } catch (error) {
+      setBancoStatus(error instanceof Error ? error.message : "No se pudo actualizar el banco");
+    } finally {
+      setLoadingBanco(false);
     }
   };
 
@@ -677,6 +717,47 @@ export default function ImportarPage() {
           </a>
           .
         </p>
+      </section>
+
+      <section className="ui-card p-6">
+        <h2 className="text-lg font-semibold">Banco de Chile</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Trae la cartola de la cuenta corriente y la carga en Gastos e Ingresos. Si el
+          movimiento ya existe, no se duplica. Si no eliges fechas, usa los últimos 7 días.
+        </p>
+        <form
+          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={(event) => void submitBanco(event)}
+        >
+          <label className="text-sm text-slate-600">
+            Desde
+            <input
+              type="date"
+              className="mt-1 block rounded-md border border-slate-300 bg-white px-3 py-2"
+              value={bancoFrom}
+              onChange={(event) => setBancoFrom(event.target.value)}
+              disabled={!authenticated || loadingBanco}
+            />
+          </label>
+          <label className="text-sm text-slate-600">
+            Hasta
+            <input
+              type="date"
+              className="mt-1 block rounded-md border border-slate-300 bg-white px-3 py-2"
+              value={bancoTo}
+              onChange={(event) => setBancoTo(event.target.value)}
+              disabled={!authenticated || loadingBanco}
+            />
+          </label>
+          <button
+            type="submit"
+            className="ui-btn-primary"
+            disabled={!authenticated || loadingBanco}
+          >
+            {loadingBanco ? "Actualizando..." : "Actualizar Banco de Chile"}
+          </button>
+        </form>
+        {bancoStatus ? <p className="mt-3 text-sm text-slate-700">{bancoStatus}</p> : null}
       </section>
 
       <section
