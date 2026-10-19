@@ -31,17 +31,16 @@ export async function fetchAccessToken(
   config: BancoConfig,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
+  // En sandbox el portal no emite un token OAuth. La cartola acepta las claves
+  // en los encabezados y cualquier Bearer. Producción firma un JWT con el PEM.
+  if (!config.privateKeyPem) return "sandbox";
+
   const body = new URLSearchParams({
     grant_type: "client_credentials",
     audience: config.audience,
+    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+    client_assertion: clientAssertion(config),
   });
-  if (config.privateKeyPem) {
-    body.set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
-    body.set("client_assertion", clientAssertion(config));
-  } else {
-    body.set("client_id", config.clientId);
-    body.set("client_secret", config.clientSecret);
-  }
 
   const res = await fetchImpl(config.tokenUrl, {
     method: "POST",
