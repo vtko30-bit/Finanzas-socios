@@ -11,6 +11,10 @@
     {
       "path": "/api/fudo/cron",
       "schedule": "15 7 * * *"
+    },
+    {
+      "path": "/api/ventas-diarias",
+      "schedule": "30 12 * * *"
     }
   ]
 }
