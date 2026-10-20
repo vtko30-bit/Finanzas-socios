@@ -255,6 +255,17 @@ export class FudoClient {
     });
   }
 
+  async fetchCashMovements(fromIso: string, toIso: string) {
+    return this.fetchAllPages("/cash-movements", {
+      "filter[createdAt]": `and(gte.${fromIso},lte.${toIso})`,
+      include: "paymentMethod,cashRegister",
+      "fields[cashMovement]":
+        "amount,canceled,comment,createdAt,updatedAt,movementType,paymentMethod,cashRegister",
+      "fields[paymentMethod]": "name,code",
+      "fields[cashRegister]": "name",
+    });
+  }
+
   /** Catálogo de productos (+ categoría). */
   async fetchProducts() {
     return this.fetchAllPages("/products", {

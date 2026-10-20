@@ -10,10 +10,9 @@ type NavItem = { href: string; label: string; external?: boolean };
 
 const RG_SUITE_URL =
   process.env.NEXT_PUBLIC_RG_SUITE_URL || "https://rg-suite.vercel.app";
-const FUDO_VENTAS_URL = `${RG_SUITE_URL.replace(/\/$/, "")}/fudo?view=ventas`;
 
 const NAV_BASE: NavItem[] = [
-  { href: FUDO_VENTAS_URL, label: "Ventas", external: true },
+  { href: "/ventas", label: "Ventas" },
   { href: "/gastos", label: "Gastos" },
   { href: "/resumen", label: "Resumen" },
   { href: "/socios", label: "Socios" },

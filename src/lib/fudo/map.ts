@@ -9,6 +9,7 @@ import type {
   FudoJsonApiResource,
   FudoListResponse,
   GastoExcelRow,
+  CashMovementRow,
   MixDetalleRow,
   MixResumenRow,
   ProductoCatalogoRow,
@@ -264,6 +265,44 @@ export function mapExpensesToGastoRows(
         asString(pm?.attributes?.code) ||
         "",
       Proveedor: asString(provider?.attributes?.name),
+    });
+  }
+
+  return rows;
+}
+
+export function mapCashMovementsToRows(
+  branch: FudoBranch,
+  response: FudoListResponse,
+): CashMovementRow[] {
+  const included = response.included;
+  const rows: CashMovementRow[] = [];
+
+  for (const mov of response.data) {
+    const attrs = mov.attributes ?? {};
+    if (attrs.canceled === true) continue;
+    const amount = asNumber(attrs.amount);
+    if (amount <= 0) continue;
+
+    const rawType = asString(attrs.movementType).toLowerCase();
+    const tipo: "income" | "outcome" =
+      rawType === "income" || rawType === "ingreso" ? "income" : "outcome";
+
+    const pm = resolveRel(mov, included, ["paymentMethod"], "PaymentMethod");
+    const register = resolveRel(mov, included, ["cashRegister"], "CashRegister");
+    const createdAt = asString(attrs.createdAt) || null;
+
+    rows.push({
+      Id: mov.id,
+      Fecha: toDateOnly(createdAt || ""),
+      Sucursal: branch,
+      Tipo: tipo,
+      Monto: amount,
+      Comentario: asString(attrs.comment),
+      "Medio de Pago":
+        asString(pm?.attributes?.name) || asString(pm?.attributes?.code) || "",
+      Caja: asString(register?.attributes?.name),
+      CreatedAt: createdAt,
     });
   }
 

@@ -1,9 +1,32 @@
-import { redirect } from "next/navigation";
+"use client";
 
-const FUDO_VENTAS_URL = `${(
-  process.env.NEXT_PUBLIC_RG_SUITE_URL || "https://rg-suite.vercel.app"
-).replace(/\/$/, "")}/fudo?view=ventas`;
+import { useState } from "react";
+import { FudoWorkspace } from "@/components/fudo/fudo-workspace";
+import { useOrgCapabilities } from "@/components/org-capabilities-provider";
+import { useAuthState } from "@/hooks/use-auth-state";
+
+function vistaInicial() {
+  if (typeof window === "undefined") return "ventas";
+  const view = new URLSearchParams(window.location.search).get("view");
+  return view || "ventas";
+}
 
 export default function VentasPage() {
-  redirect(FUDO_VENTAS_URL);
+  const { ready, authenticated } = useAuthState();
+  const { canWrite, loading } = useOrgCapabilities();
+  const [initialView] = useState(vistaInicial);
+
+  if (!ready || !authenticated || loading) {
+    return (
+      <main className="page-main page-main--wide">
+        <p className="text-sm text-slate-600">Cargando ventas…</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="page-main page-main--wide">
+      <FudoWorkspace canWrite={canWrite} initialView={initialView} />
+    </main>
+  );
 }

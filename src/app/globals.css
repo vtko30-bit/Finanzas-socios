@@ -190,6 +190,14 @@ body {
     @apply inline-flex items-center justify-center rounded-xl bg-[#2277ff] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#0056ff] disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  .ui-btn-accent {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ui-btn-sm {
+    @apply !px-3 !py-1.5 !text-xs;
+  }
+
   .ui-btn-secondary {
     @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-[#2277ff] hover:text-[#0056ff] disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -225,4 +233,280 @@ input,
 select,
 button {
   font: inherit;
+}
+
+/* Fudo: fuera de @layer para ganar a las utilidades slate de Tailwind.
+   Paleta: #FF5A00, #2B2B2B, #1E293B, #FFFFFF, #F8FAFC. */
+.fudo-theme {
+  --fudo-orange: #ff5a00;
+  --fudo-ink: #2b2b2b;
+  --fudo-structure: #1e293b;
+  --fudo-bg: #f8fafc;
+  --fudo-surface: #ffffff;
+  --fudo-line: color-mix(in srgb, var(--fudo-structure) 18%, var(--fudo-bg));
+  --fudo-muted: color-mix(in srgb, var(--fudo-structure) 72%, var(--fudo-bg));
+  background: var(--fudo-bg);
+  color: var(--fudo-ink);
+  accent-color: var(--fudo-orange);
+}
+
+.fudo-theme .text-slate-900,
+.fudo-theme .text-slate-800,
+.fudo-theme .text-slate-700,
+.fudo-theme .hover\:text-slate-800:hover {
+  color: var(--fudo-ink);
+}
+
+.fudo-theme .text-slate-600,
+.fudo-theme .text-slate-500,
+.fudo-theme .text-slate-400 {
+  color: var(--fudo-muted);
+}
+
+.fudo-theme .border-slate-100,
+.fudo-theme .border-slate-200,
+.fudo-theme .border-slate-200\/80,
+.fudo-theme .border-slate-200\/60,
+.fudo-theme .border-slate-300,
+.fudo-theme .divide-slate-200\/80 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--fudo-line);
+}
+
+.fudo-theme .bg-white,
+.fudo-theme .bg-white\/60 {
+  background-color: var(--fudo-surface);
+}
+
+.fudo-theme .ui-card,
+.fudo-theme .ui-field {
+  background-color: var(--fudo-surface);
+  color: var(--fudo-ink);
+}
+
+.fudo-theme .bg-slate-50,
+.fudo-theme .bg-slate-50\/70,
+.fudo-theme .bg-slate-100,
+.fudo-theme .bg-slate-100\/80 {
+  background-color: var(--fudo-bg);
+}
+
+.fudo-theme .ui-btn-secondary {
+  background-color: var(--fudo-bg);
+  color: var(--fudo-ink);
+}
+
+.fudo-theme .ui-card,
+.fudo-theme .ui-field,
+.fudo-theme .ui-btn-secondary {
+  border-color: var(--fudo-line);
+}
+
+.fudo-theme .hover\:bg-slate-50:hover,
+.fudo-theme .hover\:bg-slate-100\/80:hover,
+.fudo-theme .ui-btn-secondary:hover,
+.fudo-theme .ui-btn-ghost:hover {
+  background-color: color-mix(in srgb, var(--fudo-structure) 6%, var(--fudo-surface));
+  color: var(--fudo-ink);
+}
+
+.fudo-theme .ui-btn-accent,
+.fudo-theme .ui-btn-primary {
+  background: var(--fudo-orange);
+  color: var(--fudo-surface);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fudo-orange) 32%, transparent);
+}
+
+.fudo-theme .ui-btn-accent:hover,
+.fudo-theme .ui-btn-primary:hover {
+  background: color-mix(in srgb, var(--fudo-orange) 86%, var(--fudo-ink));
+}
+
+.fudo-theme .ui-btn-ghost {
+  color: var(--fudo-structure);
+}
+
+.fudo-theme .ui-field:focus {
+  --tw-ring-color: color-mix(in srgb, var(--fudo-orange) 45%, transparent);
+}
+
+.fudo-tab-active {
+  border-bottom: 2px solid var(--fudo-orange, #ff5a00);
+  color: var(--fudo-orange, #ff5a00);
+}
+
+.fudo-pill-active {
+  border-radius: 0.5rem;
+  background: var(--fudo-surface, #ffffff);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--fudo-orange, #ff5a00);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fudo-ink, #2b2b2b) 8%, transparent);
+}
+
+.fudo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--fudo-orange, #ff5a00);
+}
+
+.fudo-link:hover {
+  background: color-mix(in srgb, var(--fudo-orange, #ff5a00) 10%, var(--fudo-surface, #fff));
+}
+
+.fudo-accent {
+  color: var(--fudo-orange, #ff5a00);
+}
+
+.fudo-bar-track {
+  height: 0.5rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--fudo-structure, #1e293b) 8%, var(--fudo-bg, #f8fafc));
+}
+
+.fudo-bar {
+  height: 100%;
+  border-radius: 0.25rem;
+  background: var(--fudo-orange, #ff5a00);
+}
+
+.fudo-total {
+  border-top: 2px solid var(--fudo-orange, #ff5a00);
+  background: color-mix(in srgb, var(--fudo-orange, #ff5a00) 8%, var(--fudo-surface, #fff));
+  color: var(--fudo-ink, #2b2b2b);
+}
+
+.fudo-total-label {
+  margin-right: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--fudo-orange, #ff5a00);
+}
+
+.fudo-row-selected {
+  background: color-mix(in srgb, var(--fudo-orange, #ff5a00) 10%, var(--fudo-surface, #fff));
+}
+
+:where(.dark, .dark *) .fudo-theme {
+  --fudo-line: color-mix(in srgb, var(--fudo-bg) 16%, var(--fudo-structure));
+  --fudo-muted: color-mix(in srgb, var(--fudo-bg) 72%, var(--fudo-structure));
+  background: var(--fudo-ink);
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-theme .text-slate-900,
+:where(.dark, .dark *) .fudo-theme .text-slate-800,
+:where(.dark, .dark *) .fudo-theme .text-slate-700,
+:where(.dark, .dark *) .fudo-theme .text-slate-600,
+:where(.dark, .dark *) .fudo-theme .text-slate-500,
+:where(.dark, .dark *) .fudo-theme .text-slate-400,
+:where(.dark, .dark *) .fudo-theme .dark\:text-slate-100,
+:where(.dark, .dark *) .fudo-theme .dark\:text-slate-200,
+:where(.dark, .dark *) .fudo-theme .dark\:text-slate-300,
+:where(.dark, .dark *) .fudo-theme .hover\:text-slate-800:hover,
+:where(.dark, .dark *) .fudo-theme .dark\:hover\:text-slate-200:hover {
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-theme .text-slate-500,
+:where(.dark, .dark *) .fudo-theme .text-slate-400,
+:where(.dark, .dark *) .fudo-theme .dark\:text-slate-400,
+:where(.dark, .dark *) .fudo-theme .dark\:text-slate-500 {
+  color: var(--fudo-muted);
+}
+
+:where(.dark, .dark *) .fudo-theme .border-slate-100,
+:where(.dark, .dark *) .fudo-theme .border-slate-200,
+:where(.dark, .dark *) .fudo-theme .border-slate-200\/80,
+:where(.dark, .dark *) .fudo-theme .border-slate-200\/60,
+:where(.dark, .dark *) .fudo-theme .border-slate-300,
+:where(.dark, .dark *) .fudo-theme .dark\:border-slate-700,
+:where(.dark, .dark *) .fudo-theme .dark\:border-slate-700\/80,
+:where(.dark, .dark *) .fudo-theme .dark\:border-slate-700\/60,
+:where(.dark, .dark *) .fudo-theme .dark\:border-slate-800,
+:where(.dark, .dark *) .fudo-theme .divide-slate-200\/80 > :not([hidden]) ~ :not([hidden]),
+:where(.dark, .dark *) .fudo-theme .dark\:divide-slate-700\/80 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--fudo-line);
+}
+
+:where(.dark, .dark *) .fudo-theme .bg-white,
+:where(.dark, .dark *) .fudo-theme .bg-white\/60,
+:where(.dark, .dark *) .fudo-theme .dark\:bg-slate-700,
+:where(.dark, .dark *) .fudo-theme .dark\:bg-slate-900\/40 {
+  background-color: var(--fudo-structure);
+}
+
+:where(.dark, .dark *) .fudo-theme .ui-card,
+:where(.dark, .dark *) .fudo-theme .ui-field {
+  background-color: var(--fudo-structure);
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-theme .bg-slate-50,
+:where(.dark, .dark *) .fudo-theme .bg-slate-50\/70,
+:where(.dark, .dark *) .fudo-theme .bg-slate-100,
+:where(.dark, .dark *) .fudo-theme .bg-slate-100\/80,
+:where(.dark, .dark *) .fudo-theme .dark\:bg-slate-800,
+:where(.dark, .dark *) .fudo-theme .dark\:bg-slate-800\/60,
+:where(.dark, .dark *) .fudo-theme .dark\:bg-slate-800\/70,
+:where(.dark, .dark *) .fudo-theme .dark\:bg-slate-900\/30 {
+  background-color: color-mix(in srgb, var(--fudo-bg) 8%, var(--fudo-structure));
+}
+
+:where(.dark, .dark *) .fudo-theme .ui-btn-secondary {
+  background-color: color-mix(in srgb, var(--fudo-bg) 8%, var(--fudo-structure));
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-theme .ui-card,
+:where(.dark, .dark *) .fudo-theme .ui-field,
+:where(.dark, .dark *) .fudo-theme .ui-btn-secondary {
+  border-color: var(--fudo-line);
+}
+
+:where(.dark, .dark *) .fudo-theme .hover\:bg-slate-50:hover,
+:where(.dark, .dark *) .fudo-theme .hover\:bg-slate-100\/80:hover,
+:where(.dark, .dark *) .fudo-theme .dark\:hover\:bg-slate-800\/40:hover,
+:where(.dark, .dark *) .fudo-theme .dark\:hover\:bg-slate-800\/50:hover,
+:where(.dark, .dark *) .fudo-theme .ui-btn-secondary:hover,
+:where(.dark, .dark *) .fudo-theme .ui-btn-ghost:hover {
+  background-color: color-mix(in srgb, var(--fudo-bg) 14%, var(--fudo-structure));
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-theme .ui-btn-ghost {
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-pill-active,
+:where(.dark, .dark *) .fudo-theme .fudo-total,
+:where(.dark, .dark *) .fudo-theme .fudo-row-selected {
+  background: color-mix(in srgb, var(--fudo-orange) 16%, var(--fudo-structure));
+  color: var(--fudo-bg);
+}
+
+:where(.dark, .dark *) .fudo-theme .fudo-total {
+  border-top-color: var(--fudo-orange);
+}
+
+:where(.dark, .dark *) .fudo-link,
+:where(.dark, .dark *) .fudo-theme .fudo-total-label,
+:where(.dark, .dark *) .fudo-accent,
+:where(.dark, .dark *) .fudo-tab-active {
+  color: var(--fudo-orange);
+}
+
+:where(.dark, .dark *) .fudo-bar-track {
+  background: color-mix(in srgb, var(--fudo-bg) 12%, var(--fudo-ink));
 }

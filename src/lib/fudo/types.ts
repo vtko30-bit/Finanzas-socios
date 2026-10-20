@@ -26,6 +26,18 @@ export type FudoListResponse = {
   included?: FudoJsonApiResource[];
 };
 
+export type CashMovementRow = {
+  Id: string;
+  Fecha: string;
+  Sucursal: FudoBranch;
+  Tipo: "income" | "outcome";
+  Monto: number;
+  Comentario: string;
+  "Medio de Pago": string;
+  Caja: string;
+  CreatedAt: string | null;
+};
+
 export type VentaExcelRow = {
   Id: string;
   Sucursal: FudoBranch;
@@ -78,16 +90,4 @@ export type GastoExcelRow = {
   "Cheques / Cargos": number;
   "Medio de Pago": string;
   Proveedor: string;
-};
-
-export type CashMovementRow = {
-  Id: string;
-  Fecha: string;
-  Sucursal: FudoBranch;
-  Tipo: "income" | "outcome";
-  Monto: number;
-  Comentario: string;
-  "Medio de Pago": string;
-  Caja: string;
-  CreatedAt: string | null;
 };
