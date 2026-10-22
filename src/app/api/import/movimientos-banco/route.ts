@@ -118,12 +118,20 @@ function logicalKey(row: {
   ].join("|");
 }
 
+function normParty(value: unknown) {
+  return normText(value)
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function clavesDeCruce(row: {
   date?: string;
   type?: string;
   amount?: number;
   external_ref?: string;
   description?: string;
+  counterparty?: string;
 }) {
   const date = String(row.date ?? "").slice(0, 10);
   const type = String(row.type ?? "");
@@ -138,6 +146,10 @@ function clavesDeCruce(row: {
   const description = normText(row.description);
   if (description.length >= 6) {
     keys.push(`desc|${date}|${type}|${amount}|${description}`);
+  }
+  const destino = normParty(row.counterparty);
+  if (destino.length >= 3) {
+    keys.push(`cp|${date}|${type}|${amount}|${destino}`);
   }
   return keys;
 }
@@ -268,7 +280,7 @@ export async function POST(request: Request) {
       for (let from = 0; ; from += pageSize) {
         const { data, error } = await admin
           .from("transactions")
-          .select("date, type, amount, external_ref, origen_cuenta, description")
+          .select("date, type, amount, external_ref, origen_cuenta, description, counterparty")
           .eq("organization_id", organizationId)
           .gte("date", dates[0])
           .lte("date", dates[dates.length - 1])
