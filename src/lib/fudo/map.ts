@@ -89,7 +89,9 @@ export function mapSalesToVentasRows(
         "Sin medio";
 
       rows.push({
-        Id: paymentIds.length > 1 ? `${sale.id}-${paymentId}` : sale.id,
+        // Siempre sale-payment: si una venta pasa de 1 a N pagos, el id viejo
+        // (solo sale.id) no debe quedar como fila huérfana sumando de más.
+        Id: `${sale.id}-${paymentId}`,
         Sucursal: branch,
         Fecha: fecha,
         "Medio de Pago": medio,

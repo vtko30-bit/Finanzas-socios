@@ -197,6 +197,39 @@ export async function syncFudoRange(params: FudoSyncParams) {
         });
       if (error) throw new Error(`payments ${s.label}: ${error.message}`);
     }
+    // Quita ids viejos (p. ej. fudo_payment_id = sale.id) cuando la venta
+    // ya tiene los ids actuales sale-payment.
+    const keepPaymentIds = new Set(paymentRows.map((r) => r.fudo_payment_id));
+    const saleIds = [...new Set(paymentRows.map((r) => r.fudo_sale_id))];
+    for (const saleBatch of chunk(saleIds, 80)) {
+      if (!saleBatch.length) continue;
+      const { data: existing, error: existingError } = await admin
+        .schema("fudo")
+        .from("sale_payments")
+        .select("fudo_payment_id")
+        .eq("organization_id", organizationId)
+        .eq("branch_code", s.id)
+        .in("fudo_sale_id", saleBatch);
+      if (existingError) {
+        throw new Error(`payments prune ${s.label}: ${existingError.message}`);
+      }
+      const stale = (existing ?? [])
+        .map((row) => String(row.fudo_payment_id ?? ""))
+        .filter((id) => id && !keepPaymentIds.has(id));
+      for (const staleBatch of chunk(stale, 100)) {
+        if (!staleBatch.length) continue;
+        const { error: deleteError } = await admin
+          .schema("fudo")
+          .from("sale_payments")
+          .delete()
+          .eq("organization_id", organizationId)
+          .eq("branch_code", s.id)
+          .in("fudo_payment_id", staleBatch);
+        if (deleteError) {
+          throw new Error(`payments prune ${s.label}: ${deleteError.message}`);
+        }
+      }
+    }
     for (const batch of chunk(itemRows, 200)) {
       if (!batch.length) continue;
       const { error } = await admin
@@ -252,7 +285,11 @@ export async function syncFudoRange(params: FudoSyncParams) {
 
   // Sucursales en serie (paralelo saturaba auth de Fudo con 429).
   // Dentro de cada sucursal, ventas/gastos/caja siguen en paralelo.
-  for (const s of sucursales) {
+  for (let i = 0; i < sucursales.length; i++) {
+    const s = sucursales[i]!;
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
     try {
       const row = await syncOneBranch(s);
       branchStats.push(row);

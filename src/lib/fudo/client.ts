@@ -102,6 +102,7 @@ export function resolveRel(
 export class FudoClient {
   private creds: FudoCredentials;
   private tokenState: TokenState | null = null;
+  private authInFlight: Promise<string> | null = null;
 
   constructor(creds: FudoCredentials) {
     this.creds = creds;
@@ -116,41 +117,64 @@ export class FudoClient {
     ) {
       return this.tokenState.token;
     }
+    if (!force && this.authInFlight) return this.authInFlight;
 
-    const res = await fetch(AUTH_URL, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        apiKey: this.creds.apiKey,
-        apiSecret: this.creds.apiSecret,
-      }),
-    });
+    const run = (async () => {
+      let lastStatus = 0;
+      let lastError = "sin token";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * 2 ** (attempt - 1)),
+          );
+        }
+        const res = await fetch(AUTH_URL, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            apiKey: this.creds.apiKey,
+            apiSecret: this.creds.apiSecret,
+          }),
+        });
 
-    const body = (await res.json().catch(() => ({}))) as {
-      token?: string;
-      exp?: number | string;
-      error?: string;
-    };
+        const body = (await res.json().catch(() => ({}))) as {
+          token?: string;
+          exp?: number | string;
+          error?: string;
+        };
 
-    if (!res.ok || !body.token) {
-      throw new Error(
-        `Fudo auth falló (${res.status}): ${body.error || "sin token"}`,
-      );
+        lastStatus = res.status;
+        lastError = body.error || "sin token";
+        if (res.status === 429) continue;
+
+        if (!res.ok || !body.token) {
+          throw new Error(`Fudo auth falló (${res.status}): ${lastError}`);
+        }
+
+        const expSec =
+          typeof body.exp === "number"
+            ? body.exp
+            : Number(body.exp) || Math.floor(Date.now() / 1000) + 23 * 3600;
+
+        this.tokenState = {
+          token: body.token,
+          expMs: expSec * 1000,
+        };
+        return body.token;
+      }
+
+      throw new Error(`Fudo auth falló (${lastStatus}): ${lastError}`);
+    })();
+
+    this.authInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (this.authInFlight === run) this.authInFlight = null;
     }
-
-    const expSec =
-      typeof body.exp === "number"
-        ? body.exp
-        : Number(body.exp) || Math.floor(now / 1000) + 23 * 3600;
-
-    this.tokenState = {
-      token: body.token,
-      expMs: expSec * 1000,
-    };
-    return body.token;
   }
 
   private async request(
