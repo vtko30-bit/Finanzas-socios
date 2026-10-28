@@ -59,21 +59,22 @@ export function mapSalesToVentasRows(
     const fecha = toDateOnly(
       asString(attrs.closedAt || attrs.createdAt),
     );
+    const saleTotal = asNumber(attrs.total);
     const paymentIds = relIds(sale, "payments");
 
     if (!paymentIds.length) {
-      const total = asNumber(attrs.total);
-      if (total <= 0) continue;
+      if (saleTotal <= 0) continue;
       rows.push({
         Id: sale.id,
         Sucursal: branch,
         Fecha: fecha,
         "Medio de Pago": "Sin medio",
-        Total: total,
+        Total: saleTotal,
       });
       continue;
     }
 
+    const pays: Array<{ id: string; medio: string; amount: number }> = [];
     for (const paymentId of paymentIds) {
       const payment = resolveIncluded(included, "Payment", paymentId);
       const payAttrs = payment?.attributes ?? {};
@@ -88,14 +89,39 @@ export function mapSalesToVentasRows(
         asString(pm?.attributes?.code) ||
         "Sin medio";
 
+      pays.push({ id: paymentId, medio, amount });
+    }
+
+    // Fudo a veces deja N cobros por el total completo (no un split).
+    // La app usa sale.total; si cada pago = total, nos quedamos con uno.
+    let usable = pays;
+    if (saleTotal > 0 && pays.length > 1) {
+      const allFull = pays.every(
+        (p) => Math.abs(p.amount - saleTotal) < 0.01,
+      );
+      if (allFull) {
+        usable = [pays[0]!];
+      } else {
+        const paySum = pays.reduce((a, p) => a + p.amount, 0);
+        if (paySum > saleTotal + 0.01) {
+          const factor = saleTotal / paySum;
+          usable = pays.map((p) => ({
+            ...p,
+            amount: Math.round(p.amount * factor * 100) / 100,
+          }));
+        }
+      }
+    }
+
+    for (const pay of usable) {
       rows.push({
         // Siempre sale-payment: si una venta pasa de 1 a N pagos, el id viejo
         // (solo sale.id) no debe quedar como fila huérfana sumando de más.
-        Id: `${sale.id}-${paymentId}`,
+        Id: `${sale.id}-${pay.id}`,
         Sucursal: branch,
         Fecha: fecha,
-        "Medio de Pago": medio,
-        Total: amount,
+        "Medio de Pago": pay.medio,
+        Total: pay.amount,
       });
     }
   }
