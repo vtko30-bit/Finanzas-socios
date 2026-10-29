@@ -26,15 +26,24 @@ type IncomingRow = {
 
 function conceptoDe(row: IncomingRow) {
   const propio = String(row.concepto ?? "").trim();
+  // La carpeta (Movimientos Bci, etc.) es Origen, no categoría contable.
+  if (!propio || esEtiquetaCarpetaBanco(propio)) return "";
+  return propio;
+}
+
+function origenDe(row: IncomingRow) {
+  const propio = String(row.origen ?? "").trim();
   if (propio) return propio;
   const carpeta = String(row.carpeta ?? "").trim();
   if (carpeta) return carpeta;
-  return "Sin categoria";
+  const sucursal = String(row.sucursal ?? "").trim();
+  if (sucursal) return sucursal;
+  return "Sin origen";
 }
 
-function conceptoVacio(value: unknown) {
+function origenVacio(value: unknown) {
   const text = String(value ?? "").trim();
-  return !text || /^sin categor[ií]a$/i.test(text);
+  return !text || /^sin origen$/i.test(text);
 }
 
 function authorize(request: Request) {
@@ -202,7 +211,7 @@ export async function POST(request: Request) {
       const counterparty = String(row.alias ?? "").trim();
       const paymentMethod = String(row.cuenta ?? "").trim();
       const externalRef = String(row.operacion ?? "").trim();
-      const accountName = String(row.origen || row.sucursal || "Sin origen").trim();
+      const accountName = origenDe(row);
       drafts.push({
         date,
         type,
@@ -241,34 +250,42 @@ export async function POST(request: Request) {
     const open = drafts.filter((row) => !blocked.has(row.date));
 
     const knownHashes = new Set<string>();
-    const etiquetaPorHash = new Map<string, string>();
+    const origenPorHash = new Map<string, string>();
     for (const row of open) {
-      if (esEtiquetaCarpetaBanco(row.concepto)) etiquetaPorHash.set(row.dedupe_hash, row.concepto);
+      if (row.origen_cuenta) origenPorHash.set(row.dedupe_hash, row.origen_cuenta);
     }
     for (const group of chunk(open.map((row) => row.dedupe_hash), 100)) {
       const { data, error } = await admin
         .from("transactions")
-        .select("id, dedupe_hash, concepto")
+        .select("id, dedupe_hash, concepto, origen_cuenta")
         .eq("organization_id", organizationId)
         .in("dedupe_hash", group);
       if (error) throw new Error(error.message);
-      const porEtiqueta = new Map<string, string[]>();
       for (const row of data ?? []) {
         const hash = String(row.dedupe_hash ?? "");
         if (!hash) continue;
         knownHashes.add(hash);
-        const etiqueta = etiquetaPorHash.get(hash);
-        if (!etiqueta || !conceptoVacio(row.concepto) || !row.id) continue;
-        const ids = porEtiqueta.get(etiqueta) ?? [];
-        ids.push(String(row.id));
-        porEtiqueta.set(etiqueta, ids);
-      }
-      for (const [etiqueta, ids] of porEtiqueta) {
+        if (!row.id) continue;
+        const concepto = String(row.concepto ?? "").trim();
+        const origenActual = String(row.origen_cuenta ?? "").trim();
+        const patch: { concepto?: string; origen_cuenta?: string } = {};
+        // Filas viejas: la carpeta quedó en Categoría; muévela a Origen.
+        if (esEtiquetaCarpetaBanco(concepto)) {
+          patch.concepto = "";
+          if (origenVacio(origenActual)) {
+            patch.origen_cuenta = concepto;
+          }
+        }
+        const origenNuevo = origenPorHash.get(hash);
+        if (origenNuevo && origenVacio(origenActual) && !patch.origen_cuenta) {
+          patch.origen_cuenta = origenNuevo;
+        }
+        if (!Object.keys(patch).length) continue;
         const { error: updateError } = await admin
           .from("transactions")
-          .update({ concepto: etiqueta })
+          .update(patch)
           .eq("organization_id", organizationId)
-          .in("id", ids);
+          .eq("id", String(row.id));
         if (updateError) throw new Error(updateError.message);
       }
     }

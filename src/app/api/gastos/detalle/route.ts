@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import { omitMirroredExpenseDuplicates } from "@/lib/gastos-dedupe-servicios";
+import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import {
   fetchExcludedFamilyIdSet,
   rowMatchesExcludedFamily,
@@ -18,7 +19,22 @@ function necesitaConcepto(raw: string) {
   const t = (raw || "").trim().toLowerCase();
   if (!t) return true;
   if (t === "pendiente de definir" || t === "por clasificar") return true;
+  if (/^sin categor[ií]a$/i.test(t)) return true;
+  if (esEtiquetaCarpetaBanco(raw)) return true;
   return false;
+}
+
+function origenMostrado(origenCuenta: string, concepto: string, source: unknown) {
+  const origen = (origenCuenta || "").trim();
+  if (origen && !/^sin origen$/i.test(origen)) return origen;
+  if (esEtiquetaCarpetaBanco(concepto)) return concepto.trim();
+  return origen || String(source ?? "").trim() || "";
+}
+
+function conceptoLimpio(concepto: string) {
+  const t = (concepto || "").trim();
+  if (!t || /^sin categor[ií]a$/i.test(t) || esEtiquetaCarpetaBanco(t)) return "";
+  return t;
 }
 
 export async function GET(request: Request) {
@@ -125,7 +141,8 @@ export async function GET(request: Request) {
   const rows = deduped.map((row) => {
     const origenCuenta =
       (row as { origen_cuenta?: string }).origen_cuenta ?? "";
-    const conceptoCol = (row as { concepto?: string }).concepto ?? "";
+    const conceptoRaw = (row as { concepto?: string }).concepto ?? "";
+    const conceptoCol = conceptoLimpio(conceptoRaw);
     const conceptId = (row as { concept_id?: string | null }).concept_id ?? null;
     const cat = row as {
       concept_catalog?: {
@@ -155,7 +172,7 @@ export async function GET(request: Request) {
       (row as { import_batch_id?: string | null }).import_batch_id ?? null;
     return {
       fecha: row.date,
-      origen: origenCuenta || row.source || "",
+      origen: origenMostrado(origenCuenta, conceptoRaw, row.source),
       source: sourceRaw,
       id: row.id,
       /** Momento en que se creó el registro en la app (p. ej. al importar). */

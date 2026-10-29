@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
+import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 import {
   getClientCache,
@@ -131,6 +132,8 @@ function esConceptoVacioOPlaceholder(texto: string) {
   const t = (texto || "").trim().toLowerCase();
   if (!t) return true;
   if (t === "pendiente de definir" || t === "por clasificar") return true;
+  if (/^sin categor[ií]a$/i.test(t)) return true;
+  if (esEtiquetaCarpetaBanco(texto)) return true;
   return false;
 }
 
