@@ -30,8 +30,8 @@ const NAV_BASE: NavItem[] = [
 ];
 
 const NAV_OWNER: NavItem[] = [
-  { href: "/importar", label: "Importar" },
-  { href: "/importaciones", label: "Importaciones" },
+  // Importar / Importaciones: control de cargas vive en Gastos.
+  // /importar y /importaciones redirigen o quedan como emergencia.
   { href: "/periodos-cerrados", label: "Períodos cerrados" },
   { href: "/equipo", label: "Equipo" },
 ];

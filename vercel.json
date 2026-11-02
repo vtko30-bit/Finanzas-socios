@@ -13,6 +13,10 @@
       "schedule": "15 7 * * *"
     },
     {
+      "path": "/api/banco-chile/cron",
+      "schedule": "20 7 * * *"
+    },
+    {
       "path": "/api/ventas-diarias",
       "schedule": "30 12 * * *"
     }

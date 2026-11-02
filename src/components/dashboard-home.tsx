@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, FileDown, Upload } from "lucide-react";
+import { BarChart3, FileDown } from "lucide-react";
 import { BankPositionSection } from "@/components/bank-position-section";
 import { RecurringObligationsWidget } from "@/components/recurring-obligations-widget";
 
@@ -13,14 +13,6 @@ const ACTION_CARDS = [
     description:
       "Evolución mensual y comparación año contra año de ingresos y gastos.",
     icon: BarChart3,
-  },
-  {
-    href: "/importar",
-    title: "Importar Datos",
-    shortTitle: "Importar",
-    description:
-      "Carga archivos Excel, valida filas y guarda en lote con deduplicación.",
-    icon: Upload,
   },
   {
     href: "/reportes",

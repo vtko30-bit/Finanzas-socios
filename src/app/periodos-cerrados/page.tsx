@@ -163,8 +163,8 @@ export default function PeriodosCerradosPage() {
           cerrado, para que el resumen y los totales no cambien hasta que reabras el período.
         </p>
         <p className="mt-2 text-sm">
-          <Link href="/importar" className="text-[#0056ff] underline hover:text-[#0046d9]">
-            Volver a Importar
+          <Link href="/gastos" className="text-[#0056ff] underline hover:text-[#0046d9]">
+            Ir a Gastos
           </Link>
         </p>
       </div>

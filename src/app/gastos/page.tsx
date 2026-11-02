@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
+import { GastosCargasPanel } from "@/components/gastos/gastos-cargas-panel";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 import {
@@ -1190,6 +1191,34 @@ function GastosPageContent() {
     ],
   );
 
+  /** Período sugerido para el panel de duplicados (sigue el filtro de fechas). */
+  const periodoCargas = useMemo(() => {
+    const today = new Date();
+    const ymd = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (modoFecha === "dia" && dia) return { desde: dia, hasta: dia };
+    if (modoFecha === "mes" && mes) {
+      const [y, m] = mes.split("-").map(Number);
+      if (y && m) {
+        const last = new Date(y, m, 0).getDate();
+        return {
+          desde: `${mes}-01`,
+          hasta: `${mes}-${String(last).padStart(2, "0")}`,
+        };
+      }
+    }
+    if (modoFecha === "anio" && anio) {
+      return { desde: `${anio}-01-01`, hasta: `${anio}-12-31` };
+    }
+    if (modoFecha === "rango" && rangoDesde && rangoHasta) {
+      return { desde: rangoDesde, hasta: rangoHasta };
+    }
+    return {
+      desde: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`,
+      hasta: ymd(today),
+    };
+  }, [modoFecha, dia, mes, anio, rangoDesde, rangoHasta]);
+
   const totalPaginasGastos = useMemo(() => {
     if (filasVisiblesCount === 0) return 0;
     return Math.ceil(filasVisiblesCount / GASTOS_POR_PAGINA);
@@ -1768,6 +1797,14 @@ function GastosPageContent() {
         <p className="text-sm text-slate-500">
           Solo lectura: solo el administrador (owner) puede editar categorías o importar datos.
         </p>
+      ) : null}
+
+      {!capsLoading && canWrite && !esVistaPagoServiciosBancoEstado ? (
+        <GastosCargasPanel
+          defaultDesde={periodoCargas.desde}
+          defaultHasta={periodoCargas.hasta}
+          onChanged={() => cargar({ force: true })}
+        />
       ) : null}
 
       <section
