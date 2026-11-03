@@ -122,6 +122,19 @@ export function PeriodDuplicatesReview({
     });
   };
 
+  /** En un grupo, elegir cuál conservar: ese queda sin tilde y el resto (libres) quedan marcados para borrar. */
+  const keepThisInGroup = (group: PeriodDuplicateGroup, keepId: string) => {
+    setSelectedDeleteIds((prev) => {
+      const next = new Set(prev);
+      for (const row of group.rows) {
+        if (row.locked) continue;
+        if (row.id === keepId) next.delete(row.id);
+        else next.add(row.id);
+      }
+      return next;
+    });
+  };
+
   const totalDuplicateRows = useMemo(
     () => groups.reduce((n, g) => n + g.rows.length, 0),
     [groups],
@@ -204,10 +217,10 @@ export function PeriodDuplicatesReview({
           {title}
         </h3>
         <p className="mt-2 text-sm text-amber-900/95">
-          Período <strong>{desde}</strong> a <strong>{hasta}</strong>. Si son copias de más,
-          márcalas y elimínalas (se respalda antes de borrar). Si el nombre, el monto y la
-          fecha coinciden pero son pagos distintos, usa <strong>Son correctos</strong>: quedan
-          registrados y no vuelven a esta lista, salvo que entre un movimiento nuevo igual.
+          Período <strong>{desde}</strong> a <strong>{hasta}</strong>. En cada grupo elegí{" "}
+          <strong>Conservar este</strong> (el otro queda marcado para borrar) y luego{" "}
+          <strong>Eliminar seleccionados</strong>. Si en realidad son pagos distintos, usá{" "}
+          <strong>Son correctos</strong>: no se borran y no vuelven a esta lista.
         </p>
 
         {loading ? (
@@ -250,48 +263,74 @@ export function PeriodDuplicatesReview({
                     </button>
                   </div>
                   <ul className="mt-2 space-y-2">
-                    {group.rows.map((row) => (
+                    {group.rows.map((row, rowIndex) => {
+                      const markedDelete = selectedDeleteIds.has(row.id);
+                      const checkboxId = `dup-del-${group.key}-${row.id}-${rowIndex}`;
+                      return (
                       <li
-                        key={row.id}
+                        key={checkboxId}
                         className="flex flex-wrap items-start gap-2 rounded border border-slate-200 bg-slate-50/80 px-2 py-1.5"
                       >
-                        <label className="flex min-w-0 flex-1 items-start gap-2">
+                        <div className="flex min-w-0 flex-1 items-start gap-2">
                           <input
+                            id={checkboxId}
                             type="checkbox"
                             className="mt-0.5 h-4 w-4 shrink-0 accent-amber-700"
-                            checked={selectedDeleteIds.has(row.id)}
+                            checked={markedDelete}
                             disabled={row.locked || deleting || acking}
-                            onChange={() => toggleRow(row.id, row.locked)}
+                            aria-label={
+                              markedDelete
+                                ? "Marcado para eliminar"
+                                : "No eliminar (conservar)"
+                            }
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleRow(row.id, row.locked);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
                           />
-                          <span className="min-w-0 flex-1 text-xs leading-snug text-slate-700">
-                            <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <div className="min-w-0 flex-1 text-xs leading-snug text-slate-700">
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                               <span className="min-w-0 font-medium text-slate-900">
                                 <span className="tabular-nums text-slate-700">
                                   {formatGastoDate(row.date)}
                                 </span>
                                 <span className="mx-1.5 text-slate-400">·</span>
                                 {row.counterparty || "—"}
-                                {row.isSuggestedKeep ? (
+                                {!markedDelete && !row.locked ? (
                                   <span className="ml-1 text-emerald-700">(conservar)</span>
+                                ) : null}
+                                {markedDelete && !row.locked ? (
+                                  <span className="ml-1 text-amber-800">(eliminar)</span>
                                 ) : null}
                                 {row.locked ? (
                                   <span className="ml-1 text-rose-700">(crédito/préstamo)</span>
                                 ) : null}
                               </span>
-                              <span
-                                className="shrink-0 text-base font-bold tabular-nums text-slate-900 sm:text-lg"
-                              >
+                              <span className="shrink-0 text-base font-bold tabular-nums text-slate-900 sm:text-lg">
                                 {formatClp(row.amount)}
                               </span>
-                            </span>
-                            <span className="mt-1 block">
+                            </div>
+                            <div className="mt-1">
                               {row.origen_cuenta || "—"}
                               {row.concepto ? ` · ${row.concepto}` : ""}
-                            </span>
-                          </span>
-                        </label>
+                            </div>
+                            {!row.locked ? (
+                              <button
+                                type="button"
+                                className="mt-1.5 rounded border border-emerald-700 bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
+                                disabled={deleting || acking}
+                                title="Deja este y marca los otros del grupo para borrar"
+                                onClick={() => keepThisInGroup(group, row.id)}
+                              >
+                                {markedDelete ? "Conservar este" : "Ya se conserva"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 </li>
               ))}
