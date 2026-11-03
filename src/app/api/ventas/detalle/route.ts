@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import {
-  fetchExcludedFamilyIdSet,
+  fetchExcludedFamilySets,
   rowMatchesExcludedFamily,
 } from "@/lib/org-excluded-families-db";
 import { createClient } from "@/lib/supabase/server";
@@ -66,11 +66,14 @@ export async function GET(request: Request) {
     searchParams.get("incluirFinanciamiento") === "true";
 
   let excludedFamilyIds: Set<string>;
+  let excludedFamilyNames: Set<string>;
   try {
-    excludedFamilyIds = await fetchExcludedFamilyIdSet(
+    const sets = await fetchExcludedFamilySets(
       supabase,
       member.organization_id,
     );
+    excludedFamilyIds = sets.ids;
+    excludedFamilyNames = sets.names;
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error al cargar exclusiones" },
@@ -182,7 +185,13 @@ export async function GET(request: Request) {
 
   const filtered = rows.filter((r) => {
     const fid = (r as { familyId?: string | null }).familyId ?? null;
-    const excl = rowMatchesExcludedFamily(fid, excludedFamilyIds);
+    const famName = (r as { familia?: string | null }).familia ?? null;
+    const excl = rowMatchesExcludedFamily(
+      fid,
+      excludedFamilyIds,
+      famName,
+      excludedFamilyNames,
+    );
     return soloExcluidos ? excl : !excl;
   });
 

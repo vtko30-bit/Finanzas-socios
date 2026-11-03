@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
+import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
 
 type Tab = "gastos" | "ventas";
 type SortDir = "asc" | "desc";
@@ -262,6 +263,7 @@ export default function MovimientosExcluidosPage() {
         setMgmtMsg(json.error || "No se pudo excluir la familia");
         return;
       }
+      invalidateMainNavCaches();
       await cargarExclusiones();
       void cargar(tab);
       cerrarModal();
@@ -284,6 +286,7 @@ export default function MovimientosExcluidosPage() {
         setMgmtMsg(json.error || "No se pudo quitar");
         return;
       }
+      invalidateMainNavCaches();
       await cargarExclusiones();
       void cargar(tab);
     } catch {

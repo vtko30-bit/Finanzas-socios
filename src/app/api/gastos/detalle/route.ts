@@ -4,7 +4,7 @@ import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import { omitMirroredExpenseDuplicates } from "@/lib/gastos-dedupe-servicios";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import {
-  fetchExcludedFamilyIdSet,
+  fetchExcludedFamilySets,
   rowMatchesExcludedFamily,
 } from "@/lib/org-excluded-families-db";
 import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
@@ -60,11 +60,14 @@ export async function GET(request: Request) {
   const sourceExact = searchParams.get("source")?.trim().toLowerCase() ?? "";
 
   let excludedFamilyIds: Set<string>;
+  let excludedFamilyNames: Set<string>;
   try {
-    excludedFamilyIds = await fetchExcludedFamilyIdSet(
+    const sets = await fetchExcludedFamilySets(
       supabase,
       member.organization_id,
     );
+    excludedFamilyIds = sets.ids;
+    excludedFamilyNames = sets.names;
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error al cargar exclusiones" },
@@ -195,7 +198,13 @@ export async function GET(request: Request) {
 
   const filtered = rows.filter((r) => {
     const fid = (r as { familyId?: string | null }).familyId ?? null;
-    const excl = rowMatchesExcludedFamily(fid, excludedFamilyIds);
+    const famName = (r as { familia?: string | null }).familia ?? null;
+    const excl = rowMatchesExcludedFamily(
+      fid,
+      excludedFamilyIds,
+      famName,
+      excludedFamilyNames,
+    );
     return soloExcluidos ? excl : !excl;
   });
 

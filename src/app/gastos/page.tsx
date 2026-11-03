@@ -20,6 +20,8 @@ import {
   setClientCache,
 } from "@/lib/client-fetch-cache";
 
+type ExcludedFamilyItem = { familyId: string; familyName: string };
+
 const GASTOS_ROW_GRID =
   "grid w-full grid-cols-[minmax(0,5rem)_minmax(0,0.28fr)_minmax(0,0.455fr)_minmax(0,120px)_minmax(0,140px)_minmax(0,0.395fr)_minmax(0,4.75rem)] items-start gap-0";
 
@@ -849,6 +851,13 @@ function GastosPageContent() {
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
   const [agruparPorFamilia, setAgruparPorFamilia] = useState(false);
   const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
+  /** Familias excluidas: no deben verse en Gastos (solo en Excluidos). */
+  const [excludedFamilyNames, setExcludedFamilyNames] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [excludedFamilyIds, setExcludedFamilyIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -882,6 +891,34 @@ function GastosPageContent() {
       setCatalogo([]);
     }
   }, []);
+
+  const cargarExclusiones = useCallback(async () => {
+    try {
+      const res = await fetch("/api/organization/excluded-families");
+      const data = (await res.json()) as {
+        items?: ExcludedFamilyItem[];
+        error?: string;
+      };
+      if (!res.ok) return;
+      const names = new Set<string>();
+      const ids = new Set<string>();
+      for (const item of data.items ?? []) {
+        if (item.familyId) ids.add(item.familyId);
+        const n = String(item.familyName ?? "")
+          .trim()
+          .toLowerCase();
+        if (n) names.add(n);
+      }
+      setExcludedFamilyIds(ids);
+      setExcludedFamilyNames(names);
+    } catch {
+      /* sin exclusiones si falla */
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarExclusiones();
+  }, [cargarExclusiones]);
 
   const cargar = useCallback(
     (opts?: { force?: boolean }) => {
@@ -1030,46 +1067,75 @@ function GastosPageContent() {
     });
   }, [catalogo, gastosCacheKey]);
 
+  const rowsSinExcluidas = useMemo(() => {
+    if (excludedFamilyNames.size === 0 && excludedFamilyIds.size === 0) {
+      return rows;
+    }
+    return rows.filter((r) => {
+      const fam = String(r.familia ?? "")
+        .trim()
+        .toLowerCase();
+      if (fam && excludedFamilyNames.has(fam)) return false;
+      if (r.concept_id) {
+        const family = catalogo.find((f) =>
+          f.concepts.some((c) => c.id === r.concept_id),
+        );
+        if (family && excludedFamilyIds.has(family.id)) return false;
+      }
+      return true;
+    });
+  }, [rows, excludedFamilyNames, excludedFamilyIds, catalogo]);
+
   const nombresFamiliaOpciones = useMemo(() => {
-    const fromCat = catalogo.map((f) => f.name).filter(Boolean);
-    const fromRows = rows
+    const fromCat = catalogo
+      .filter((f) => !excludedFamilyIds.has(f.id))
+      .map((f) => f.name)
+      .filter((n) => {
+        const key = String(n).trim().toLowerCase();
+        return Boolean(key) && !excludedFamilyNames.has(key);
+      });
+    const fromRows = rowsSinExcluidas
       .map((r) => r.familia)
-      .filter((x): x is string => !!x && String(x).trim().length > 0);
+      .filter((x): x is string => {
+        if (!x || !String(x).trim()) return false;
+        return !excludedFamilyNames.has(String(x).trim().toLowerCase());
+      });
     return [...new Set([...fromCat, ...fromRows])].sort((a, b) =>
       a.localeCompare(b, "es"),
     );
-  }, [catalogo, rows]);
+  }, [catalogo, rowsSinExcluidas, excludedFamilyIds, excludedFamilyNames]);
 
   const nombresCategoriaOpciones = useMemo(() => {
     const set = new Set<string>();
-    for (const r of rows) {
+    for (const r of rowsSinExcluidas) {
       const c = categoriaDisplayLabel(r, catalogo).trim();
       if (c) set.add(c);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [rows, catalogo]);
+  }, [rowsSinExcluidas, catalogo]);
 
   const hayGastosSinCategoria = useMemo(
     () =>
-      rows.some((r) => !categoriaDisplayLabel(r, catalogo).trim()),
-    [rows, catalogo],
+      rowsSinExcluidas.some((r) => !categoriaDisplayLabel(r, catalogo).trim()),
+    [rowsSinExcluidas, catalogo],
   );
 
   const hayGastosSinFamilia = useMemo(
-    () => rows.some((r) => !r.familia || !String(r.familia).trim()),
-    [rows],
+    () =>
+      rowsSinExcluidas.some((r) => !r.familia || !String(r.familia).trim()),
+    [rowsSinExcluidas],
   );
 
   const opcionesOrigen = useMemo((): GastosMultiSelectOption[] => {
     const set = new Set<string>();
-    for (const r of rows) {
+    for (const r of rowsSinExcluidas) {
       const v = (r.origen || "").trim();
       if (v) set.add(v);
     }
     return [...set]
       .sort((a, b) => a.localeCompare(b, "es"))
       .map((v) => ({ value: v, label: v }));
-  }, [rows]);
+  }, [rowsSinExcluidas]);
 
   const opcionesFamilia = useMemo((): GastosMultiSelectOption[] => {
     const opts: GastosMultiSelectOption[] = [];
@@ -1110,7 +1176,7 @@ function GastosPageContent() {
 
   const filasFiltradas = useMemo(
     () =>
-      filtrarGastos(rows, {
+      filtrarGastos(rowsSinExcluidas, {
         modoFecha,
         dia,
         mes,
@@ -1125,7 +1191,7 @@ function GastosPageContent() {
         catalogo,
       }),
     [
-      rows,
+      rowsSinExcluidas,
       modoFecha,
       dia,
       mes,
@@ -1790,7 +1856,7 @@ function GastosPageContent() {
             {hayFiltrosGastosActivos ? " ·" : ""}
           </button>
           <span className="min-w-0 flex-1 truncate text-xs tabular-nums text-slate-700">
-            {displayRows.length}/{rows.length}
+            {displayRows.length}/{rowsSinExcluidas.length}
             <span className="font-semibold"> · {formatClp(totalGastosFiltrados)}</span>
           </span>
           {hayFiltrosGastosActivos ? (
@@ -1988,12 +2054,12 @@ function GastosPageContent() {
                 </span>
               </label>
               <span className="ui-filter-stat sm:hidden">
-                {displayRows.length}/{rows.length} · {formatClp(totalGastosFiltrados)}
+                {displayRows.length}/{rowsSinExcluidas.length} · {formatClp(totalGastosFiltrados)}
               </span>
               <span className="ui-filter-stat hidden sm:inline">
                 {soloSeleccionados
-                  ? `Mostrando ${displayRows.length} seleccionados (de ${filasFiltradas.length} filtrados, ${rows.length} total)`
-                  : `Mostrando ${displayRows.length} de ${rows.length} gastos`}
+                  ? `Mostrando ${displayRows.length} seleccionados (de ${filasFiltradas.length} filtrados, ${rowsSinExcluidas.length} total)`
+                  : `Mostrando ${displayRows.length} de ${rowsSinExcluidas.length} gastos`}
               </span>
               <span className="ui-filter-stat-emphasis hidden sm:inline">
                 Total filtrado: {formatClp(totalGastosFiltrados)}
