@@ -45,12 +45,15 @@ type Props = {
   defaultHasta?: string;
   /** Tras borrar duplicados o un lote, refrescar la lista de gastos. */
   onChanged?: () => void;
+  /** Filtrar la tabla de Gastos a los egresos de este lote. */
+  onVerLote?: (batchId: string, filename: string) => void;
 };
 
 export function GastosCargasPanel({
   defaultDesde,
   defaultHasta,
   onChanged,
+  onVerLote,
 }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [items, setItems] = useState<HistorialItem[]>([]);
@@ -250,9 +253,11 @@ export function GastosCargasPanel({
       {abierto ? (
         <div className="space-y-3 border-t border-amber-200/70 px-3 pb-3 pt-2">
           <p className="text-xs text-amber-900/90">
-            Si una carga entró mal o se duplicó: limpiá copias o deshacé el lote.
-            Las entradas automáticas (bancos / Fudo) ya evitan la mayoría de
-            duplicados.
+            La tabla de abajo son <strong>cargas/lotes</strong> (archivos o
+            syncs), no cada gasto. La columna «Cant. egresos» es cuántos
+            movimientos entraron en esa carga. Para ver si hay duplicados usá
+            «Revisar duplicados» o «Limpiar duplicados». «Ver egresos» filtra la
+            lista de Gastos a ese lote.
           </p>
 
           <div className="flex flex-wrap items-end gap-2">
@@ -312,13 +317,18 @@ export function GastosCargasPanel({
           ) : null}
 
           <div className="overflow-x-auto rounded border border-amber-200/80 bg-white">
-            <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[720px] border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                  <th className="px-2 py-1.5 font-medium">Fecha</th>
+                  <th className="px-2 py-1.5 font-medium">Cuándo se cargó</th>
                   <th className="px-2 py-1.5 font-medium">Archivo / lote</th>
                   <th className="px-2 py-1.5 font-medium">Tipo</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Egresos</th>
+                  <th
+                    className="px-2 py-1.5 text-right font-medium"
+                    title="Cuántos egresos tiene este lote (no es un monto en pesos)"
+                  >
+                    Cant. egresos
+                  </th>
                   <th className="px-2 py-1.5 text-right font-medium">Acción</th>
                 </tr>
               </thead>
@@ -336,7 +346,9 @@ export function GastosCargasPanel({
                     </td>
                   </tr>
                 ) : (
-                  items.map((row) => (
+                  items.map((row) => {
+                    const esFudo = row.importKind === "fudo_gastos";
+                    return (
                     <tr
                       key={row.id}
                       className="border-b border-slate-100 last:border-0"
@@ -359,27 +371,37 @@ export function GastosCargasPanel({
                         {row.transactionExpense.toLocaleString("es-CL")}
                       </td>
                       <td className="px-2 py-1.5 text-right">
-                        <button
-                          type="button"
-                          disabled={
-                            deletingId === row.id ||
-                            row.importKind === "fudo_gastos"
-                          }
-                          title={
-                            row.importKind === "fudo_gastos"
-                              ? "Las cargas Fudo no se deshacen desde aquí"
-                              : "Eliminar esta carga"
-                          }
-                          className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
-                          onClick={() => void eliminarLote(row)}
-                        >
-                          {deletingId === row.id
-                            ? "Eliminando…"
-                            : "Deshacer carga"}
-                        </button>
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {onVerLote ? (
+                            <button
+                              type="button"
+                              className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 hover:bg-slate-50"
+                              onClick={() => onVerLote(row.id, row.filename)}
+                              title="Mostrar solo los egresos de este lote en la tabla de Gastos"
+                            >
+                              Ver egresos
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={deletingId === row.id || esFudo}
+                            title={
+                              esFudo
+                                ? "Las cargas Fudo no se deshacen desde aquí"
+                                : "Borrar todos los egresos de este lote"
+                            }
+                            className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            onClick={() => void eliminarLote(row)}
+                          >
+                            {deletingId === row.id
+                              ? "Eliminando…"
+                              : "Deshacer carga"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

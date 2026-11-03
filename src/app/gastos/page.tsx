@@ -849,6 +849,11 @@ function GastosPageContent() {
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
   const [agruparPorFamilia, setAgruparPorFamilia] = useState(false);
   const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
+  /** Filtro temporal: ver solo egresos de un lote de carga. */
+  const [filtroLote, setFiltroLote] = useState<{
+    id: string;
+    filename: string;
+  } | null>(null);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -1108,38 +1113,41 @@ function GastosPageContent() {
     setFiltroCategorias((prev) => podarSeleccion(prev, validas));
   }, [opcionesCategoria]);
 
-  const filasFiltradas = useMemo(
-    () =>
-      filtrarGastos(rows, {
-        modoFecha,
-        dia,
-        mes,
-        anio,
-        rangoDesde,
-        rangoHasta,
-        nombreDestino: filtroNombreDestino,
-        descripcion: filtroDescripcion,
-        familias: filtroFamilias,
-        origenes: filtroOrigenes,
-        categorias: filtroCategorias,
-        catalogo,
-      }),
-    [
-      rows,
+  const filasFiltradas = useMemo(() => {
+    let out = filtrarGastos(rows, {
       modoFecha,
       dia,
       mes,
       anio,
       rangoDesde,
       rangoHasta,
-      filtroNombreDestino,
-      filtroDescripcion,
-      filtroFamilias,
-      filtroOrigenes,
-      filtroCategorias,
+      nombreDestino: filtroNombreDestino,
+      descripcion: filtroDescripcion,
+      familias: filtroFamilias,
+      origenes: filtroOrigenes,
+      categorias: filtroCategorias,
       catalogo,
-    ],
-  );
+    });
+    if (filtroLote) {
+      out = out.filter((r) => (r.importBatchId ?? "").trim() === filtroLote.id);
+    }
+    return out;
+  }, [
+    rows,
+    modoFecha,
+    dia,
+    mes,
+    anio,
+    rangoDesde,
+    rangoHasta,
+    filtroNombreDestino,
+    filtroDescripcion,
+    filtroFamilias,
+    filtroOrigenes,
+    filtroCategorias,
+    catalogo,
+    filtroLote,
+  ]);
 
   const filasTrasSeleccion = useMemo(() => {
     if (!soloSeleccionados) return filasFiltradas;
@@ -1291,6 +1299,7 @@ function GastosPageContent() {
     setFiltroCategorias(null);
     setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
+    setFiltroLote(null);
     setFiltrosMovilAbiertos(false);
   };
 
@@ -1804,7 +1813,30 @@ function GastosPageContent() {
           defaultDesde={periodoCargas.desde}
           defaultHasta={periodoCargas.hasta}
           onChanged={() => cargar({ force: true })}
+          onVerLote={(id, filename) => {
+            setFiltroLote({ id, filename });
+            setAgruparPorFamilia(false);
+            setPaginaGastos(1);
+            mostrarAviso(
+              `Mostrando egresos del lote «${filename}». Tocá «Quitar filtro de lote» para ver todos.`,
+            );
+          }}
         />
+      ) : null}
+
+      {filtroLote ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+          <span className="min-w-0 flex-1 break-all">
+            Filtro de lote: <strong>{filtroLote.filename}</strong>
+          </span>
+          <button
+            type="button"
+            className="shrink-0 rounded border border-sky-400 bg-white px-2 py-1 font-medium text-sky-900 hover:bg-sky-100"
+            onClick={() => setFiltroLote(null)}
+          >
+            Quitar filtro de lote
+          </button>
+        </div>
       ) : null}
 
       <section
