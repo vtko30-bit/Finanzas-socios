@@ -849,11 +849,6 @@ function GastosPageContent() {
   const [soloSeleccionados, setSoloSeleccionados] = useState(false);
   const [agruparPorFamilia, setAgruparPorFamilia] = useState(false);
   const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
-  /** Filtro temporal: ver solo egresos de un lote de carga. */
-  const [filtroLote, setFiltroLote] = useState<{
-    id: string;
-    filename: string;
-  } | null>(null);
 
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -1113,41 +1108,38 @@ function GastosPageContent() {
     setFiltroCategorias((prev) => podarSeleccion(prev, validas));
   }, [opcionesCategoria]);
 
-  const filasFiltradas = useMemo(() => {
-    let out = filtrarGastos(rows, {
+  const filasFiltradas = useMemo(
+    () =>
+      filtrarGastos(rows, {
+        modoFecha,
+        dia,
+        mes,
+        anio,
+        rangoDesde,
+        rangoHasta,
+        nombreDestino: filtroNombreDestino,
+        descripcion: filtroDescripcion,
+        familias: filtroFamilias,
+        origenes: filtroOrigenes,
+        categorias: filtroCategorias,
+        catalogo,
+      }),
+    [
+      rows,
       modoFecha,
       dia,
       mes,
       anio,
       rangoDesde,
       rangoHasta,
-      nombreDestino: filtroNombreDestino,
-      descripcion: filtroDescripcion,
-      familias: filtroFamilias,
-      origenes: filtroOrigenes,
-      categorias: filtroCategorias,
+      filtroNombreDestino,
+      filtroDescripcion,
+      filtroFamilias,
+      filtroOrigenes,
+      filtroCategorias,
       catalogo,
-    });
-    if (filtroLote) {
-      out = out.filter((r) => (r.importBatchId ?? "").trim() === filtroLote.id);
-    }
-    return out;
-  }, [
-    rows,
-    modoFecha,
-    dia,
-    mes,
-    anio,
-    rangoDesde,
-    rangoHasta,
-    filtroNombreDestino,
-    filtroDescripcion,
-    filtroFamilias,
-    filtroOrigenes,
-    filtroCategorias,
-    catalogo,
-    filtroLote,
-  ]);
+    ],
+  );
 
   const filasTrasSeleccion = useMemo(() => {
     if (!soloSeleccionados) return filasFiltradas;
@@ -1198,34 +1190,6 @@ function GastosPageContent() {
       soloSeleccionados,
     ],
   );
-
-  /** Período sugerido para el panel de duplicados (sigue el filtro de fechas). */
-  const periodoCargas = useMemo(() => {
-    const today = new Date();
-    const ymd = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (modoFecha === "dia" && dia) return { desde: dia, hasta: dia };
-    if (modoFecha === "mes" && mes) {
-      const [y, m] = mes.split("-").map(Number);
-      if (y && m) {
-        const last = new Date(y, m, 0).getDate();
-        return {
-          desde: `${mes}-01`,
-          hasta: `${mes}-${String(last).padStart(2, "0")}`,
-        };
-      }
-    }
-    if (modoFecha === "anio" && anio) {
-      return { desde: `${anio}-01-01`, hasta: `${anio}-12-31` };
-    }
-    if (modoFecha === "rango" && rangoDesde && rangoHasta) {
-      return { desde: rangoDesde, hasta: rangoHasta };
-    }
-    return {
-      desde: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`,
-      hasta: ymd(today),
-    };
-  }, [modoFecha, dia, mes, anio, rangoDesde, rangoHasta]);
 
   const totalPaginasGastos = useMemo(() => {
     if (filasVisiblesCount === 0) return 0;
@@ -1299,7 +1263,6 @@ function GastosPageContent() {
     setFiltroCategorias(null);
     setSoloSeleccionados(false);
     setSelectedGastoIds(new Set());
-    setFiltroLote(null);
     setFiltrosMovilAbiertos(false);
   };
 
@@ -1809,34 +1772,7 @@ function GastosPageContent() {
       ) : null}
 
       {!capsLoading && canWrite && !esVistaPagoServiciosBancoEstado ? (
-        <GastosCargasPanel
-          defaultDesde={periodoCargas.desde}
-          defaultHasta={periodoCargas.hasta}
-          onChanged={() => cargar({ force: true })}
-          onVerLote={(id, filename) => {
-            setFiltroLote({ id, filename });
-            setAgruparPorFamilia(false);
-            setPaginaGastos(1);
-            mostrarAviso(
-              `Mostrando egresos del lote «${filename}». Tocá «Quitar filtro de lote» para ver todos.`,
-            );
-          }}
-        />
-      ) : null}
-
-      {filtroLote ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-          <span className="min-w-0 flex-1 break-all">
-            Filtro de lote: <strong>{filtroLote.filename}</strong>
-          </span>
-          <button
-            type="button"
-            className="shrink-0 rounded border border-sky-400 bg-white px-2 py-1 font-medium text-sky-900 hover:bg-sky-100"
-            onClick={() => setFiltroLote(null)}
-          >
-            Quitar filtro de lote
-          </button>
-        </div>
+        <GastosCargasPanel onChanged={() => cargar({ force: true })} />
       ) : null}
 
       <section

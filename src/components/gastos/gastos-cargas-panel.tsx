@@ -2,431 +2,131 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PeriodDuplicatesReview } from "@/components/import/period-duplicates-review";
-import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
 
 function ymdLocal(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function firstDayOfMonthYmd() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+function addMonthsYmd(ymd: string, months: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1 + months, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
-type HistorialItem = {
-  id: string;
-  filename: string;
-  status: string;
-  createdAt: string;
-  importKind: string;
-  validRows: number | null;
-  transactionExpense: number;
-  transactionIncome: number;
-};
-
-const EXPENSE_KINDS = new Set([
-  "excel_egresos",
-  "excel_egresos_bancoestado_servicios",
-  "fudo_gastos",
-]);
-
-function labelTipo(kind: string): string {
-  if (kind === "fudo_gastos") return "Gastos Fudo";
-  if (kind === "excel_egresos") return "Gastos / egresos";
-  if (kind === "excel_egresos_bancoestado_servicios") {
-    return "Pago servicios BancoEstado";
-  }
-  return kind;
+/** Ventana de búsqueda de duplicados pendientes (últimos 6 meses). */
+function defaultPeriod(): { desde: string; hasta: string } {
+  const hasta = ymdLocal();
+  return { desde: addMonthsYmd(hasta, -6), hasta };
 }
 
 type Props = {
-  /** Período sugerido (p. ej. filtro de fechas de Gastos). */
-  defaultDesde?: string;
-  defaultHasta?: string;
-  /** Tras borrar duplicados o un lote, refrescar la lista de gastos. */
+  /** Tras resolver duplicados, refrescar la lista de gastos. */
   onChanged?: () => void;
-  /** Filtrar la tabla de Gastos a los egresos de este lote. */
-  onVerLote?: (batchId: string, filename: string) => void;
 };
 
-export function GastosCargasPanel({
-  defaultDesde,
-  defaultHasta,
-  onChanged,
-  onVerLote,
-}: Props) {
-  const [abierto, setAbierto] = useState(false);
-  const [items, setItems] = useState<HistorialItem[]>([]);
-  const [loading, setLoading] = useState(false);
+/**
+ * Botón que solo se activa si hay grupos de egresos duplicados por revisar.
+ * Al hacer clic abre el detalle; al resolverlos (borrar o marcar correctos) queda inactivo.
+ */
+export function GastosCargasPanel({ onChanged }: Props) {
+  const [{ desde, hasta }] = useState(defaultPeriod);
+  const [checking, setChecking] = useState(true);
+  const [groupCount, setGroupCount] = useState(0);
+  const [rowCount, setRowCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [limpiandoDups, setLimpiandoDups] = useState(false);
-  const [dupDesde, setDupDesde] = useState(
-    () => defaultDesde || firstDayOfMonthYmd(),
-  );
-  const [dupHasta, setDupHasta] = useState(
-    () => defaultHasta || ymdLocal(),
-  );
-  const [periodDupReview, setPeriodDupReview] = useState<{
-    desde: string;
-    hasta: string;
-  } | null>(null);
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (defaultDesde) setDupDesde(defaultDesde);
-    if (defaultHasta) setDupHasta(defaultHasta);
-  }, [defaultDesde, defaultHasta]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
+  const refreshPending = useCallback(async (): Promise<number> => {
+    setChecking(true);
     setError(null);
     try {
-      const res = await fetch("/api/import/historial");
-      const json = (await res.json()) as {
-        items?: HistorialItem[];
+      const res = await fetch(
+        `/api/import/duplicados-periodo?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+      );
+      const data = (await res.json()) as {
         error?: string;
+        duplicateGroups?: number;
+        duplicateRowCount?: number;
       };
       if (!res.ok) {
-        setError(json.error ?? "No se pudo cargar las cargas");
-        setItems([]);
-        return;
+        setError(data.error ?? "No se pudo revisar duplicados");
+        setGroupCount(0);
+        setRowCount(0);
+        return 0;
       }
-      setItems(
-        (json.items ?? []).filter((row) => EXPENSE_KINDS.has(row.importKind)),
-      );
+      const groups = Number(data.duplicateGroups) || 0;
+      setGroupCount(groups);
+      setRowCount(Number(data.duplicateRowCount) || 0);
+      return groups;
     } catch {
-      setError("Error de red al cargar las cargas");
-      setItems([]);
+      setError("Error de red al revisar duplicados");
+      setGroupCount(0);
+      setRowCount(0);
+      return 0;
     } finally {
-      setLoading(false);
+      setChecking(false);
     }
-  }, []);
+  }, [desde, hasta]);
 
   useEffect(() => {
-    if (abierto) void load();
-  }, [abierto, load]);
+    void refreshPending();
+  }, [refreshPending]);
 
-  const eliminarLote = async (row: HistorialItem) => {
-    const ok = window.confirm(
-      `¿Eliminar la carga «${row.filename}»?\n\n` +
-        `Se borrarán ${row.transactionExpense.toLocaleString("es-CL")} egresos de esta carga. ` +
-        `No se puede deshacer.\n\n` +
-        `Si reimportaste porque la carga anterior estaba incompleta, NO uses esto: ` +
-        `usa «Limpiar duplicados».`,
-    );
-    if (!ok) return;
-
-    setDeletingId(row.id);
-    setError(null);
-    setInfoMsg(null);
-    try {
-      const res = await fetch(`/api/import/batches/${encodeURIComponent(row.id)}`, {
-        method: "DELETE",
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setError(json.error ?? "No se pudo eliminar la carga");
-        return;
-      }
-      setInfoMsg("Carga eliminada.");
-      invalidateMainNavCaches();
-      await load();
-      onChanged?.();
-    } catch {
-      setError("Error de red al eliminar la carga");
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const limpiarDuplicadosEgresos = async () => {
-    setError(null);
-    setInfoMsg(null);
-    setLimpiandoDups(true);
-    try {
-      const prevRes = await fetch("/api/import/limpiar-duplicados-egresos");
-      const prev = (await prevRes.json()) as {
-        error?: string;
-        hint?: string;
-        duplicateGroups?: number;
-        toDelete?: number;
-        examples?: Array<{ idOrigen: string; total: number }>;
-      };
-      if (!prevRes.ok) {
-        setError(
-          [prev.error ?? "No se pudo previsualizar duplicados", prev.hint]
-            .filter(Boolean)
-            .join(" "),
-        );
-        return;
-      }
-
-      const toDelete = prev.toDelete ?? 0;
-      const groups = prev.duplicateGroups ?? 0;
-      if (toDelete === 0) {
-        setInfoMsg("No hay egresos duplicados por Id Origen.");
-        return;
-      }
-
-      const ejemplos =
-        (prev.examples ?? [])
-          .slice(0, 5)
-          .map((e) => `• ${e.idOrigen} (${e.total} copias)`)
-          .join("\n") || "";
-
-      const ok = window.confirm(
-        `Se encontraron ${groups.toLocaleString("es-CL")} Id Origen duplicados.\n` +
-          `Se borrarán ${toDelete.toLocaleString("es-CL")} copias sobrantes.\n` +
-          `Se conservan las filas clasificadas (o más antiguas).\n\n` +
-          (ejemplos ? `Ejemplos:\n${ejemplos}\n\n` : "") +
-          `Los borrados se respaldan antes. ¿Continuar?`,
-      );
-      if (!ok) return;
-
-      const postRes = await fetch("/api/import/limpiar-duplicados-egresos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: true }),
-      });
-      const post = (await postRes.json()) as {
-        error?: string;
-        hint?: string;
-        deleted?: number;
-        backedUp?: number;
-        duplicateGroups?: number;
-        message?: string;
-      };
-      if (!postRes.ok) {
-        setError(
-          [post.error ?? "No se pudo limpiar duplicados", post.hint]
-            .filter(Boolean)
-            .join(" "),
-        );
-        return;
-      }
-
-      setInfoMsg(
-        post.deleted
-          ? `Listo: se borraron ${post.deleted.toLocaleString("es-CL")} duplicados ` +
-              `(${(post.duplicateGroups ?? 0).toLocaleString("es-CL")} Id Origen).`
-          : post.message ?? "No había duplicados para borrar.",
-      );
-      invalidateMainNavCaches();
-      await load();
-      onChanged?.();
-    } catch {
-      setError("Error de red al limpiar duplicados");
-    } finally {
-      setLimpiandoDups(false);
-    }
-  };
-
-  const abrirRevisarPeriodo = () => {
-    setError(null);
-    setInfoMsg(null);
-    if (!dupDesde || !dupHasta) {
-      setError("Indica fecha desde y hasta.");
-      return;
-    }
-    if (dupDesde > dupHasta) {
-      setError("La fecha «desde» no puede ser posterior a «hasta».");
-      return;
-    }
-    setPeriodDupReview({ desde: dupDesde, hasta: dupHasta });
-  };
+  const hayPendientes = groupCount > 0;
+  const label = checking
+    ? "Revisando duplicados…"
+    : hayPendientes
+      ? `Revisar duplicados (${groupCount})`
+      : "Sin duplicados por revisar";
 
   return (
-    <section className="rounded-lg border border-amber-200/80 bg-amber-50/50">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-amber-950"
-        aria-expanded={abierto}
-        onClick={() => setAbierto((v) => !v)}
+        disabled={!hayPendientes || checking}
+        aria-disabled={!hayPendientes || checking}
+        title={
+          hayPendientes
+            ? `${rowCount} movimientos en ${groupCount} grupo(s) por aclarar (últimos 6 meses)`
+            : "No hay egresos duplicados pendientes en los últimos 6 meses"
+        }
+        className={
+          hayPendientes
+            ? "rounded-lg border border-amber-600 bg-amber-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-50"
+            : "rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500 cursor-not-allowed"
+        }
+        onClick={() => {
+          if (!hayPendientes) return;
+          setOpen(true);
+        }}
       >
-        <span>Control de cargas (duplicados y deshacer)</span>
-        <span className="text-xs font-normal text-amber-800/80">
-          {abierto ? "Ocultar" : "Mostrar"}
-        </span>
+        {label}
       </button>
-
-      {abierto ? (
-        <div className="space-y-3 border-t border-amber-200/70 px-3 pb-3 pt-2">
-          <p className="text-xs text-amber-900/90">
-            La tabla de abajo son <strong>cargas/lotes</strong> (archivos o
-            syncs), no cada gasto. La columna «Cant. egresos» es cuántos
-            movimientos entraron en esa carga. Para ver si hay duplicados usá
-            «Revisar duplicados» o «Limpiar duplicados». «Ver egresos» filtra la
-            lista de Gastos a ese lote.
-          </p>
-
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs text-amber-950">
-              Desde
-              <input
-                type="date"
-                value={dupDesde}
-                onChange={(e) => setDupDesde(e.target.value)}
-                className="mt-1 block rounded border border-amber-300 bg-white px-2 py-1 text-sm text-slate-800"
-              />
-            </label>
-            <label className="text-xs text-amber-950">
-              Hasta
-              <input
-                type="date"
-                value={dupHasta}
-                onChange={(e) => setDupHasta(e.target.value)}
-                className="mt-1 block rounded border border-amber-300 bg-white px-2 py-1 text-sm text-slate-800"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={abrirRevisarPeriodo}
-              disabled={limpiandoDups}
-              className="rounded border border-amber-600 bg-amber-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              Revisar duplicados del período
-            </button>
-            <button
-              type="button"
-              onClick={() => void limpiarDuplicadosEgresos()}
-              disabled={limpiandoDups || loading}
-              className="rounded border border-amber-400 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
-            >
-              {limpiandoDups ? "Limpiando…" : "Limpiar duplicados (Id Origen)"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void load()}
-              disabled={loading || limpiandoDups}
-              className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {loading ? "Actualizando…" : "Actualizar lista"}
-            </button>
-          </div>
-
-          {error ? (
-            <p className="rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-900">
-              {error}
-            </p>
-          ) : null}
-          {infoMsg ? (
-            <p className="rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-950">
-              {infoMsg}
-            </p>
-          ) : null}
-
-          <div className="overflow-x-auto rounded border border-amber-200/80 bg-white">
-            <table className="w-full min-w-[720px] border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                  <th className="px-2 py-1.5 font-medium">Cuándo se cargó</th>
-                  <th className="px-2 py-1.5 font-medium">Archivo / lote</th>
-                  <th className="px-2 py-1.5 font-medium">Tipo</th>
-                  <th
-                    className="px-2 py-1.5 text-right font-medium"
-                    title="Cuántos egresos tiene este lote (no es un monto en pesos)"
-                  >
-                    Cant. egresos
-                  </th>
-                  <th className="px-2 py-1.5 text-right font-medium">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && items.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-2 py-4 text-center text-slate-500">
-                      Cargando…
-                    </td>
-                  </tr>
-                ) : items.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-2 py-4 text-center text-slate-500">
-                      No hay cargas de gastos registradas.
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((row) => {
-                    const esFudo = row.importKind === "fudo_gastos";
-                    return (
-                    <tr
-                      key={row.id}
-                      className="border-b border-slate-100 last:border-0"
-                    >
-                      <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">
-                        {new Date(row.createdAt).toLocaleString("es-CL", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </td>
-                      <td className="px-2 py-1.5 text-slate-800">
-                        <span className="break-all" title={row.filename}>
-                          {row.filename}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5 text-slate-700">
-                        {labelTipo(row.importKind)}
-                      </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-amber-900">
-                        {row.transactionExpense.toLocaleString("es-CL")}
-                      </td>
-                      <td className="px-2 py-1.5 text-right">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
-                          {onVerLote ? (
-                            <button
-                              type="button"
-                              className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 hover:bg-slate-50"
-                              onClick={() => onVerLote(row.id, row.filename)}
-                              title="Mostrar solo los egresos de este lote en la tabla de Gastos"
-                            >
-                              Ver egresos
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            disabled={deletingId === row.id || esFudo}
-                            title={
-                              esFudo
-                                ? "Las cargas Fudo no se deshacen desde aquí"
-                                : "Borrar todos los egresos de este lote"
-                            }
-                            className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
-                            onClick={() => void eliminarLote(row)}
-                          >
-                            {deletingId === row.id
-                              ? "Eliminando…"
-                              : "Deshacer carga"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {error ? (
+        <span className="text-xs text-rose-700">{error}</span>
       ) : null}
 
-      {periodDupReview ? (
+      {open ? (
         <PeriodDuplicatesReview
           open
-          desde={periodDupReview.desde}
-          hasta={periodDupReview.hasta}
-          onClose={() => setPeriodDupReview(null)}
-          onDeleted={(deleted) => {
-            setInfoMsg(
-              deleted > 0
-                ? `Se eliminaron ${deleted.toLocaleString("es-CL")} egreso(s) duplicado(s).`
-                : "No se eliminaron movimientos.",
-            );
-            invalidateMainNavCaches();
-            void load();
+          desde={desde}
+          hasta={hasta}
+          title="Duplicados por aclarar"
+          onClose={() => {
+            setOpen(false);
+            void refreshPending();
+          }}
+          onDeleted={() => {
             onChanged?.();
+          }}
+          onResolved={() => {
+            onChanged?.();
+            void refreshPending().then((remaining) => {
+              if (remaining === 0) setOpen(false);
+            });
           }}
         />
       ) : null}
-    </section>
+    </div>
   );
 }

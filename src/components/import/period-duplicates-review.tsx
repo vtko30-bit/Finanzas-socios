@@ -34,6 +34,8 @@ type PeriodDuplicatesReviewProps = {
   title?: string;
   onClose: () => void;
   onDeleted?: (deleted: number) => void;
+  /** Tras marcar correctos o eliminar (para apagar el botón de Gastos). */
+  onResolved?: () => void;
 };
 
 const formatClp = (n: number) =>
@@ -62,6 +64,7 @@ export function PeriodDuplicatesReview({
   title = "Revisar duplicados del período",
   onClose,
   onDeleted,
+  onResolved,
 }: PeriodDuplicatesReviewProps) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -152,6 +155,7 @@ export function PeriodDuplicatesReview({
         for (const id of ackedIds) next.delete(id);
         return next;
       });
+      onResolved?.();
     } catch {
       setError("Error de red al registrar movimientos correctos");
     } finally {
@@ -175,7 +179,9 @@ export function PeriodDuplicatesReview({
         return;
       }
       invalidateMainNavCaches();
-      onDeleted?.(Number(data.deleted) || 0);
+      const deleted = Number(data.deleted) || 0;
+      onDeleted?.(deleted);
+      onResolved?.();
       onClose();
     } catch {
       setError("Error de red al eliminar duplicados");
