@@ -1826,19 +1826,20 @@ function GastosPageContent() {
 
   return (
     <main className="page-main page-main--2xl gap-2 pt-3 sm:pt-4">
-      <h1 className="page-title">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="page-title mb-0 min-w-0 truncate">
           {esVistaPagoServiciosBancoEstado
             ? "Gastos — Pago servicios BancoEstado"
             : "Gastos"}
         </h1>
+        {!capsLoading && canWrite && !esVistaPagoServiciosBancoEstado ? (
+          <GastosCargasPanel onChanged={() => cargar({ force: true })} />
+        ) : null}
+      </div>
       {!capsLoading && !canWrite ? (
         <p className="text-sm text-slate-500">
           Solo lectura: solo el administrador (owner) puede editar categorías o importar datos.
         </p>
-      ) : null}
-
-      {!capsLoading && canWrite && !esVistaPagoServiciosBancoEstado ? (
-        <GastosCargasPanel onChanged={() => cargar({ force: true })} />
       ) : null}
 
       <section

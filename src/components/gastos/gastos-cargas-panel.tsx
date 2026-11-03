@@ -80,7 +80,7 @@ export function GastosCargasPanel({ onChanged }: Props) {
       : "Sin duplicados por revisar";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex shrink-0 items-center gap-1.5">
       <button
         type="button"
         disabled={!hayPendientes || checking}
@@ -92,8 +92,8 @@ export function GastosCargasPanel({ onChanged }: Props) {
         }
         className={
           hayPendientes
-            ? "rounded-lg border border-amber-600 bg-amber-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-50"
-            : "rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500 cursor-not-allowed"
+            ? "rounded border border-amber-600 bg-amber-500 px-2 py-0.5 text-[11px] font-medium leading-tight text-white hover:bg-amber-600 disabled:opacity-50"
+            : "rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium leading-tight text-slate-500 cursor-not-allowed"
         }
         onClick={() => {
           if (!hayPendientes) return;
@@ -103,7 +103,7 @@ export function GastosCargasPanel({ onChanged }: Props) {
         {label}
       </button>
       {error ? (
-        <span className="text-xs text-rose-700">{error}</span>
+        <span className="max-w-[9rem] truncate text-[10px] text-rose-700">{error}</span>
       ) : null}
 
       {open ? (
