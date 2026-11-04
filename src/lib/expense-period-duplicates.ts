@@ -77,8 +77,16 @@ export function partitionPeriodDuplicatesByLogicalKey(
   groups: PeriodDuplicateGroup[];
   suggestedDeleteIds: string[];
 } {
-  const byKey = new Map<string, PeriodDuplicateRow[]>();
+  // Una sola fila por id (evita grupos fantasmas que el cliente luego vacía).
+  const uniqueRows = new Map<string, PeriodDuplicateRow>();
   for (const row of rows) {
+    const id = String(row.id ?? "").trim();
+    if (!id || uniqueRows.has(id)) continue;
+    uniqueRows.set(id, row);
+  }
+
+  const byKey = new Map<string, PeriodDuplicateRow[]>();
+  for (const row of uniqueRows.values()) {
     const key = logicalKeyFromRow(row);
     const list = byKey.get(key);
     if (list) list.push(row);

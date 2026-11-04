@@ -2,40 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
+import type { PeriodDuplicateGroup } from "@/lib/expense-period-duplicates";
+import { fetchPendingDuplicateGroups } from "@/lib/period-duplicates-client";
 
-export type PeriodDuplicateGroup = {
-  key: string;
-  label: string;
-  keepId: string;
-  suggestedDeleteIds: string[];
-  rows: Array<{
-    id: string;
-    date: string;
-    amount: number;
-    counterparty: string;
-    origen_cuenta: string;
-    payment_method: string;
-    external_ref: string;
-    description: string;
-    concepto: string;
-    source_id: string;
-    dedupe_hash: string;
-    created_at: string;
-    import_batch_id: string | null;
-    locked: boolean;
-    isSuggestedKeep: boolean;
-  }>;
-};
+export type { PeriodDuplicateGroup };
 
 type PeriodDuplicatesReviewProps = {
   open: boolean;
   desde: string;
   hasta: string;
+  /** Grupos ya cargados por el botón (misma fuente que el contador). */
+  initialGroups?: PeriodDuplicateGroup[];
   title?: string;
   onClose: () => void;
   onDeleted?: (deleted: number) => void;
   /** Tras marcar correctos o eliminar (para apagar el botón de Gastos). */
   onResolved?: () => void;
+  /** Sincroniza el contador del botón cuando cambia el detalle. */
+  onGroupsChange?: (groups: PeriodDuplicateGroup[]) => void;
 };
 
 const formatClp = (n: number) =>
@@ -70,73 +54,84 @@ function shortId(id: string): string {
   return t.slice(0, 8);
 }
 
+function initialKeepMap(groups: PeriodDuplicateGroup[]): Record<string, string> {
+  const initial: Record<string, string> = {};
+  for (const group of groups) {
+    const preferred =
+      group.rows.find((row) => row.id === group.keepId && !row.locked)?.id ||
+      group.rows.find((row) => !row.locked)?.id ||
+      group.rows[0]?.id ||
+      "";
+    if (preferred) initial[group.key] = preferred;
+  }
+  return initial;
+}
+
 export function PeriodDuplicatesReview({
   open,
   desde,
   hasta,
+  initialGroups,
   title = "Revisar duplicados del período",
   onClose,
   onDeleted,
   onResolved,
+  onGroupsChange,
 }: PeriodDuplicatesReviewProps) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [acking, setAcking] = useState(false);
   const [error, setError] = useState("");
-  const [groups, setGroups] = useState<PeriodDuplicateGroup[]>([]);
+  const [groups, setGroups] = useState<PeriodDuplicateGroup[]>(
+    () => initialGroups ?? [],
+  );
   /** Por cada grupo, el id del movimiento a conservar. */
-  const [keepByGroup, setKeepByGroup] = useState<Record<string, string>>({});
+  const [keepByGroup, setKeepByGroup] = useState<Record<string, string>>(
+    () => initialKeepMap(initialGroups ?? []),
+  );
+
+  const applyGroups = useCallback(
+    (next: PeriodDuplicateGroup[]) => {
+      setGroups(next);
+      setKeepByGroup(initialKeepMap(next));
+      onGroupsChange?.(next);
+    },
+    [onGroupsChange],
+  );
 
   const load = useCallback(async () => {
     if (!desde || !hasta) return;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `/api/import/duplicados-periodo?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+      const { groups: cleaned, error: err } = await fetchPendingDuplicateGroups(
+        desde,
+        hasta,
       );
-      const data = await res.json();
-      if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Error al cargar duplicados");
-        setGroups([]);
-        setKeepByGroup({});
+      if (err) {
+        setError(err);
+        applyGroups([]);
         return;
       }
-      const nextGroups = (data.groups ?? []) as PeriodDuplicateGroup[];
-      // Evitar filas repetidas con el mismo id dentro del grupo.
-      const cleaned = nextGroups.map((group) => {
-        const seen = new Set<string>();
-        const rows = group.rows.filter((row) => {
-          if (!row.id || seen.has(row.id)) return false;
-          seen.add(row.id);
-          return true;
-        });
-        return { ...group, rows };
-      }).filter((group) => group.rows.length >= 2);
-
-      setGroups(cleaned);
-      const initial: Record<string, string> = {};
-      for (const group of cleaned) {
-        const preferred =
-          group.rows.find((row) => row.id === group.keepId && !row.locked)?.id ||
-          group.rows.find((row) => !row.locked)?.id ||
-          group.rows[0]?.id ||
-          "";
-        if (preferred) initial[group.key] = preferred;
-      }
-      setKeepByGroup(initial);
+      applyGroups(cleaned);
     } catch {
       setError("Error de red al cargar duplicados");
-      setGroups([]);
-      setKeepByGroup({});
+      applyGroups([]);
     } finally {
       setLoading(false);
     }
-  }, [desde, hasta]);
+  }, [desde, hasta, applyGroups]);
 
   useEffect(() => {
-    if (open && desde && hasta) void load();
-  }, [open, desde, hasta, load]);
+    if (!open) return;
+    // Si el botón ya trajo grupos, mostrarlos al toque; refrescar en silencio.
+    if (initialGroups && initialGroups.length > 0) {
+      applyGroups(initialGroups);
+      void load();
+      return;
+    }
+    void load();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- solo al abrir
 
   const selectedDeleteIds = useMemo(() => {
     const ids = new Set<string>();
@@ -178,7 +173,11 @@ export function PeriodDuplicatesReview({
         return;
       }
       const acked = new Set(target.map((group) => group.key));
-      setGroups((prev) => prev.filter((group) => !acked.has(group.key)));
+      setGroups((prev) => {
+        const next = prev.filter((group) => !acked.has(group.key));
+        onGroupsChange?.(next);
+        return next;
+      });
       setKeepByGroup((prev) => {
         const next = { ...prev };
         for (const key of acked) delete next[key];

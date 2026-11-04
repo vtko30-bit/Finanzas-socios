@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PeriodDuplicatesReview } from "@/components/import/period-duplicates-review";
+import {
+  PeriodDuplicatesReview,
+  type PeriodDuplicateGroup,
+} from "@/components/import/period-duplicates-review";
+import { fetchPendingDuplicateGroups } from "@/lib/period-duplicates-client";
 
 function ymdLocal(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -26,13 +30,14 @@ type Props = {
 
 /**
  * Botón que solo se activa si hay grupos de egresos duplicados por revisar.
- * Al hacer clic abre el detalle; al resolverlos (borrar o marcar correctos) queda inactivo.
+ * El contador usa exactamente los mismos grupos que muestra el detalle.
  */
 export function GastosCargasPanel({ onChanged }: Props) {
   const [{ desde, hasta }] = useState(defaultPeriod);
   const [checking, setChecking] = useState(true);
-  const [groupCount, setGroupCount] = useState(0);
-  const [rowCount, setRowCount] = useState(0);
+  const [pendingGroups, setPendingGroups] = useState<PeriodDuplicateGroup[]>(
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -40,28 +45,20 @@ export function GastosCargasPanel({ onChanged }: Props) {
     setChecking(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/import/duplicados-periodo?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+      const { groups, error: err } = await fetchPendingDuplicateGroups(
+        desde,
+        hasta,
       );
-      const data = (await res.json()) as {
-        error?: string;
-        duplicateGroups?: number;
-        duplicateRowCount?: number;
-      };
-      if (!res.ok) {
-        setError(data.error ?? "No se pudo revisar duplicados");
-        setGroupCount(0);
-        setRowCount(0);
+      if (err) {
+        setError(err);
+        setPendingGroups([]);
         return 0;
       }
-      const groups = Number(data.duplicateGroups) || 0;
-      setGroupCount(groups);
-      setRowCount(Number(data.duplicateRowCount) || 0);
-      return groups;
+      setPendingGroups(groups);
+      return groups.length;
     } catch {
       setError("Error de red al revisar duplicados");
-      setGroupCount(0);
-      setRowCount(0);
+      setPendingGroups([]);
       return 0;
     } finally {
       setChecking(false);
@@ -72,9 +69,11 @@ export function GastosCargasPanel({ onChanged }: Props) {
     void refreshPending();
   }, [refreshPending]);
 
+  const groupCount = pendingGroups.length;
+  const rowCount = pendingGroups.reduce((n, g) => n + g.rows.length, 0);
   const hayPendientes = groupCount > 0;
   const label = checking
-    ? "Revisando duplicados…"
+    ? "Revisando…"
     : hayPendientes
       ? `Revisar duplicados (${groupCount})`
       : "Sin duplicados por revisar";
@@ -111,6 +110,7 @@ export function GastosCargasPanel({ onChanged }: Props) {
           open
           desde={desde}
           hasta={hasta}
+          initialGroups={pendingGroups}
           title="Duplicados por aclarar"
           onClose={() => {
             setOpen(false);
@@ -118,6 +118,9 @@ export function GastosCargasPanel({ onChanged }: Props) {
           }}
           onDeleted={() => {
             onChanged?.();
+          }}
+          onGroupsChange={(next) => {
+            setPendingGroups(next);
           }}
           onResolved={() => {
             onChanged?.();
