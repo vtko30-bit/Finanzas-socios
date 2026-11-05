@@ -14,6 +14,7 @@ const RG_SUITE_URL =
 const NAV_BASE: NavItem[] = [
   { href: "/ventas", label: "Ventas" },
   { href: "/gastos", label: "Gastos" },
+  { href: "/facturas", label: "Facturas" },
   { href: "/resumen", label: "Resumen" },
   { href: "/socios", label: "Socios" },
   { href: "/analisis", label: "Análisis" },
