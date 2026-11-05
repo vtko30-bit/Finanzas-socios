@@ -103,12 +103,6 @@ function normText(value: unknown) {
     .replace(/\s+/g, " ");
 }
 
-function addDays(ymd: string, days: number) {
-  const date = new Date(`${ymd}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 function logicalKey(row: {
   date?: string;
   type?: string;
