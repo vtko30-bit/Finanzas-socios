@@ -134,6 +134,26 @@ function normParty(value: unknown) {
     .trim();
 }
 
+/** Alias del titular de la cuenta: aparece en todas las filas de cartola BE, no identifica el movimiento. */
+function esAliasTitularCuenta(destino: string) {
+  const n = destino.trim().toLowerCase();
+  if (!n) return true;
+  return (
+    n === "rg spa" ||
+    n === "rg" ||
+    n === "happy" ||
+    n === "happymarket" ||
+    n === "happy market" ||
+    n.includes("rg spa") ||
+    n.includes("happymarket")
+  );
+}
+
+/**
+ * Claves para detectar el mismo movimiento ya cargado.
+ * Importante: en Banco Estado el N° operación se reutiliza (tipo de operación),
+ * no es un id único. Nunca cruzar solo por N° operación + monto.
+ */
 function clavesDeCruce(row: {
   date?: string;
   type?: string;
@@ -146,18 +166,18 @@ function clavesDeCruce(row: {
   const type = String(row.type ?? "");
   const amount = Number(row.amount || 0).toFixed(2);
   const keys = [logicalKey(row)];
-  const ref = normRef(row.external_ref);
-  if (ref && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    for (let delta = -5; delta <= 5; delta += 1) {
-      keys.push(`ref|${addDays(date, delta)}|${type}|${amount}|${ref}`);
-    }
-  }
   const description = normText(row.description);
+  const ref = normRef(row.external_ref);
+  // Misma fecha + monto + N° op + descripción (reenvío del mismo Excel).
+  if (ref && description.length >= 6 && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    keys.push(`refdesc|${date}|${type}|${amount}|${ref}|${description}`);
+  }
   if (description.length >= 6) {
     keys.push(`desc|${date}|${type}|${amount}|${description}`);
   }
   const destino = normParty(row.counterparty);
-  if (destino.length >= 3) {
+  // No usar el alias de la empresa (RG SPA): es igual en casi todas las filas BE.
+  if (destino.length >= 3 && !esAliasTitularCuenta(destino)) {
     keys.push(`cp|${date}|${type}|${amount}|${destino}`);
   }
   return keys;
