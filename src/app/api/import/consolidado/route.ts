@@ -33,12 +33,13 @@ import {
   fetchTransferenciasDuplicateKeysForOrg,
   fetchTransferenciasFingerprintsForOrg,
 } from "@/lib/transferencias-be-fingerprints-db";
-import { fetchRetirosMercadoPagoDuplicateKeysForOrg } from "@/lib/retiros-mp-fingerprints-db";
+import {
+  esRetiroMercadoPagoYaCargado,
+  fetchRetirosMercadoPagoDuplicateIndexForOrg,
+} from "@/lib/retiros-mp-fingerprints-db";
 import {
   esOrigenRetirosMercadoPago,
   esOrigenSinAsignar,
-  fingerprintRetirosMercadoPagoMovimiento,
-  fingerprintRetirosMercadoPagoMovimientoLaxo,
 } from "@/lib/gastos-dedupe-servicios";
 
 function normalizarEtiquetaConcepto(raw: string): string {
@@ -258,13 +259,13 @@ export async function POST(request: Request) {
 
     let transferenciasInDb;
     let transferenciasDupKeysInDb: Set<string>;
-    let retirosMpDupKeysInDb: Set<string>;
+    let retirosMpIndex;
     try {
-      [transferenciasInDb, transferenciasDupKeysInDb, retirosMpDupKeysInDb] =
+      [transferenciasInDb, transferenciasDupKeysInDb, retirosMpIndex] =
         await Promise.all([
           fetchTransferenciasFingerprintsForOrg(supabase, orgId),
           fetchTransferenciasDuplicateKeysForOrg(supabase, orgId),
-          fetchRetirosMercadoPagoDuplicateKeysForOrg(supabase, orgId),
+          fetchRetirosMercadoPagoDuplicateIndexForOrg(supabase, orgId),
         ]);
     } catch (e) {
       return NextResponse.json(
@@ -317,15 +318,8 @@ export async function POST(request: Request) {
           esOrigenRetirosMercadoPago(origen) ||
           esOrigenSinAsignar(origen) ||
           /retiros.*mercado|mercado.*retiros/i.test(fileName);
-        if (esRetirosImport) {
-          const fp = fingerprintRetirosMercadoPagoMovimiento(m);
-          const fpLoose = fingerprintRetirosMercadoPagoMovimientoLaxo(m);
-          if (
-            (fp && retirosMpDupKeysInDb.has(fp)) ||
-            (fpLoose && retirosMpDupKeysInDb.has(fpLoose))
-          ) {
-            return false;
-          }
+        if (esRetirosImport && esRetiroMercadoPagoYaCargado(m, retirosMpIndex)) {
+          return false;
         }
       }
       if (!esOrigenTransferencias(String(m.account_name ?? ""))) return true;

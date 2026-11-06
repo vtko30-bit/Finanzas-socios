@@ -1,10 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import {
-  esOrigenRetirosMercadoPago,
-  fingerprintRetirosMercadoPagoMovimiento,
-  fingerprintRetirosMercadoPagoMovimientoLaxo,
-} from "@/lib/gastos-dedupe-servicios";
+import { esOrigenRetirosMercadoPago } from "@/lib/gastos-dedupe-servicios";
 import { expenseDedupeHashFromParsed } from "@/lib/import/expense-dedupe-keys";
 import { origenCanonico } from "@/lib/origen-canonico";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
@@ -12,7 +8,10 @@ import {
   collectBlockedImportDates,
   fetchImportPeriodLocks,
 } from "@/lib/import-period-lock";
-import { fetchRetirosMercadoPagoDuplicateKeysForOrg } from "@/lib/retiros-mp-fingerprints-db";
+import {
+  esRetiroMercadoPagoYaCargado,
+  fetchRetirosMercadoPagoDuplicateIndexForOrg,
+} from "@/lib/retiros-mp-fingerprints-db";
 import { resolveOrganizationId } from "@/lib/send-daily-balance";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -386,19 +385,18 @@ export async function POST(request: Request) {
         if (!data || data.length < pageSize) break;
       }
     }
-    const retirosMpKeys = await fetchRetirosMercadoPagoDuplicateKeysForOrg(
+    const retirosMpIndex = await fetchRetirosMercadoPagoDuplicateIndexForOrg(
       admin,
       organizationId,
     );
     const fresh = open.filter((row) => {
       if (knownHashes.has(row.dedupe_hash)) return false;
       if (clavesDeCruce(row).some((key) => existingKeys.has(key))) return false;
-      if (esOrigenRetirosMercadoPago(row.origen_cuenta)) {
-        const fp = fingerprintRetirosMercadoPagoMovimiento(row);
-        const fpLoose = fingerprintRetirosMercadoPagoMovimientoLaxo(row);
-        if ((fp && retirosMpKeys.has(fp)) || (fpLoose && retirosMpKeys.has(fpLoose))) {
-          return false;
-        }
+      if (
+        esOrigenRetirosMercadoPago(row.origen_cuenta) &&
+        esRetiroMercadoPagoYaCargado(row, retirosMpIndex)
+      ) {
+        return false;
       }
       return true;
     });

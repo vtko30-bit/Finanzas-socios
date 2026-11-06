@@ -730,6 +730,55 @@ export function fingerprintRetirosMercadoPagoMovimientoLaxo(r: {
   return `retiros-mp-loose|${d}|${amountCanon(r.amount)}|${dest}`;
 }
 
+/** Destinatario enmascarado por Mercado Pago (c******** s**** e****). */
+export function esDestinatarioEnmascaradoMp(counterparty: unknown): boolean {
+  return /\*/.test(String(counterparty ?? ""));
+}
+
+/**
+ * Huella por fecha + monto + N° operación.
+ * Sirve cuando un export trae el nombre completo y otro el mismo pago con asteriscos.
+ * No usar sola para borrar: el N° op. se reutiliza (p. ej. 12) entre pagos distintos.
+ */
+export function fingerprintRetirosMercadoPagoPorOperacion(r: {
+  date?: unknown;
+  amount?: unknown;
+  external_ref?: unknown;
+}): string | null {
+  const d = String(r.date ?? "").slice(0, 10);
+  if (!d) return null;
+  const op = normOpRefRetirosMp(r.external_ref);
+  if (!op) return null;
+  return `retiros-mp-op|${d}|${amountCanon(r.amount)}|${op}`;
+}
+
+/** ¿El nombre enmascarado puede ser el mismo que el completo? (mismas iniciales por palabra). */
+export function destinatarioMpCompatible(
+  a: unknown,
+  b: unknown,
+): boolean {
+  const sa = String(a ?? "").trim();
+  const sb = String(b ?? "").trim();
+  if (!sa || !sb) return false;
+  if (normDupText(sa) === normDupText(sb)) return true;
+  const masked = esDestinatarioEnmascaradoMp(sa)
+    ? sa
+    : esDestinatarioEnmascaradoMp(sb)
+      ? sb
+      : "";
+  const full = masked === sa ? sb : masked === sb ? sa : "";
+  if (!masked || !full || esDestinatarioEnmascaradoMp(full)) return false;
+  const mParts = masked.toLowerCase().split(/\s+/).filter(Boolean);
+  const fParts = full.toLowerCase().split(/\s+/).filter(Boolean);
+  if (mParts.length !== fParts.length) return false;
+  return mParts.every((mp, i) => {
+    const fp = fParts[i] ?? "";
+    const letters = mp.replace(/\*/g, "");
+    if (!letters) return fp.length > 0;
+    return fp.startsWith(letters);
+  });
+}
+
 /** Huella de fila Retiros MP ya guardada (solo origen explícito). */
 export function fingerprintRetirosMercadoPago(r: {
   date?: unknown;
