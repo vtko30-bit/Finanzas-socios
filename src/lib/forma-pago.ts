@@ -12,17 +12,27 @@ export function medioPagoResumenParaExport(args: {
     return normalizeFormaPago(args.paymentMethod);
   }
   if (!raw) return "Sin dato";
-  const normalized = normalizeFormaPago(args.paymentMethod);
   const digitsOnly = raw.replace(/\s+/g, "");
-  if (/^\d{4,}$/.test(digitsOnly) && normalized === raw) {
+  // En egresos el N° de cuenta no es medio de pago: no lo digas como Transferencia.
+  if (esCodigoNumericoImportado(digitsOnly)) {
     return "Código numérico importado";
   }
-  return normalized;
+  return normalizeFormaPago(args.paymentMethod);
+}
+
+/** N° de cuenta / códigos de cartola bancaria (no son forma de pago). */
+export function esCodigoNumericoImportado(value: string): boolean {
+  const digitsOnly = String(value ?? "").trim().replace(/\s+/g, "");
+  return /^\d{3,}$/.test(digitsOnly);
 }
 
 /** Misma lógica que el resumen por forma de pago (ventas). */
 export function normalizeFormaPago(paymentMethod: string | null): string {
   const raw = String(paymentMethod ?? "").trim();
+  // Cartola: el campo a veces trae N° de cuenta; en Resumen es Transferencia.
+  if (esCodigoNumericoImportado(raw)) {
+    return "Transferencia";
+  }
   const fallback = "Sin forma de pago";
   const value = raw || fallback;
   const lower = value.toLowerCase();
