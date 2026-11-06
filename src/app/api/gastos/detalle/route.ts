@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
 import { familyIdDesdeRawTx } from "@/lib/familia-excluida";
 import { omitMirroredExpenseDuplicates } from "@/lib/gastos-dedupe-servicios";
+import { origenCanonico } from "@/lib/origen-canonico";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import {
   fetchExcludedFamilySets,
@@ -145,8 +146,12 @@ export async function GET(request: Request) {
       : omitMirroredExpenseDuplicates(merged);
 
   const rows = deduped.map((row) => {
-    const origenCuenta =
-      (row as { origen_cuenta?: string }).origen_cuenta ?? "";
+    const sourceRawEarly = String((row as { source?: string }).source ?? "").trim();
+    const payRaw = String((row as { payment_method?: string }).payment_method ?? "").trim();
+    const origenCuenta = origenCanonico(
+      (row as { origen_cuenta?: string }).origen_cuenta ?? "",
+      { source: sourceRawEarly, paymentMethod: payRaw },
+    );
     const conceptoRaw = (row as { concepto?: string }).concepto ?? "";
     const conceptoCol = conceptoLimpio(conceptoRaw);
     const conceptId = (row as { concept_id?: string | null }).concept_id ?? null;
@@ -172,7 +177,7 @@ export async function GET(request: Request) {
     const idOrigen = String(
       (row as { source_id?: string }).source_id ?? "",
     ).trim();
-    const sourceRaw = String((row as { source?: string }).source ?? "").trim();
+    const sourceRaw = sourceRawEarly;
     const createdAt = (row as { created_at?: string | null }).created_at ?? null;
     const importBatchId =
       (row as { import_batch_id?: string | null }).import_batch_id ?? null;

@@ -8,6 +8,7 @@ import { fudoGastoOrigen, mapExpensesToGastoRows } from "@/lib/fudo/map";
 import type { GastoExcelRow } from "@/lib/fudo/types";
 import { gastosFudoDedupeHash } from "@/lib/gastos-fudo-dedupe-hash";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
+import { origenCanonico } from "@/lib/origen-canonico";
 import {
   collectBlockedImportDates,
   fetchImportPeriodLocks,
@@ -85,8 +86,13 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
   const source_id = String(row.Id ?? "").trim();
   const amount = Number(row["Cheques / Cargos"]) || 0;
   const branchLabel = String(row.Sucursal ?? "").trim() || "Sin sucursal";
-  const account_name =
+  const accountRaw =
     String(row.Origen ?? "").trim() || fudoGastoOrigen(branchLabel);
+  const payment_method = String(row["Medio de Pago"] ?? "").trim();
+  const account_name = origenCanonico(accountRaw, {
+    source: FUDO_GASTOS_SOURCE,
+    paymentMethod: payment_method,
+  });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !source_id || amount <= 0) {
     return null;
   }
@@ -98,7 +104,7 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
     date,
     type: "expense" as const,
     amount,
-    account_name,
+    account_name: accountRaw,
     external_ref: "",
     counterparty,
     description,
@@ -115,7 +121,7 @@ function gastoToMovement(row: GastoExcelRow): GastoMovement | null {
     category_name,
     source_id,
     external_ref: "",
-    payment_method: String(row["Medio de Pago"] ?? "").trim(),
+    payment_method,
     counterparty,
     dedupe_hash,
   };

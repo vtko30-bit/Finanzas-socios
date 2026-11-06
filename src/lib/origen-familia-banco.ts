@@ -28,6 +28,11 @@ export function origenFamiliaBanco(origenRaw: string): OrigenFamiliaBanco | null
   const n = normalizeKey(origenRaw);
   if (!n) return null;
 
+  // Orígenes canónicos
+  if (n === "bci" || n.startsWith("bci")) return "bci";
+  if (n.includes("bancodechilerg") || (n.includes("chile") && n.includes("rg"))) return "bdch";
+  if (n.includes("bancoestado") || n.startsWith("bancoestado")) return "be";
+
   const esTransferencias = n.includes("transferencias") || n.includes("transferencia");
   if (esTransferencias) {
     if (n.includes("bci")) return "bci";

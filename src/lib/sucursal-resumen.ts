@@ -53,6 +53,20 @@ export function sucursalResumenCanonica(
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+
+  // Orígenes canónicos nuevos
+  if (n === "fudo eventos" || n.includes("fudo evento")) return "Eventos";
+  if (n === "fudo happy" || n.includes("bci") || n === "mercado pago") return "Happy";
+  if (n.includes("rg market") || n.includes("chile rg market")) return "Happy";
+  if (
+    n === "fudo rg" ||
+    n.startsWith("banco estado") ||
+    n.includes("chile rg spa") ||
+    n === "caja"
+  ) {
+    return "Rg";
+  }
+
   if (n === "rg" || n.startsWith("rg ") || n.startsWith("rg-") || n.includes("bancoestado")) {
     return "Rg";
   }

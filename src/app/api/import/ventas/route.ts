@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { chunk } from "@/lib/array-chunk";
 import { rejectIfImportDatesLocked } from "@/lib/import-period-lock-guard";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
+import { origenCanonico } from "@/lib/origen-canonico";
 
 /** Importaciones grandes: muchas filas + RPC dedupe (Vercel / hosting). */
 export const maxDuration = 300;
@@ -168,7 +169,10 @@ export async function POST(request: Request) {
       payment_method: m.payment_method,
       source_id: m.source_id ?? "",
       external_ref: m.external_ref,
-      origen_cuenta: m.account_name ?? "",
+      origen_cuenta: origenCanonico(m.account_name ?? "", {
+        source: "excel_ventas",
+        paymentMethod: m.payment_method,
+      }),
       concepto: m.category_name ?? "",
       source: "excel_ventas",
       import_batch_id: batchId,

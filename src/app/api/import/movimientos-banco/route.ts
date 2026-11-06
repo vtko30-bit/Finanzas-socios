@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { expenseDedupeHashFromParsed } from "@/lib/import/expense-dedupe-keys";
+import { origenCanonico } from "@/lib/origen-canonico";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import {
   collectBlockedImportDates,
@@ -31,7 +32,7 @@ function conceptoDe(row: IncomingRow) {
   return propio;
 }
 
-function origenDe(row: IncomingRow) {
+function origenCrudo(row: IncomingRow) {
   const propio = String(row.origen ?? "").trim();
   if (propio) return propio;
   const carpeta = String(row.carpeta ?? "").trim();
@@ -44,6 +45,15 @@ function origenDe(row: IncomingRow) {
   const sucursal = String(row.sucursal ?? "").trim();
   if (sucursal) return sucursal;
   return "Sin origen";
+}
+
+/** Nombre estable en pantalla; el hash de dedupe sigue usando la etiqueta cruda del archivo. */
+function origenDe(row: IncomingRow) {
+  const crudo = origenCrudo(row);
+  return origenCanonico(crudo, {
+    source: "excel_egresos",
+    carpeta: row.carpeta,
+  });
 }
 
 /** TEF/transferencias de cartola Movimientos: van en Transferencias Banco Estado. */
@@ -254,6 +264,7 @@ export async function POST(request: Request) {
         : String(row.alias ?? "").trim();
       const paymentMethod = String(row.cuenta ?? "").trim();
       const externalRef = String(row.operacion ?? "").trim();
+      const accountNameRaw = origenCrudo(row);
       const accountName = origenDe(row);
       drafts.push({
         date,
@@ -271,7 +282,8 @@ export async function POST(request: Request) {
           date,
           type,
           amount,
-          account_name: accountName,
+          // Misma huella que filas históricas (etiqueta del Excel, no el nombre canónico).
+          account_name: accountNameRaw,
           external_ref: externalRef,
           counterparty,
           payment_method: paymentMethod,
@@ -329,7 +341,11 @@ export async function POST(request: Request) {
           }
         }
         const origenNuevo = origenPorHash.get(hash);
-        if (origenNuevo && origenVacio(origenActual) && !patch.origen_cuenta) {
+        if (
+          origenNuevo &&
+          !patch.origen_cuenta &&
+          (origenVacio(origenActual) || origenActual !== origenNuevo)
+        ) {
           patch.origen_cuenta = origenNuevo;
         }
         if (!Object.keys(patch).length) continue;

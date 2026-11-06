@@ -22,6 +22,7 @@ import {
   preferirTefEspejoBeEnImport,
 } from "@/lib/gastos-dedupe-servicios";
 import { fetchExistingDedupeHashesForOrg } from "@/lib/import-existing-dedupe-hashes";
+import { origenCanonico } from "@/lib/origen-canonico";
 import {
   expenseLogicalKeyFromMovement,
   fetchExistingExpenseRowsByLogicalKey,
@@ -439,7 +440,10 @@ export async function POST(request: Request) {
       payment_method: m.payment_method,
       source_id: m.source_id ?? "",
       external_ref: m.external_ref,
-      origen_cuenta: m.account_name ?? "",
+      origen_cuenta: origenCanonico(m.account_name ?? "", {
+        source: "excel_egresos",
+        paymentMethod: m.payment_method,
+      }),
       source: "excel_egresos",
       import_batch_id: batchId,
       dedupe_hash: m.dedupe_hash,

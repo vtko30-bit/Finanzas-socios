@@ -9,6 +9,7 @@ import {
   rowMatchesExcludedFamily,
 } from "@/lib/org-excluded-families-db";
 import { omitMirroredExpenseDuplicates } from "@/lib/gastos-dedupe-servicios";
+import { origenCanonico } from "@/lib/origen-canonico";
 import {
   compareSucursalOrder,
   effectiveSoloSucursalesFijas,
@@ -139,15 +140,26 @@ export async function fetchIncomeRowsPaged(args: {
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as IncomeRow[];
     out.push(
-      ...page.filter((r) => {
-        const row = r as IncomeRow & { source?: string | null };
-        if (!fudoCuentaEnResultado(row.source, row.payment_method)) return false;
-        if (soloFijas && !esSucursalFija(r.origen_cuenta)) return false;
-        if (filtroCanonico && sucursalResumenCanonica(r.origen_cuenta) !== sucursalTrim) {
-          return false;
-        }
-        return true;
-      }),
+      ...page
+        .map((r) => {
+          const row = r as IncomeRow & { source?: string | null; payment_method?: string | null };
+          return {
+            ...row,
+            origen_cuenta: origenCanonico(row.origen_cuenta, {
+              source: row.source,
+              paymentMethod: row.payment_method,
+            }),
+          };
+        })
+        .filter((r) => {
+          const row = r as IncomeRow & { source?: string | null };
+          if (!fudoCuentaEnResultado(row.source, row.payment_method)) return false;
+          if (soloFijas && !esSucursalFija(r.origen_cuenta)) return false;
+          if (filtroCanonico && sucursalResumenCanonica(r.origen_cuenta) !== sucursalTrim) {
+            return false;
+          }
+          return true;
+        }),
     );
     if (page.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
@@ -213,19 +225,34 @@ export async function fetchExpenseRowsPaged(args: {
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as unknown[];
     out.push(
-      ...page.filter((raw) => {
-        const row = raw as {
-          origen_cuenta?: string | null;
-          source?: string | null;
-          payment_method?: string | null;
-        };
-        if (!fudoCuentaEnResultado(row.source, row.payment_method)) return false;
-        if (soloFijas && !esSucursalFija(row.origen_cuenta)) return false;
-        if (filtroCanonico && sucursalResumenCanonica(row.origen_cuenta) !== sucursalTrim) {
-          return false;
-        }
-        return true;
-      }),
+      ...page
+        .map((raw) => {
+          const row = raw as {
+            origen_cuenta?: string | null;
+            source?: string | null;
+            payment_method?: string | null;
+          };
+          return {
+            ...(raw as object),
+            origen_cuenta: origenCanonico(row.origen_cuenta, {
+              source: row.source,
+              paymentMethod: row.payment_method,
+            }),
+          };
+        })
+        .filter((raw) => {
+          const row = raw as {
+            origen_cuenta?: string | null;
+            source?: string | null;
+            payment_method?: string | null;
+          };
+          if (!fudoCuentaEnResultado(row.source, row.payment_method)) return false;
+          if (soloFijas && !esSucursalFija(row.origen_cuenta)) return false;
+          if (filtroCanonico && sucursalResumenCanonica(row.origen_cuenta) !== sucursalTrim) {
+            return false;
+          }
+          return true;
+        }),
     );
     if (page.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
