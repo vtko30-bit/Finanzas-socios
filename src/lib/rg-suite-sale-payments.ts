@@ -1,7 +1,7 @@
 /**
  * Ventas del módulo Fudo en RG Suite (sale_payments).
- * El Resumen usa estas filas para que el total coincida con Ventas.
- * Si faltan las variables, devuelve null y el Resumen sigue con la copia local.
+ * El Resumen de ventas usa solo estas filas (o fudo_ventas local): los bancos no entran.
+ * Si faltan las variables, devuelve null y el Resumen usa la copia local fudo_ventas.
  */
 
 export type RgSalePayment = {

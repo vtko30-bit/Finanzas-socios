@@ -234,31 +234,106 @@ export async function fetchExpenseRowsPaged(args: {
   };
 }
 
+function pasaFiltroSucursalVenta(
+  sucursalFila: string,
+  sucursalTrim: string,
+  soloFijas: boolean,
+): boolean {
+  if (soloFijas && esEventoSucursal(sucursalFila)) return false;
+  if (!sucursalTrim) return true;
+  if (sucursalFila === sucursalTrim) return true;
+  if (esSucursalResumenCanonica(sucursalTrim)) {
+    return sucursalResumenCanonica(sucursalFila) === sucursalTrim;
+  }
+  return sucursalFila.toLowerCase().includes(sucursalTrim.toLowerCase());
+}
+
+/**
+ * Solo ventas Fudo (Rg / Happy / eventos). Los bancos no entran.
+ * Eventos (Ramadas, Exponor…): una fila de total, sin desglose por forma de pago.
+ */
 function listaVentasPorEtiqueta(
-  rows: IncomeRow[],
+  fijas: IncomeRow[],
+  eventos: IncomeRow[],
   monthKeys: string[],
 ): Array<{ sucursal: string; rows: ReturnType<typeof ventasRowsFromIncome> }> {
   const byLoc = new Map<string, IncomeRow[]>();
-  for (const raw of rows) {
+  for (const raw of fijas) {
     const loc = String(raw.origen_cuenta ?? "").trim() || "Sin sucursal";
     if (!byLoc.has(loc)) byLoc.set(loc, []);
     byLoc.get(loc)!.push(raw);
   }
-  return Array.from(byLoc.entries())
-    .map(([sucursal, incomeRows]) => ({
+  const lista = Array.from(byLoc.entries()).map(([sucursal, incomeRows]) => ({
+    sucursal,
+    rows: ventasRowsFromIncome(incomeRows, monthKeys),
+  }));
+
+  const byEvento = new Map<string, IncomeRow[]>();
+  for (const raw of eventos) {
+    const loc = String(raw.origen_cuenta ?? "").trim() || "EVENTO_SinSucursal";
+    if (!byEvento.has(loc)) byEvento.set(loc, []);
+    byEvento.get(loc)!.push(raw);
+  }
+  for (const [sucursal, incomeRows] of byEvento) {
+    const tot = ventasTotalesFromIncome(incomeRows, monthKeys);
+    lista.push({
       sucursal,
-      rows: ventasRowsFromIncome(incomeRows, monthKeys),
-    }))
-    .sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
+      rows: [{ formaPago: "Total", byMonth: tot.byMonth, total: tot.total }],
+    });
+  }
+
+  return lista.sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
 }
 
-/** Desde esta fecha el Resumen usa los pagos de Fudo (RG Suite), igual que Ventas. */
-const VENTAS_FUDO_DESDE = "2026-08-01";
+/** Ingresos locales de Fudo (todas las formas de pago; no cartola bancaria). */
+async function fetchFudoVentasIncomeRowsPaged(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+}): Promise<{ data: IncomeRow[]; error: string | null }> {
+  const out: IncomeRow[] = [];
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await args.supabase
+      .from("transactions")
+      .select(
+        `
+      date,
+      amount,
+      source,
+      payment_method,
+      origen_cuenta,
+      concepto,
+      concept_catalog (
+        label,
+        family_id,
+        concept_families ( id, name )
+      )
+    `,
+      )
+      .eq("organization_id", args.organizationId)
+      .eq("source", "fudo_ventas")
+      .or("flow_kind.eq.operativo,flow_kind.is.null")
+      .in("type", [...INCOME_TYPES])
+      .gte("date", args.desde)
+      .lte("date", args.hasta)
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (error) return { data: [], error: error.message };
+    const page = (data ?? []) as IncomeRow[];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return { data: out, error: null };
+}
 
 /**
- * Antes de agosto: Excel y el resto de ingresos locales.
- * Desde agosto: solo los pagos de Fudo en RG Suite.
- * Devuelve null si RG Suite no está configurado o no responde.
+ * Ventas del Resumen = solo Fudo (sale_payments de RG Suite, o copia local fudo_ventas).
+ * Nunca incluye bancos ni otros ingresos.
  */
 async function loadVentasAlineadasConModulo(args: {
   supabase: SupabaseClient;
@@ -271,61 +346,50 @@ async function loadVentasAlineadasConModulo(args: {
   monthKeys: string[];
 }): Promise<{
   lista: Array<{ sucursal: string; rows: ReturnType<typeof ventasRowsFromIncome> }>;
-  filas: IncomeRow[];
-} | null> {
-  const fudoDesde = args.desde > VENTAS_FUDO_DESDE ? args.desde : VENTAS_FUDO_DESDE;
-  const payments =
-    args.hasta < VENTAS_FUDO_DESDE
-      ? []
-      : await fetchRgSuiteSalePayments(fudoDesde, args.hasta);
-  if (payments === null) return null;
-
+  filasFijas: IncomeRow[];
+  filasEventos: IncomeRow[];
+}> {
   const sucursalTrim = args.sucursal?.trim() ?? "";
   const soloFijas = effectiveSoloSucursalesFijas(sucursalTrim, args.soloSucursalesFijas);
-  const hastaLocal =
-    args.hasta < VENTAS_FUDO_DESDE ? args.hasta : "2026-07-31";
-  const locales: IncomeRow[] = [];
-  if (args.desde <= hastaLocal) {
-    const { data, error } = await fetchIncomeRowsPaged({
+
+  const payments = await fetchRgSuiteSalePayments(args.desde, args.hasta);
+  let filas: IncomeRow[] = [];
+
+  if (payments !== null && payments.length > 0) {
+    filas = payments
+      .filter((p) => pasaFiltroSucursalVenta(p.sucursal, sucursalTrim, soloFijas))
+      .map((p) => ({
+        date: p.date,
+        amount: p.amount,
+        payment_method: p.paymentMethod,
+        origen_cuenta: p.sucursal,
+        source: "fudo_ventas",
+      }));
+  } else {
+    const { data } = await fetchFudoVentasIncomeRowsPaged({
       supabase: args.supabase,
       organizationId: args.organizationId,
       desde: args.desde,
-      hasta: hastaLocal,
-      sucursal: sucursalTrim,
-      soloSucursalesFijas: args.soloSucursalesFijas,
+      hasta: args.hasta,
     });
-    if (error) return null;
-    locales.push(
-      ...filterIncomeRowsByExcludedFamilies(data ?? [], args.excludedFamilyIds).filter(
-        (row) => String(row.source ?? "") !== "fudo_ventas",
-      ),
+    filas = filterIncomeRowsByExcludedFamilies(data ?? [], args.excludedFamilyIds).filter(
+      (row) =>
+        pasaFiltroSucursalVenta(
+          String(row.origen_cuenta ?? ""),
+          sucursalTrim,
+          soloFijas,
+        ),
     );
   }
 
-  const pagos = payments.filter((p) => {
-    if (soloFijas && esEventoSucursal(p.sucursal)) return false;
-    if (!sucursalTrim) return true;
-    if (p.sucursal === sucursalTrim) return true;
-    if (esSucursalResumenCanonica(sucursalTrim)) {
-      return sucursalResumenCanonica(p.sucursal) === sucursalTrim;
-    }
-    return p.sucursal.toLowerCase().includes(sucursalTrim.toLowerCase());
-  });
+  const filasFijas = filas.filter((r) => !esEventoSucursal(r.origen_cuenta));
+  const filasEventos = filas.filter((r) => esEventoSucursal(r.origen_cuenta));
 
-  const filas: IncomeRow[] = [
-    ...locales.map((row) => ({
-      ...row,
-      origen_cuenta: sucursalResumenCanonica(row.origen_cuenta),
-    })),
-    ...pagos.map((p) => ({
-      date: p.date,
-      amount: p.amount,
-      payment_method: p.paymentMethod,
-      origen_cuenta: p.sucursal,
-    })),
-  ];
-
-  return { lista: listaVentasPorEtiqueta(filas, args.monthKeys), filas };
+  return {
+    lista: listaVentasPorEtiqueta(filasFijas, filasEventos, args.monthKeys),
+    filasFijas,
+    filasEventos,
+  };
 }
 
 export function ventasRowsFromIncome(
@@ -1289,8 +1353,12 @@ export async function loadResumenPivotMain(args: {
     gastosSociosRows = gastosRowsFromExpenseRows(expenseSocios, monthKeys);
   }
   if (ventasAlineadas) {
-    ventasRows = ventasRowsFromIncome(ventasAlineadas.filas, monthKeys);
-    ventasEventosRows = [];
+    // Solo Fudo: Rg/Happy por forma de pago; Ramadas/Exponor solo total.
+    ventasRows = ventasRowsFromIncome(ventasAlineadas.filasFijas, monthKeys);
+    ventasEventosRows = ventasEventosRowsFromIncome(
+      ventasAlineadas.filasEventos,
+      monthKeys,
+    );
   }
   const ingresoCreditosDesdeCredits = sumCreditDisbursementsByMonth(
     creditDisburseRows ?? [],
