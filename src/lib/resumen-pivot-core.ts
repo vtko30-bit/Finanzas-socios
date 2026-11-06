@@ -110,6 +110,7 @@ export async function fetchIncomeRowsPaged(args: {
       amount,
       source,
       payment_method,
+      external_ref,
       origen_cuenta,
       concepto,
       concept_catalog (
