@@ -107,6 +107,9 @@ export async function GET(request: Request) {
     }
     if (sourceExact) {
       query = query.eq("source", sourceExact);
+    } else {
+      // API Banco de Chile desactivada (datos incompletos / sandbox).
+      query = query.neq("source", "banco-chile");
     }
 
     const { data: page, error } = await query;

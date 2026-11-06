@@ -122,6 +122,7 @@ export async function fetchIncomeRowsPaged(args: {
       // Compatibilidad con filas históricas previas a flow_kind (null).
       .or("flow_kind.eq.operativo,flow_kind.is.null")
       .in("type", [...INCOME_TYPES])
+      .neq("source", "banco-chile")
       .gte("date", args.desde)
       .lte("date", args.hasta)
       .order("date", { ascending: false })
@@ -195,6 +196,7 @@ export async function fetchExpenseRowsPaged(args: {
       // Compatibilidad con filas históricas previas a flow_kind (null).
       .or("flow_kind.eq.operativo,flow_kind.is.null")
       .in("type", [...EXPENSE_TYPES])
+      .neq("source", "banco-chile")
       .gte("date", args.desde)
       .lte("date", args.hasta)
       .order("date", { ascending: false })

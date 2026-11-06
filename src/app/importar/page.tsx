@@ -1,18 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
-import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
 
 export default function ImportarPage() {
-  const { ready, authenticated } = useAuthState();
+  const { authenticated } = useAuthState();
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
   const [status, setStatus] = useState("");
-  const [bancoFrom, setBancoFrom] = useState("");
-  const [bancoTo, setBancoTo] = useState("");
-  const [loadingBanco, setLoadingBanco] = useState(false);
-  const [bancoStatus, setBancoStatus] = useState("");
   const [loadingResetTodo, setLoadingResetTodo] = useState(false);
   const [loadingResetVentas, setLoadingResetVentas] = useState(false);
   const [loadingBackup, setLoadingBackup] = useState(false);
@@ -32,41 +27,6 @@ export default function ImportarPage() {
       .map((item) => (typeof item === "string" ? item.trim() : ""))
       .filter(Boolean);
     return parts.join(" — ");
-  };
-
-  const submitBanco = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!authenticated) return;
-    setLoadingBanco(true);
-    setBancoStatus("");
-    try {
-      const res = await fetch("/api/banco-chile/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: bancoFrom || undefined,
-          to: bancoTo || undefined,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        inserted?: number;
-        skipped?: number;
-        locked?: number;
-        from?: string;
-        to?: string;
-      };
-      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el banco");
-      const locked = data.locked ? ` ${data.locked} quedaron en un período cerrado.` : "";
-      setBancoStatus(
-        `Banco de Chile ${data.from} a ${data.to}: ${data.inserted ?? 0} movimientos nuevos, ${data.skipped ?? 0} ya estaban.${locked}`,
-      );
-      invalidateMainNavCaches();
-    } catch (error) {
-      setBancoStatus(error instanceof Error ? error.message : "No se pudo actualizar el banco");
-    } finally {
-      setLoadingBanco(false);
-    }
   };
 
   const descargarRespaldo = useCallback(async (kind: "ingresos" | "todo"): Promise<boolean> => {
@@ -181,7 +141,7 @@ export default function ImportarPage() {
     return (
       <main className="page-main page-main--md">
         <p className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          Tu cuenta tiene acceso de solo lectura. Solo el administrador de la organización puede actualizar el banco o borrar datos.
+          Tu cuenta tiene acceso de solo lectura. Solo el administrador de la organización puede borrar datos.
         </p>
       </main>
     );
@@ -190,7 +150,9 @@ export default function ImportarPage() {
   return (
     <main className="page-main page-main--md">
       <p className="text-sm text-slate-600">
-        Los gastos e ingresos entran por Fudo y por los bancos. Aquí queda la actualización del Banco de Chile.
+        Los gastos e ingresos entran por Fudo y por los archivos Excel de los bancos. Banco de Chile ya no se
+        consulta por API (el banco entregaba datos incompletos); se actualiza solo desde las cartolas y
+        transferencias en la carpeta de movimientos.
       </p>
 
       <section
@@ -210,37 +172,9 @@ export default function ImportarPage() {
       <section className="ui-card p-6">
         <h2 className="text-lg font-semibold">Banco de Chile</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Trae la cartola de la cuenta corriente. Si el movimiento ya existe, no se duplica. Si no eliges fechas, usa los últimos 7 días.
+          Se carga automáticamente desde los Excel en «Base Finanzas Rg → Datos Movimientos Bancarios → Banco
+          de Chile» (saldo/movimientos, transferencias y pago de servicios). No hace falta pulsar nada aquí.
         </p>
-        <form
-          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
-          onSubmit={(event) => void submitBanco(event)}
-        >
-          <label className="text-sm text-slate-600">
-            Desde
-            <input
-              type="date"
-              className="mt-1 block rounded-md border border-slate-300 bg-white px-3 py-2"
-              value={bancoFrom}
-              onChange={(event) => setBancoFrom(event.target.value)}
-              disabled={!ready || !authenticated || loadingBanco}
-            />
-          </label>
-          <label className="text-sm text-slate-600">
-            Hasta
-            <input
-              type="date"
-              className="mt-1 block rounded-md border border-slate-300 bg-white px-3 py-2"
-              value={bancoTo}
-              onChange={(event) => setBancoTo(event.target.value)}
-              disabled={!ready || !authenticated || loadingBanco}
-            />
-          </label>
-          <button type="submit" className="ui-btn-primary" disabled={!authenticated || loadingBanco}>
-            {loadingBanco ? "Actualizando..." : "Actualizar Banco de Chile"}
-          </button>
-        </form>
-        {bancoStatus ? <p className="mt-3 text-sm text-slate-700">{bancoStatus}</p> : null}
       </section>
 
       {status ? <p className="ui-card px-4 py-3 text-sm text-slate-700">{status}</p> : null}
