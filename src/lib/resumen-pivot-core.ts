@@ -322,24 +322,7 @@ function listaVentasPorEtiqueta(
   return lista.sort((a, b) => compareSucursalOrder(a.sucursal, b.sucursal));
 }
 
-/**
- * Ventas Fudo locales: sync API (`fudo_ventas`) + planillas históricas (`excel_ventas`).
- * No incluye bancos ni otros ingresos.
- */
-async function fetchFudoVentasIncomeRowsPaged(args: {
-  supabase: SupabaseClient;
-  organizationId: string;
-  desde: string;
-  hasta: string;
-}): Promise<{ data: IncomeRow[]; error: string | null }> {
-  const out: IncomeRow[] = [];
-  let from = 0;
-  while (true) {
-    const to = from + PAGE_SIZE - 1;
-    const { data, error } = await args.supabase
-      .from("transactions")
-      .select(
-        `
+const VENTAS_INCOME_SELECT = `
       date,
       amount,
       source,
@@ -351,10 +334,39 @@ async function fetchFudoVentasIncomeRowsPaged(args: {
         family_id,
         concept_families ( id, name )
       )
-    `,
-      )
+    `;
+
+/** Último día del mes anterior a YYYY-MM (para completar Excel antes del sync Fudo). */
+function diaAntesDeMes(ym: string): string | null {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return null;
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(Date.UTC(y!, m! - 1, 1));
+  d.setUTCDate(0);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Ventas Fudo locales por fuente (sync API o planillas históricas).
+ * No incluye bancos ni otros ingresos.
+ */
+async function fetchVentasIncomeBySourcesPaged(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  desde: string;
+  hasta: string;
+  sources: string[];
+}): Promise<{ data: IncomeRow[]; error: string | null }> {
+  if (args.desde > args.hasta || args.sources.length === 0) {
+    return { data: [], error: null };
+  }
+  const out: IncomeRow[] = [];
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    let q = args.supabase
+      .from("transactions")
+      .select(VENTAS_INCOME_SELECT)
       .eq("organization_id", args.organizationId)
-      .in("source", ["fudo_ventas", "excel_ventas"])
       .or("flow_kind.eq.operativo,flow_kind.is.null")
       .in("type", [...INCOME_TYPES])
       .gte("date", args.desde)
@@ -362,6 +374,11 @@ async function fetchFudoVentasIncomeRowsPaged(args: {
       .order("date", { ascending: false })
       .order("id", { ascending: false })
       .range(from, to);
+    q =
+      args.sources.length === 1
+        ? q.eq("source", args.sources[0]!)
+        : q.in("source", args.sources);
+    const { data, error } = await q;
     if (error) return { data: [], error: error.message };
     const page = (data ?? []) as IncomeRow[];
     out.push(...page);
@@ -371,10 +388,29 @@ async function fetchFudoVentasIncomeRowsPaged(args: {
   return { data: out, error: null };
 }
 
+function prepararFilasVentas(
+  rows: IncomeRow[],
+  excludedFamilyIds: Set<string>,
+  sucursalTrim: string,
+  soloFijas: boolean,
+): IncomeRow[] {
+  return filterIncomeRowsByExcludedFamilies(rows, excludedFamilyIds)
+    .map((row) => ({
+      ...row,
+      origen_cuenta: origenCanonico(row.origen_cuenta, {
+        source: row.source,
+        paymentMethod: row.payment_method,
+      }),
+    }))
+    .filter((row) =>
+      pasaFiltroSucursalVenta(String(row.origen_cuenta ?? ""), sucursalTrim, soloFijas),
+    );
+}
+
 /**
- * Ventas del Resumen = Fudo (RG Suite / fudo_ventas) + Excel histórico de ventas.
- * Si hay datos en vivo para un mes, no se suman otra vez las planillas de ese mes.
- * Nunca incluye bancos ni otros ingresos.
+ * Ventas del Resumen = Fudo en vivo (RG Suite) + planillas Excel de meses anteriores.
+ * Si hay sync Fudo para un mes, no se vuelve a sumar el Excel de ese mes.
+ * Nunca incluye bancos.
  */
 async function loadVentasAlineadasConModulo(args: {
   supabase: SupabaseClient;
@@ -394,23 +430,6 @@ async function loadVentasAlineadasConModulo(args: {
   const soloFijas = effectiveSoloSucursalesFijas(sucursalTrim, args.soloSucursalesFijas);
 
   const payments = await fetchRgSuiteSalePayments(args.desde, args.hasta);
-  const { data: locales } = await fetchFudoVentasIncomeRowsPaged({
-    supabase: args.supabase,
-    organizationId: args.organizationId,
-    desde: args.desde,
-    hasta: args.hasta,
-  });
-  const localesFiltrados = filterIncomeRowsByExcludedFamilies(locales ?? [], args.excludedFamilyIds)
-    .map((row) => ({
-      ...row,
-      origen_cuenta: origenCanonico(row.origen_cuenta, {
-        source: row.source,
-        paymentMethod: row.payment_method,
-      }),
-    }))
-    .filter((row) =>
-      pasaFiltroSucursalVenta(String(row.origen_cuenta ?? ""), sucursalTrim, soloFijas),
-    );
 
   let filas: IncomeRow[] = [];
 
@@ -424,25 +443,92 @@ async function loadVentasAlineadasConModulo(args: {
           source: "fudo_ventas",
           paymentMethod: p.paymentMethod,
         }),
-        source: "fudo_ventas",
+        source: "fudo_ventas" as const,
       }))
       .filter((p) =>
         pasaFiltroSucursalVenta(String(p.origen_cuenta ?? ""), sucursalTrim, soloFijas),
       );
-    const mesesConFudo = new Set(
-      desdeRg
-        .map((r) => String(r.date ?? "").slice(0, 7))
-        .filter((m) => /^\d{4}-\d{2}$/.test(m)),
+
+    const mesesConFudo = [
+      ...new Set(
+        desdeRg
+          .map((r) => String(r.date ?? "").slice(0, 7))
+          .filter((m) => /^\d{4}-\d{2}$/.test(m)),
+      ),
+    ].sort();
+    const primerMesFudo = mesesConFudo[0] ?? "";
+    const hastaExcel = primerMesFudo ? diaAntesDeMes(primerMesFudo) : null;
+
+    let historicoExcel: IncomeRow[] = [];
+    if (hastaExcel && args.desde <= hastaExcel) {
+      const excelHasta =
+        hastaExcel < args.hasta ? hastaExcel : args.hasta;
+      const { data: excelRows, error: excelErr } = await fetchVentasIncomeBySourcesPaged({
+        supabase: args.supabase,
+        organizationId: args.organizationId,
+        desde: args.desde,
+        hasta: excelHasta,
+        sources: ["excel_ventas"],
+      });
+      if (excelErr) {
+        console.error("resumen excel_ventas histórico:", excelErr);
+      }
+      historicoExcel = prepararFilasVentas(
+        excelRows ?? [],
+        args.excludedFamilyIds,
+        sucursalTrim,
+        soloFijas,
+      );
+    }
+
+    // Huecos: meses del rango sin Fudo ni cubiertos por el corte Excel (poco frecuente).
+    const mesesExcel = new Set(
+      historicoExcel.map((r) => String(r.date ?? "").slice(0, 7)),
     );
-    // Meses solo en planilla (antes del sync Fudo): completar sin duplicar agosto+.
-    const historicoExcel = localesFiltrados.filter((row) => {
-      if (String(row.source ?? "").trim() !== "excel_ventas") return false;
-      const mes = String(row.date ?? "").slice(0, 7);
-      return !mesesConFudo.has(mes);
-    });
+    const mesesFudoSet = new Set(mesesConFudo);
+    const mesesHueco = args.monthKeys.filter(
+      (m) => !mesesFudoSet.has(m) && !mesesExcel.has(m),
+    );
+    if (mesesHueco.length > 0) {
+      const huecoDesde = `${mesesHueco[0]}-01`;
+      const last = mesesHueco[mesesHueco.length - 1]!;
+      const [yy, mm] = last.split("-").map(Number);
+      const huecoHasta = new Date(Date.UTC(yy!, mm!, 0)).toISOString().slice(0, 10);
+      const { data: extra } = await fetchVentasIncomeBySourcesPaged({
+        supabase: args.supabase,
+        organizationId: args.organizationId,
+        desde: huecoDesde < args.desde ? args.desde : huecoDesde,
+        hasta: huecoHasta > args.hasta ? args.hasta : huecoHasta,
+        sources: ["excel_ventas", "fudo_ventas"],
+      });
+      const extraFilas = prepararFilasVentas(
+        (extra ?? []).filter((r) => {
+          const mes = String(r.date ?? "").slice(0, 7);
+          return mesesHueco.includes(mes) && !mesesFudoSet.has(mes);
+        }),
+        args.excludedFamilyIds,
+        sucursalTrim,
+        soloFijas,
+      );
+      historicoExcel = [...historicoExcel, ...extraFilas];
+    }
+
     filas = [...desdeRg, ...historicoExcel];
   } else {
-    filas = localesFiltrados;
+    const { data: locales, error } = await fetchVentasIncomeBySourcesPaged({
+      supabase: args.supabase,
+      organizationId: args.organizationId,
+      desde: args.desde,
+      hasta: args.hasta,
+      sources: ["fudo_ventas", "excel_ventas"],
+    });
+    if (error) console.error("resumen ventas locales:", error);
+    filas = prepararFilasVentas(
+      locales ?? [],
+      args.excludedFamilyIds,
+      sucursalTrim,
+      soloFijas,
+    );
   }
 
   const filasFijas = filas.filter((r) => !esEventoSucursal(r.origen_cuenta));

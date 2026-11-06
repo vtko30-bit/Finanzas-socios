@@ -265,6 +265,8 @@ function buildResumenPivotCacheKey(args: {
     desde: args.desde,
     hasta: args.hasta,
     ventasPorSucursal: "1",
+    // Bust caché tras incluir ventas Excel históricas (pre-agosto 2026).
+    v: "hist-excel-2",
   });
   return `/api/resumen/pivot?${q.toString()}`;
 }
@@ -720,6 +722,7 @@ export default function ResumenPage() {
           desde,
           hasta,
           ventasPorSucursal: "1",
+          v: "hist-excel-2",
         });
         const res = await fetch(`/api/resumen/pivot?${q}`);
         const json = (await res.json()) as PivotResponse & { error?: string };

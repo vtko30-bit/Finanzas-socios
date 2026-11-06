@@ -9,6 +9,9 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 
+/** Año completo + ventas Excel históricas + Fudo RG Suite. */
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const {
