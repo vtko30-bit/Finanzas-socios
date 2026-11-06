@@ -35,10 +35,30 @@ function origenDe(row: IncomingRow) {
   const propio = String(row.origen ?? "").trim();
   if (propio) return propio;
   const carpeta = String(row.carpeta ?? "").trim();
+  // Cartola Movimientos BE: Origen vacío → Alias es la cuenta (no el destinatario).
+  if (/^movimientos banco estado$/i.test(carpeta)) {
+    const alias = String(row.alias ?? "").trim();
+    if (alias) return alias;
+  }
   if (carpeta) return carpeta;
   const sucursal = String(row.sucursal ?? "").trim();
   if (sucursal) return sucursal;
   return "Sin origen";
+}
+
+/** TEF/transferencias de cartola Movimientos: van en Transferencias Banco Estado. */
+function esTransferenciaDeCartola(descripcion: string, carpeta: string) {
+  if (!/^movimientos banco estado$/i.test(String(carpeta ?? "").trim())) {
+    return false;
+  }
+  const d = String(descripcion ?? "")
+    .trim()
+    .toUpperCase();
+  return (
+    d.startsWith("TEF") ||
+    d.startsWith("TRANSFERENCIA") ||
+    d.startsWith("TRANSF ")
+  );
 }
 
 function origenVacio(value: unknown) {
@@ -211,18 +231,27 @@ export async function POST(request: Request) {
     dedupe_hash: string;
   }> = [];
 
+  let omitidasTransferenciasCartola = 0;
   for (const row of rows) {
     const date = toIso(row.fecha);
     const cargo = amountOf(row.cargo);
     const abono = amountOf(row.abono);
+    const description = String(row.descripcion ?? "").trim();
+    const carpeta = String(row.carpeta ?? "").trim();
+    if (esTransferenciaDeCartola(description, carpeta)) {
+      omitidasTransferenciasCartola += 1;
+      continue;
+    }
     const sides: Array<["expense" | "income", number, string]> = [];
     if (cargo > 0) sides.push(["expense", cargo, "cargo"]);
     if (abono > 0) sides.push(["income", abono, "abono"]);
     for (const [type, amount, side] of sides) {
       if (!date) continue;
       const sourceId = sourceIdFor(row, date, amount, side);
-      const description = String(row.descripcion ?? "").trim();
-      const counterparty = String(row.alias ?? "").trim();
+      // En cartola BE el Alias es la cuenta (origen); el destinatario va en la descripción.
+      const counterparty = /^movimientos banco estado$/i.test(carpeta)
+        ? ""
+        : String(row.alias ?? "").trim();
       const paymentMethod = String(row.cuenta ?? "").trim();
       const externalRef = String(row.operacion ?? "").trim();
       const accountName = origenDe(row);
@@ -253,6 +282,15 @@ export async function POST(request: Request) {
   }
 
   if (!drafts.length) {
+    if (omitidasTransferenciasCartola > 0) {
+      return NextResponse.json({
+        received: 0,
+        inserted: 0,
+        skipped: 0,
+        locked: 0,
+        omitted_transferencias_cartola: omitidasTransferenciasCartola,
+      });
+    }
     return NextResponse.json({ error: "Ninguna fila tiene fecha y monto" }, { status: 400 });
   }
 
@@ -381,6 +419,7 @@ export async function POST(request: Request) {
       inserted: fresh.length,
       skipped: open.length - fresh.length,
       locked: drafts.length - open.length,
+      omitted_transferencias_cartola: omitidasTransferenciasCartola,
     });
   } catch (error) {
     return NextResponse.json(
