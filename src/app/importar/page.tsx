@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthState } from "@/hooks/use-auth-state";
+import { invalidateMainNavCaches } from "@/lib/client-fetch-cache";
 
 export default function ImportarPage() {
   const { authenticated } = useAuthState();
