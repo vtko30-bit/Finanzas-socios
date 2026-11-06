@@ -53,6 +53,8 @@ function origenDe(row: IncomingRow) {
   return origenCanonico(crudo, {
     source: "excel_egresos",
     carpeta: row.carpeta,
+    externalRef: row.operacion,
+    paymentMethod: row.cuenta,
   });
 }
 

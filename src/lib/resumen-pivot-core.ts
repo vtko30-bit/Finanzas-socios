@@ -142,12 +142,17 @@ export async function fetchIncomeRowsPaged(args: {
     out.push(
       ...page
         .map((r) => {
-          const row = r as IncomeRow & { source?: string | null; payment_method?: string | null };
+          const row = r as IncomeRow & {
+            source?: string | null;
+            payment_method?: string | null;
+            external_ref?: string | null;
+          };
           return {
             ...row,
             origen_cuenta: origenCanonico(row.origen_cuenta, {
               source: row.source,
               paymentMethod: row.payment_method,
+              externalRef: row.external_ref,
             }),
           };
         })
@@ -231,12 +236,14 @@ export async function fetchExpenseRowsPaged(args: {
             origen_cuenta?: string | null;
             source?: string | null;
             payment_method?: string | null;
+            external_ref?: string | null;
           };
           return {
             ...(raw as object),
             origen_cuenta: origenCanonico(row.origen_cuenta, {
               source: row.source,
               paymentMethod: row.payment_method,
+              externalRef: row.external_ref,
             }),
           };
         })

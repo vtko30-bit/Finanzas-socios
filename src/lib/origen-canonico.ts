@@ -26,6 +26,8 @@ export type OrigenCanonicoContext = {
   paymentMethod?: string | null;
   /** Carpeta de import Excel (Movimientos Banco Estado, …). */
   carpeta?: string | null;
+  /** N° operación / external_ref (p. ej. bci|20261008|…). */
+  externalRef?: string | null;
 };
 
 function norm(value: string): string {
@@ -111,6 +113,7 @@ export function origenCanonico(
   const carpetaC = compact(carpeta);
   const pay = String(ctx.paymentMethod ?? "").trim();
   const source = String(ctx.source ?? "").trim();
+  const ext = String(ctx.externalRef ?? "").trim().toLowerCase();
 
   // 1) Consumo de personal (venta Fudo pagada con anticipo de sueldo)
   if (esConsumoPersonalTexto(original, pay)) {
@@ -148,8 +151,13 @@ export function origenCanonico(
     return "Mercado Pago";
   }
 
-  // 5) Bci
-  if (c.includes("bci") || carpetaC.includes("bci")) {
+  // 5) Bci (cartola corta a veces viene sin columna Origen; la operación empieza con bci|)
+  if (
+    c.includes("bci") ||
+    carpetaC.includes("bci") ||
+    ext.startsWith("bci|") ||
+    ext.startsWith("bci/")
+  ) {
     return "Bci";
   }
 

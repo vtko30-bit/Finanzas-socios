@@ -148,9 +148,10 @@ export async function GET(request: Request) {
   const rows = deduped.map((row) => {
     const sourceRawEarly = String((row as { source?: string }).source ?? "").trim();
     const payRaw = String((row as { payment_method?: string }).payment_method ?? "").trim();
+    const extRaw = String((row as { external_ref?: string }).external_ref ?? "").trim();
     const origenCuenta = origenCanonico(
       (row as { origen_cuenta?: string }).origen_cuenta ?? "",
-      { source: sourceRawEarly, paymentMethod: payRaw },
+      { source: sourceRawEarly, paymentMethod: payRaw, externalRef: extRaw },
     );
     const conceptoRaw = (row as { concepto?: string }).concepto ?? "";
     const conceptoCol = conceptoLimpio(conceptoRaw);
