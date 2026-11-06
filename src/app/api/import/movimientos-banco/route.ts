@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import {
+  esOrigenRetirosMercadoPago,
+  fingerprintRetirosMercadoPagoMovimiento,
+  fingerprintRetirosMercadoPagoMovimientoLaxo,
+} from "@/lib/gastos-dedupe-servicios";
 import { expenseDedupeHashFromParsed } from "@/lib/import/expense-dedupe-keys";
 import { origenCanonico } from "@/lib/origen-canonico";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
@@ -7,6 +12,7 @@ import {
   collectBlockedImportDates,
   fetchImportPeriodLocks,
 } from "@/lib/import-period-lock";
+import { fetchRetirosMercadoPagoDuplicateKeysForOrg } from "@/lib/retiros-mp-fingerprints-db";
 import { resolveOrganizationId } from "@/lib/send-daily-balance";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -371,6 +377,7 @@ export async function POST(request: Request) {
           .eq("organization_id", organizationId)
           .gte("date", dates[0])
           .lte("date", dates[dates.length - 1])
+          .order("id", { ascending: true })
           .range(from, from + pageSize - 1);
         if (error) throw new Error(error.message);
         for (const row of data ?? []) {
@@ -379,11 +386,22 @@ export async function POST(request: Request) {
         if (!data || data.length < pageSize) break;
       }
     }
-    const fresh = open.filter(
-      (row) =>
-        !knownHashes.has(row.dedupe_hash) &&
-        !clavesDeCruce(row).some((key) => existingKeys.has(key)),
+    const retirosMpKeys = await fetchRetirosMercadoPagoDuplicateKeysForOrg(
+      admin,
+      organizationId,
     );
+    const fresh = open.filter((row) => {
+      if (knownHashes.has(row.dedupe_hash)) return false;
+      if (clavesDeCruce(row).some((key) => existingKeys.has(key))) return false;
+      if (esOrigenRetirosMercadoPago(row.origen_cuenta)) {
+        const fp = fingerprintRetirosMercadoPagoMovimiento(row);
+        const fpLoose = fingerprintRetirosMercadoPagoMovimientoLaxo(row);
+        if ((fp && retirosMpKeys.has(fp)) || (fpLoose && retirosMpKeys.has(fpLoose))) {
+          return false;
+        }
+      }
+      return true;
+    });
 
     const { data: batch, error: batchError } = await admin
       .from("import_batches")

@@ -29,7 +29,10 @@ export async function fetchRetirosMercadoPagoDuplicateKeysForOrg(
       .eq("organization_id", organizationId)
       .eq("source", "excel_egresos")
       .in("type", ["expense", "gasto", "egreso"])
-      .ilike("origen_cuenta", "%retiros%")
+      // Incluye origen canónico «Mercado Pago» y etiquetas viejas «Retiros…».
+      .or(
+        "origen_cuenta.ilike.%retiros%,origen_cuenta.ilike.%mercado pago%,origen_cuenta.ilike.%mercadopago%,origen_cuenta.eq.Mercado Pago",
+      )
       .range(from, to);
 
     if (error) throw new Error(error.message);

@@ -687,7 +687,9 @@ export function preferirEgresoDuplicadoEnImport<
 /** Retiros Mercado Pago (maestro excel-movimientos / import egresos). */
 export function esOrigenRetirosMercadoPago(origen: string): boolean {
   const n = normOrigenKey(origen);
-  return n.includes("retiros") && (n.includes("mercadopago") || n.includes("mercadolibre"));
+  if (n === "mercadopago" || n === "mercadolibre") return true;
+  if (n.includes("mercadopago") || n.includes("mercadolibre")) return true;
+  return n.includes("retiros") && (n.includes("mercado") || n.includes("mpago"));
 }
 
 export function esOrigenSinAsignar(origen: string): boolean {
