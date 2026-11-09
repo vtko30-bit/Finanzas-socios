@@ -20,6 +20,15 @@ export function familyIdDesdeRawTx(raw: {
   return null;
 }
 
+/** Nombre de familia vacío / basura de import (p. ej. guion de Mercado Pago). */
+export function esFamiliaSinAsignar(nombre: string | null | undefined): boolean {
+  const n = String(nombre ?? "").trim();
+  if (!n) return true;
+  if (/^sin familia$/i.test(n)) return true;
+  if (n === "-" || n === "—" || n === "–") return true;
+  return false;
+}
+
 /** Nombre de familia para mostrar (mismo criterio que resumen / detalle). */
 export function familiaNombreDesdeRawTx(raw: {
   concept_catalog?: {
@@ -32,7 +41,19 @@ export function familiaNombreDesdeRawTx(raw: {
   if (!fam) return "Sin familia";
   const f = Array.isArray(fam) ? fam[0] : fam;
   if (!f || typeof f !== "object") return "Sin familia";
-  const name = (f as { name?: string }).name;
-  return String(name ?? "").trim() || "Sin familia";
+  const name = String((f as { name?: string }).name ?? "").trim();
+  if (esFamiliaSinAsignar(name)) return "Sin familia";
+  return name;
+}
+
+/** Compara familia del resumen con la de un movimiento (incluye "-" ≡ Sin familia). */
+export function mismaFamiliaResumen(
+  familiaFiltro: string,
+  familiaFila: string,
+): boolean {
+  const a = familiaFiltro.trim();
+  const b = familiaFila.trim();
+  if (a === b) return true;
+  return esFamiliaSinAsignar(a) && esFamiliaSinAsignar(b);
 }
 

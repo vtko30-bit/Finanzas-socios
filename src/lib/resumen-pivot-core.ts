@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categoriaMostradaDesdeRawTx } from "@/lib/categoria-excluida";
-import { familiaNombreDesdeRawTx, familyIdDesdeRawTx } from "@/lib/familia-excluida";
+import {
+  familiaNombreDesdeRawTx,
+  familyIdDesdeRawTx,
+  mismaFamiliaResumen,
+} from "@/lib/familia-excluida";
 import { normalizeFormaPago } from "@/lib/forma-pago";
 import { fudoCuentaEnResultado } from "@/lib/fudo-cuenta-en-resultado";
 import { fetchRgSuiteSalePayments } from "@/lib/rg-suite-sale-payments";
@@ -771,10 +775,11 @@ async function loadGastosFamiliaDetallePool(args: GastosFamiliaDetalleArgs): Pro
     }
   }
 
-  const poolFamilia = pool.filter(
-    (raw) =>
-      familiaNombreDesdeRawTx(raw as Parameters<typeof familiaNombreDesdeRawTx>[0]) ===
+  const poolFamilia = pool.filter((raw) =>
+    mismaFamiliaResumen(
       familia,
+      familiaNombreDesdeRawTx(raw as Parameters<typeof familiaNombreDesdeRawTx>[0]),
+    ),
   );
 
   return { poolFamilia, monthKeys, monthLabels, error: null };
@@ -1229,7 +1234,11 @@ function shapeResumenPivotMainFromAggRows(
       if (!eventMap.has(evento)) eventMap.set(evento, new Map());
       eventMap.get(evento)!.set(ym, (eventMap.get(evento)!.get(ym) ?? 0) + amt);
     } else if (section === "expense_familia") {
-      const familia = String(r.dim_key ?? "").trim() || "Sin familia";
+      const rawFam = String(r.dim_key ?? "").trim();
+      const familia =
+        !rawFam || rawFam === "-" || rawFam === "—" || rawFam === "–"
+          ? "Sin familia"
+          : rawFam;
       const target = esFamiliaSocio(familia) ? gastosSocMap : gastosNegMap;
       if (!target.has(familia)) target.set(familia, new Map());
       const inner = target.get(familia)!;
