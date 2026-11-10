@@ -2190,7 +2190,7 @@ export default function ResumenPage() {
               onClick={cerrarFamiliaDetalle}
             >
               <div
-                className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+                className="flex max-h-[90vh] w-full min-w-0 max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
@@ -2221,13 +2221,13 @@ export default function ResumenPage() {
                     Cerrar
                   </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2">
+                <div className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain px-4 pb-4 pt-2">
                   {familiaDetalleLoading ? (
                     <p className="py-8 text-center text-sm text-slate-600">Cargando…</p>
                   ) : familiaDetalleError ? (
                     <p className="py-8 text-center text-sm text-red-700">{familiaDetalleError}</p>
                   ) : familiaDetalleData && familiaDetalleData.monthKeys.length > 0 ? (
-                    <div className="resumen-tabla-scroll">
+                    <div className="resumen-tabla-scroll max-w-full">
                       <table className={resumenTableCls}
                         style={{
                           minWidth: tableMinWidth(familiaDetalleData.monthKeys.length),
