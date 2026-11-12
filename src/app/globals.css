@@ -543,6 +543,7 @@ button {
 .fin-app__content {
   min-width: 0;
   flex: 1;
+  padding-bottom: 6.5rem;
 }
 
 .fin-sidebar {
@@ -755,10 +756,6 @@ button {
   border-color: var(--border);
   background: var(--card);
   box-shadow: 0 1px 2px rgb(26 24 22 / 0.04), 0 8px 24px -16px rgb(26 24 22 / 0.12);
-}
-
-.fin-app__content {
-  padding-bottom: 6.5rem;
 }
 
 /* Menú flotante (como RG Suite) */
