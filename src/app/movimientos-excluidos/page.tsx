@@ -558,7 +558,7 @@ export default function MovimientosExcluidosPage() {
               exclItems.length === 0 ? (
                 <p className="mt-2 text-xs text-slate-600">
                   Ninguna familia excluida. Usa «Excluir familia» para elegir una de la lista en{" "}
-                  <Link href="/familias" className="text-sky-700 underline">
+                  <Link href="/familias" className="text-[#d45500] underline">
                     Familias
                   </Link>
                   .
@@ -915,7 +915,7 @@ export default function MovimientosExcluidosPage() {
                         <button
                           type="button"
                           disabled={ya || busy || !!savingFamilyId}
-                          className="flex w-full flex-col items-start rounded-md px-2 py-2 text-left text-sm hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex w-full flex-col items-start rounded-md px-2 py-2 text-left text-sm hover:bg-[#fbe7d8] disabled:cursor-not-allowed disabled:opacity-50"
                           onClick={() => void elegirFamiliaExcluir(f.id)}
                         >
                           <span className="font-medium text-slate-900">{f.name}</span>
@@ -990,7 +990,7 @@ export default function MovimientosExcluidosPage() {
                         <button
                           type="button"
                           disabled={!!savingConceptId}
-                          className="flex w-full flex-col items-start rounded-md px-2 py-2 text-left text-sm hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex w-full flex-col items-start rounded-md px-2 py-2 text-left text-sm hover:bg-[#fbe7d8] disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => void aplicarConceptoALinea(c.conceptId)}
                         >
                           <span className="font-medium text-slate-900">{c.label}</span>

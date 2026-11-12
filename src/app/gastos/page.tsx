@@ -309,7 +309,7 @@ function ComboboxLista({
         disabled={disabled}
         placeholder={placeholder}
         title="Escribe o elige de la lista al enfocar"
-        className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-500"
+        className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#e85e00]"
         value={value}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
@@ -581,7 +581,7 @@ function GastosMultiSelect({
         aria-expanded={abierto}
         aria-controls={`${id}-lista`}
         disabled={opciones.length === 0}
-        className="ui-filter-control box-border flex w-full items-center justify-between gap-2 text-left outline-none focus:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+        className="ui-filter-control box-border flex w-full items-center justify-between gap-2 text-left outline-none focus:border-[#e85e00] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={() => (abierto ? setAbierto(false) : abrir())}
         onBlur={cerrarLuego}
       >
@@ -602,7 +602,7 @@ function GastosMultiSelect({
             <label className="flex cursor-pointer items-center gap-2 text-slate-700">
               <input
                 type="checkbox"
-                className="h-3.5 w-3.5 accent-sky-700"
+                className="h-3.5 w-3.5 accent-[#e85e00]"
                 checked={todasMarcadas}
                 ref={(el) => {
                   if (el) el.indeterminate = algunasMarcadas;
@@ -617,7 +617,7 @@ function GastosMultiSelect({
               <label className="flex cursor-pointer items-center gap-2 text-slate-800">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 accent-sky-700"
+                  className="h-3.5 w-3.5 accent-[#e85e00]"
                   checked={opcionMultiMarcada(opt.value, seleccion, opciones.length)}
                   onChange={() =>
                     onChange(toggleSeleccionMulti(opt.value, seleccion, valores))
@@ -1876,7 +1876,7 @@ function GastosPageContent() {
             <label className="ui-filter-chip">
               <input
                 type="checkbox"
-                className="h-3.5 w-3.5 accent-sky-700"
+                className="h-3.5 w-3.5 accent-[#e85e00]"
                 checked={soloSeleccionados}
                 onChange={(e) => setSoloSeleccionados(e.target.checked)}
               />
@@ -2031,7 +2031,7 @@ function GastosPageContent() {
               <label className="ui-filter-chip sm:hidden">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 accent-sky-700"
+                  className="h-3.5 w-3.5 accent-[#e85e00]"
                   checked={agruparPorFamilia}
                   onChange={(e) => setAgruparPorFamilia(e.target.checked)}
                 />
@@ -2040,7 +2040,7 @@ function GastosPageContent() {
               <label className="ui-filter-chip">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-sky-700"
+                  className="h-4 w-4 accent-[#e85e00]"
                   checked={soloSeleccionados}
                   disabled={selectedGastoIds.size === 0}
                   onChange={(e) => setSoloSeleccionados(e.target.checked)}
@@ -2140,7 +2140,7 @@ function GastosPageContent() {
       {toast ? (
         <div
           role="alert"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-[#f0c9a8] bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
         >
           {toast}
         </div>
@@ -2336,13 +2336,13 @@ function GastosPageContent() {
                 ? paginaGastosRender.familiaRows.map((item) => (
                     <div
                       key={item.familia}
-                      className="border-t border-slate-200 bg-sky-50/40"
+                      className="border-t border-slate-200 bg-[#fbe7d8]/40"
                     >
                       <div
                         className={`hidden sm:grid ${GASTOS_ROW_GRID} px-3 py-1.5 text-xs leading-snug`}
                       >
                         <div className="col-span-3 min-w-0 text-slate-400">—</div>
-                        <div className="min-w-0 font-semibold text-sky-950">{item.familia}</div>
+                        <div className="min-w-0 font-semibold text-stone-900">{item.familia}</div>
                         <div className="col-span-2 min-w-0 text-slate-600">
                           {item.count} mov.
                         </div>
@@ -2353,7 +2353,7 @@ function GastosPageContent() {
                       <div
                         className={`grid sm:hidden ${GASTOS_ROW_GRID_MOVIL} px-3 py-1.5 text-xs leading-snug`}
                       >
-                        <div className="col-span-3 min-w-0 font-semibold text-sky-950">
+                        <div className="col-span-3 min-w-0 font-semibold text-stone-900">
                           {item.familia}
                           <span className="ml-1 font-normal text-slate-600">
                             ({item.count})
@@ -2422,7 +2422,7 @@ function GastosPageContent() {
                           </span>
                           <button
                             type="button"
-                            className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
+                            className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-[#e85e00] disabled:opacity-40"
                             title="Editar gasto"
                             aria-label="Editar gasto"
                             disabled={uiBloqueadoGuardado}
@@ -2851,7 +2851,7 @@ function GastosPageContent() {
                   <label className="mt-4 block text-sm text-slate-700">
                     Descripción
                     <textarea
-                      className="mt-1 w-full resize-y rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-500"
+                      className="mt-1 w-full resize-y rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#e85e00]"
                       rows={3}
                       value={editModal.descripcion}
                       disabled={uiBloqueadoGuardado}
@@ -2914,7 +2914,7 @@ function GastosPageContent() {
                   </button>
                   <button
                     type="button"
-                    className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                    className="rounded border border-[#e85e00] bg-[#fbe7d8] px-4 py-2 text-sm font-medium text-[#9a3f00] hover:bg-[#fbe7d8] disabled:opacity-50"
                     disabled={uiBloqueadoGuardado}
                     onClick={() => void aplicarEdicionConceptoModal()}
                   >

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
+import { SuiteDock } from "@/components/suite-dock";
 
 type NavItem = { href: string; label: string };
 
@@ -290,6 +291,8 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
         </header>
         <div className="fin-app__content">{children}</div>
       </div>
+
+      <SuiteDock />
     </div>
   );
 }

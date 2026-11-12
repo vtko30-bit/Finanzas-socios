@@ -324,8 +324,8 @@ export function BankPositionSection({
       type="button"
       className={
         variant === "premium"
-          ? "rounded-md bg-[#2277ff] px-2.5 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-[#0056ff] disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
-          : "rounded border border-sky-700 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50 sm:px-2.5 sm:py-1 sm:text-xs"
+          ? "rounded-md bg-[#e85e00] px-2.5 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-[#e85e00] disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
+          : "rounded border border-[#d45500] bg-[#fbe7d8] px-2 py-0.5 text-[10px] font-medium text-stone-900 hover:bg-[#fbe7d8] disabled:opacity-50 sm:px-2.5 sm:py-1 sm:text-xs"
       }
       disabled={loading}
       onClick={abrirModal}
@@ -614,7 +614,7 @@ export function BankPositionSection({
                 <p className="text-xs font-medium text-slate-600">Fondos mutuos</p>
                 <button
                   type="button"
-                  className="rounded border border-sky-700 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                  className="rounded border border-[#d45500] bg-[#fbe7d8] px-2.5 py-1 text-xs font-medium text-stone-900 hover:bg-[#fbe7d8] disabled:opacity-50"
                   disabled={saving}
                   onClick={agregarFfmm}
                 >

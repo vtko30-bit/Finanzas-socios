@@ -662,7 +662,7 @@ export default function PrestamosOtorgadosPage() {
         <div className="flex justify-end">
           <button
             type="button"
-            className="text-sm text-sky-700 underline"
+            className="text-sm text-[#d45500] underline"
             onClick={() => void load()}
             disabled={loading || !authenticated}
           >
@@ -676,7 +676,7 @@ export default function PrestamosOtorgadosPage() {
               <div>
                 <div className="font-medium text-slate-900">{c.borrower}</div>
                 {detailId === c.id ? (
-                  <div className="mt-0.5 inline-flex rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-800">
+                  <div className="mt-0.5 inline-flex rounded border border-[#f0c9a8] bg-[#fbe7d8] px-1.5 py-0.5 text-[11px] text-[#9a3f00]">
                     Detalle abierto
                   </div>
                 ) : null}
@@ -696,7 +696,7 @@ export default function PrestamosOtorgadosPage() {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  className="text-sm text-sky-700 underline"
+                  className="text-sm text-[#d45500] underline"
                   onClick={() => void openDetail(c.id)}
                 >
                   {detailId === c.id ? "Ocultar" : "Ver / recuperar"}

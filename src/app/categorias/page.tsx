@@ -209,7 +209,7 @@ export default function CategoriasPage() {
       {toast ? (
         <div
           role="alert"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-[#f0c9a8] bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
         >
           {toast}
         </div>
@@ -237,7 +237,7 @@ export default function CategoriasPage() {
             <p className="py-4 text-sm text-slate-500">
               No hay categorías aún. Importa gastos o crea una categoría nueva (necesitas al menos
               una familia en{" "}
-              <Link href="/familias" className="text-[#0056ff] underline hover:text-[#0046d9] hover:text-sky-700">
+              <Link href="/familias" className="text-[#e85e00] underline hover:text-[#d45500] hover:text-[#d45500]">
                 Familias
               </Link>
               ).
@@ -267,7 +267,7 @@ export default function CategoriasPage() {
                     <button
                       type="button"
                       disabled={!canWrite}
-                      className="shrink-0 rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
+                      className="shrink-0 rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-[#e85e00] disabled:opacity-40"
                       title="Editar categoría"
                       aria-label="Editar categoría"
                       onClick={() => abrirEditarCategoria(c)}
@@ -335,7 +335,7 @@ export default function CategoriasPage() {
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
+                className="rounded border border-[#e85e00] bg-[#fbe7d8] px-4 py-2 text-sm font-medium text-[#9a3f00] hover:bg-[#fbe7d8]"
                 onClick={() => void guardarNuevoConcepto()}
               >
                 Crear
@@ -413,7 +413,7 @@ export default function CategoriasPage() {
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
+                className="rounded border border-[#e85e00] bg-[#fbe7d8] px-4 py-2 text-sm font-medium text-[#9a3f00] hover:bg-[#fbe7d8]"
                 onClick={() => void guardarModalEdit()}
               >
                 Guardar

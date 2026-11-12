@@ -703,7 +703,7 @@ export default function CreditosPage() {
             <label className="flex cursor-pointer items-start gap-2 text-sm sm:col-span-2">
               <input
                 type="checkbox"
-                className="mt-1 h-3.5 w-3.5 accent-sky-700"
+                className="mt-1 h-3.5 w-3.5 accent-[#e85e00]"
                 checked={sinCuotasFijas}
                 onChange={(e) => setSinCuotasFijas(e.target.checked)}
               />
@@ -845,7 +845,7 @@ export default function CreditosPage() {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  className="text-sm text-sky-700 underline"
+                  className="text-sm text-[#d45500] underline"
                   onClick={() => void openDetail(c.id)}
                 >
                   Ver / pagar
@@ -898,7 +898,7 @@ export default function CreditosPage() {
         <div className="mt-4 flex justify-end">
           <button
             type="button"
-            className="text-sm text-sky-700 underline"
+            className="text-sm text-[#d45500] underline"
             onClick={() => void load()}
             disabled={loading || !authenticated}
           >

@@ -382,7 +382,7 @@ export default function FamiliasPage() {
       {toast ? (
         <div
           role="alert"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-[#f0c9a8] bg-white px-4 py-3 text-sm text-slate-900 shadow-lg"
         >
           {toast}
         </div>
@@ -426,7 +426,7 @@ export default function FamiliasPage() {
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                className="rounded border border-[#e85e00] bg-[#fbe7d8] px-3 py-1.5 text-sm font-medium text-[#9a3f00] hover:bg-[#fbe7d8] disabled:opacity-50"
                 disabled={busyKey === "__batch__" || !canWrite}
                 onClick={() => void guardarPendientes()}
               >
@@ -481,7 +481,7 @@ export default function FamiliasPage() {
                           />
                           <button
                             type="button"
-                            className="text-xs text-sky-400 hover:underline"
+                            className="text-xs text-[#e85e00] hover:underline"
                             onClick={() => void guardarNombreFamilia(fam.id)}
                           >
                             OK
@@ -499,7 +499,7 @@ export default function FamiliasPage() {
                           <button
                             type="button"
                             disabled={!canWrite}
-                            className="text-xs text-slate-600 hover:text-sky-400 disabled:opacity-40"
+                            className="text-xs text-slate-600 hover:text-[#e85e00] disabled:opacity-40"
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditandoFamilia(fam.id);
@@ -568,7 +568,7 @@ export default function FamiliasPage() {
                                   <button
                                     type="button"
                                     disabled={!canWrite}
-                                    className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-sky-400 disabled:opacity-40"
+                                    className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-[#e85e00] disabled:opacity-40"
                                     title="Editar nombre"
                                     aria-label="Editar nombre"
                                     onClick={() => abrirEditarCategoria(c, fam.id)}
@@ -652,7 +652,7 @@ export default function FamiliasPage() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
+                  className="rounded border border-[#e85e00] bg-[#fbe7d8] px-4 py-2 text-sm font-medium text-[#9a3f00] hover:bg-[#fbe7d8]"
                 >
                   Crear familia
                 </button>
@@ -730,7 +730,7 @@ export default function FamiliasPage() {
               </button>
               <button
                 type="button"
-                className="rounded border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100"
+                className="rounded border border-[#e85e00] bg-[#fbe7d8] px-4 py-2 text-sm font-medium text-[#9a3f00] hover:bg-[#fbe7d8]"
                 onClick={() => void guardarModalEdit()}
               >
                 Guardar

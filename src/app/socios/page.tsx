@@ -125,14 +125,14 @@ function monthTotalForSocio(rowsCategoria: CategoriaPivot[], monthKey: string): 
 function DetalleToggle({ abierto }: { abierto: boolean }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100 ${
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition group-hover:border-[#f0c9a8] group-hover:bg-[#fbe7d8] ${
         abierto
-          ? "border-sky-300 bg-sky-100 text-sky-900"
-          : "border-sky-200 bg-sky-50 text-sky-800"
+          ? "border-[#f0c9a8] bg-[#fbe7d8] text-stone-900"
+          : "border-[#f0c9a8] bg-[#fbe7d8] text-[#9a3f00]"
       }`}
     >
       Detalle
-      <span className="text-[11px] text-sky-600" aria-hidden>
+      <span className="text-[11px] text-[#d45500]" aria-hidden>
         {abierto ? "▲" : "▼"}
       </span>
     </span>
@@ -283,7 +283,7 @@ export default function SociosPage() {
 
   const thCls = "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white";
   const thNum = `${thCls} text-right`;
-  const thCatSticky = `${thCls} sticky left-0 z-20 min-w-[6.75rem] max-w-[9rem] bg-[#0056ff] shadow-[4px_0_6px_-4px_rgba(15,23,42,0.25)]`;
+  const thCatSticky = `${thCls} sticky left-0 z-20 min-w-[6.75rem] max-w-[9rem] bg-[#e85e00] shadow-[4px_0_6px_-4px_rgba(15,23,42,0.25)]`;
   const tdCls = "px-3 py-2 text-xs text-slate-900";
   const tdNum = `${tdCls} text-right tabular-nums`;
   const tdCatSticky =
@@ -385,7 +385,7 @@ export default function SociosPage() {
           return (
           <section key={bloque.socio} className="ui-card-panel flex min-w-0 flex-col">
             <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-              <h2 className="text-base font-semibold text-sky-950">{bloque.socio}</h2>
+              <h2 className="text-base font-semibold text-stone-900">{bloque.socio}</h2>
               {!filtroUnMes && bloque.rowsCategoria.length > 0 ? (
                 <button
                   type="button"
@@ -430,7 +430,7 @@ export default function SociosPage() {
                           <td className={tdCls}>
                             <button
                               type="button"
-                              className="text-left font-medium text-sky-900 hover:underline"
+                              className="text-left font-medium text-stone-900 hover:underline"
                               onClick={() => toggleExpanded(rowKey)}
                               aria-expanded={open}
                             >
@@ -449,7 +449,7 @@ export default function SociosPage() {
                     <td className={`${tdNum} font-medium`}>
                       {formatClp(monthTotalForSocio(bloque.rowsCategoria, visibleMonthKeys[0]))}
                     </td>
-                    <td className={`${tdNum} font-semibold text-sky-800`}>
+                    <td className={`${tdNum} font-semibold text-[#9a3f00]`}>
                       {formatClp(bloque.total)}
                     </td>
                   </tr>
@@ -485,7 +485,7 @@ export default function SociosPage() {
                               {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-sky-800`}>
+                          <td className={`${tdNum} font-semibold text-[#9a3f00]`}>
                             {formatClp(bloque.total)}
                           </td>
                         </tr>
@@ -500,7 +500,7 @@ export default function SociosPage() {
                                   <td className={`${tdCatSticky} group-hover:bg-slate-50`}>
                                     <button
                                       type="button"
-                                      className="text-left font-medium text-sky-900 hover:underline"
+                                      className="text-left font-medium text-stone-900 hover:underline"
                                       onClick={() => toggleExpanded(rowKey)}
                                       aria-expanded={open}
                                     >
@@ -531,7 +531,7 @@ export default function SociosPage() {
                               {formatClp(monthTotalForSocio(bloque.rowsCategoria, mk))}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-sky-800`}>
+                          <td className={`${tdNum} font-semibold text-[#9a3f00]`}>
                             {formatClp(bloque.total)}
                           </td>
                         </tr>

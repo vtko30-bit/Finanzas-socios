@@ -132,7 +132,7 @@ export default function PeriodosCerradosPage() {
     return (
       <main className="page-main page-main--md">
         <p className="text-slate-700">
-          <Link href="/login" className="text-[#0056ff] underline hover:text-[#0046d9]">
+          <Link href="/login" className="text-[#e85e00] underline hover:text-[#d45500]">
             Inicia sesión
           </Link>{" "}
           para gestionar períodos cerrados.
@@ -163,14 +163,14 @@ export default function PeriodosCerradosPage() {
           cerrado, para que el resumen y los totales no cambien hasta que reabras el período.
         </p>
         <p className="mt-2 text-sm">
-          <Link href="/gastos" className="text-[#0056ff] underline hover:text-[#0046d9]">
+          <Link href="/gastos" className="text-[#e85e00] underline hover:text-[#d45500]">
             Ir a Gastos
           </Link>
         </p>
       </div>
 
       <section className="ui-card p-6">
-        <h2 className="text-lg font-semibold text-[#0a2a6e]">Cerrar período</h2>
+        <h2 className="text-lg font-semibold text-[#1a1816]">Cerrar período</h2>
         <form onSubmit={crear} className="mt-4 flex flex-col gap-4">
           <div className="flex flex-wrap gap-4">
             <label className="flex flex-col gap-1 text-sm">
@@ -242,7 +242,7 @@ export default function PeriodosCerradosPage() {
 
       <section className="ui-card p-6">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+          <h2 className="text-lg font-semibold text-[#1a1816]">
             Períodos cerrados actualmente
           </h2>
           <button

@@ -757,6 +757,148 @@ button {
   box-shadow: 0 1px 2px rgb(26 24 22 / 0.04), 0 8px 24px -16px rgb(26 24 22 / 0.12);
 }
 
+.fin-app__content {
+  padding-bottom: 6.5rem;
+}
+
+/* Menú flotante (como RG Suite) */
+.suite-dock {
+  position: fixed;
+  z-index: 50;
+  right: 0;
+  bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.fin-app--collapsed .suite-dock,
+.fin-app .suite-dock {
+  padding-left: 0;
+}
+
+@media (min-width: 768px) {
+  .fin-app .suite-dock {
+    padding-left: var(--sidebar-width);
+  }
+  .fin-app--collapsed .suite-dock {
+    padding-left: var(--sidebar-width-icon);
+  }
+}
+
+.suite-dock__cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  pointer-events: auto;
+}
+
+.suite-dock__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 96%, transparent);
+  padding: 0.35rem;
+  box-shadow: 0 1px 2px rgb(26 24 22 / 0.08), 0 18px 40px -12px rgb(26 24 22 / 0.26);
+  backdrop-filter: blur(12px);
+}
+
+.suite-dock__btn {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--foreground);
+  background: transparent;
+}
+
+.suite-dock__btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.suite-dock__sep {
+  width: 1px;
+  height: 1.35rem;
+  margin: 0 0.2rem;
+  background: var(--border);
+}
+
+.suite-dock__avatar {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #1a1816;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.suite-dock__fab {
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 2px rgb(26 24 22 / 0.08), 0 18px 40px -12px rgb(26 24 22 / 0.26);
+}
+
+.suite-dock__menu {
+  position: absolute;
+  bottom: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 60;
+  min-width: 12rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0.35rem;
+  box-shadow: 0 1px 2px rgb(26 24 22 / 0.08), 0 18px 40px -12px rgb(26 24 22 / 0.26);
+}
+
+.suite-dock__menu--up {
+  left: auto;
+  right: 0;
+}
+
+.suite-dock__menu--fab {
+  right: 0;
+  left: auto;
+}
+
+.suite-dock__menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.suite-dock__menu-item:hover {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
 @media (max-width: 767px) {
   .fin-app,
   .fin-app--collapsed {

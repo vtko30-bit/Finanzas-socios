@@ -340,7 +340,7 @@ function ResumenSeccionFiltroSeleccionados({
     <label className="ui-filter-chip shrink-0">
       <input
         type="checkbox"
-        className="h-3.5 w-3.5 accent-sky-700"
+        className="h-3.5 w-3.5 accent-[#e85e00]"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
@@ -448,7 +448,7 @@ function ResumenMultiSelect({
         aria-expanded={abierto}
         aria-controls={`${id}-lista`}
         disabled={opciones.length === 0}
-        className="box-border flex h-8 w-full items-center justify-between gap-2 rounded border border-slate-300 bg-white px-2 text-left text-xs leading-normal text-slate-900 outline-none focus:border-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+        className="box-border flex h-8 w-full items-center justify-between gap-2 rounded border border-slate-300 bg-white px-2 text-left text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
         onClick={() => (abierto ? setAbierto(false) : abrir())}
         onBlur={cerrarLuego}
       >
@@ -469,7 +469,7 @@ function ResumenMultiSelect({
             <label className="flex cursor-pointer items-center gap-2 text-slate-700">
               <input
                 type="checkbox"
-                className="h-3.5 w-3.5 accent-sky-700"
+                className="h-3.5 w-3.5 accent-[#e85e00]"
                 checked={todasMarcadas}
                 ref={(el) => {
                   if (el) el.indeterminate = algunasMarcadas;
@@ -484,7 +484,7 @@ function ResumenMultiSelect({
               <label className="flex cursor-pointer items-center gap-2 text-slate-800">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 accent-sky-700"
+                  className="h-3.5 w-3.5 accent-[#e85e00]"
                   checked={opcionMultiMarcada(opt, seleccion, opciones.length)}
                   onChange={() => onChange(toggleSeleccionMulti(opt, seleccion, opciones))}
                 />
@@ -1204,7 +1204,7 @@ export default function ResumenPage() {
   const tdCls =
     "border-t border-slate-200 px-1 py-0.5 sm:px-2 sm:py-2 text-[10px] sm:text-xs text-slate-800";
   const tdNum = `${tdCls} text-right tabular-nums`;
-  const trTotal = "bg-sky-100/70 ring-1 ring-inset ring-sky-200";
+  const trTotal = "bg-[#fbe7d8]/70 ring-1 ring-inset ring-[#f0c9a8]";
   const resumenTarjetaTitulo =
     "border-b border-slate-200 px-4 py-3 text-base font-semibold text-slate-900 max-sm:px-2 max-sm:py-1.5 max-sm:text-sm";
   const resumenTarjetaTituloBarra =
@@ -1212,9 +1212,9 @@ export default function ResumenPage() {
   const resumenTarjetaTituloTexto =
     "text-base font-semibold text-slate-900 max-sm:text-sm";
   /** Primera columna fija al hacer scroll horizontal en cualquier tamaño. */
-  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[112px] sm:min-w-[150px] bg-[#0056ff] border-r border-sky-700/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
+  const thStickyFirst = `${thCls} sticky left-0 z-20 min-w-[112px] sm:min-w-[150px] bg-[#e85e00] border-r border-[#d45500]/30 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.12)]`;
   const tdStickyFirst = `${tdCls} sticky left-0 z-10 min-w-[112px] sm:min-w-[150px] bg-slate-50 border-r border-slate-200 shadow-[2px_0_8px_-2px_rgba(15,23,42,0.08)]`;
-  const tdStickyFirstTotal = `${tdCls} sticky left-0 z-10 min-w-[112px] sm:min-w-[150px] bg-sky-100/70 border-r border-slate-200`;
+  const tdStickyFirstTotal = `${tdCls} sticky left-0 z-10 min-w-[112px] sm:min-w-[150px] bg-[#fbe7d8]/70 border-r border-slate-200`;
   const COL_FIRST = isMobile ? 112 : 150;
   const COL_MONTH = isMobile ? 70 : 100;
   const COL_TOTAL = isMobile ? 88 : 120;
@@ -1260,7 +1260,7 @@ export default function ResumenPage() {
                     {filtroSucursalActivo ||
                     filtroFamiliaActivo ||
                     filtroFormaPagoActivo ? (
-                      <span className="ml-1 text-xs font-normal text-sky-700">
+                      <span className="ml-1 text-xs font-normal text-[#d45500]">
                         (activos)
                       </span>
                     ) : null}
@@ -1287,7 +1287,7 @@ export default function ResumenPage() {
                   </span>
                   <div className="flex flex-nowrap items-center gap-1.5">
                     <select
-                      className="box-border h-8 w-[11rem] shrink-0 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#2277ff] focus:ring-2 focus:ring-[#2277ff]/20"
+                      className="box-border h-8 w-[11rem] shrink-0 rounded-xl border border-slate-200 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00] focus:ring-2 focus:ring-[#e85e00]/20"
                       value={modo}
                       onChange={(e) => setModo(e.target.value as FiltroModo)}
                     >
@@ -1300,7 +1300,7 @@ export default function ResumenPage() {
                     {modo === "diario" ? (
                       <input
                         type="date"
-                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                         value={dia}
                         onChange={(e) => setDia(e.target.value)}
                       />
@@ -1308,7 +1308,7 @@ export default function ResumenPage() {
                     {modo === "semanal" ? (
                       <input
                         type="week"
-                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                         value={semana}
                         onChange={(e) => setSemana(e.target.value)}
                       />
@@ -1316,7 +1316,7 @@ export default function ResumenPage() {
                     {modo === "mensual" ? (
                       <input
                         type="month"
-                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                         value={mes}
                         onChange={(e) => setMes(e.target.value)}
                       />
@@ -1326,7 +1326,7 @@ export default function ResumenPage() {
                         type="number"
                         min={1990}
                         max={2100}
-                        className="box-border h-8 w-28 shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                        className="box-border h-8 w-28 shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                         value={anio}
                         onChange={(e) => setAnio(e.target.value)}
                       />
@@ -1335,14 +1335,14 @@ export default function ResumenPage() {
                       <>
                         <input
                           type="date"
-                          className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                          className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                           value={rangoDesde}
                           onChange={(e) => setRangoDesde(e.target.value)}
                         />
                         <span className="shrink-0 text-xs text-slate-500">a</span>
                         <input
                           type="date"
-                          className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-sky-500"
+                          className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                           value={rangoHasta}
                           onChange={(e) => setRangoHasta(e.target.value)}
                         />
@@ -1493,7 +1493,7 @@ export default function ResumenPage() {
                                       {formatClp(tpmB[mk] ?? 0)}
                                     </td>
                                   ))}
-                                  <td className={`${tdNum} font-semibold text-sky-800`}>
+                                  <td className={`${tdNum} font-semibold text-[#9a3f00]`}>
                                     {formatClp(totB)}
                                   </td>
                                 </tr>
@@ -1545,13 +1545,13 @@ export default function ResumenPage() {
                       ))}
                       {(data.ventasEventos?.rows ?? []).map((ev) => (
                         <tr key={`ev-${ev.evento}`}>
-                          <td className={`${tdStickyFirst} font-semibold text-sky-900`}>{ev.evento}</td>
+                          <td className={`${tdStickyFirst} font-semibold text-stone-900`}>{ev.evento}</td>
                           {data.monthKeys.map((mk) => (
-                            <td key={mk} className={`${tdNum} font-medium text-sky-900`}>
+                            <td key={mk} className={`${tdNum} font-medium text-stone-900`}>
                               {formatClp(ev.byMonth[mk] ?? 0)}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-sky-900`}>
+                          <td className={`${tdNum} font-semibold text-stone-900`}>
                             {formatClp(ev.total)}
                           </td>
                         </tr>
@@ -1576,7 +1576,7 @@ export default function ResumenPage() {
                               {formatClp(totalesPorMesVentas[mk] ?? 0)}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-sky-800`}>
+                          <td className={`${tdNum} font-semibold text-[#9a3f00]`}>
                             {formatClp(totalVentas)}
                           </td>
                         </tr>
@@ -1636,7 +1636,7 @@ export default function ResumenPage() {
                                   <div className="flex items-center gap-2">
                                     <input
                                       type="checkbox"
-                                      className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                                      className="h-3.5 w-3.5 shrink-0 accent-[#f0c9a8]"
                                       checked={todasFamBloque}
                                       disabled={familiasBloque.length === 0}
                                       aria-label="Seleccionar todas las familias de esta sucursal"
@@ -1677,7 +1677,7 @@ export default function ResumenPage() {
                                     <div className="flex items-center gap-2">
                                       <input
                                         type="checkbox"
-                                        className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                        className="h-3.5 w-3.5 shrink-0 accent-[#e85e00]"
                                         checked={familiasMarcadas.has(r.familia)}
                                         aria-label={`Seleccionar familia ${r.familia}`}
                                         onClick={(e) => e.stopPropagation()}
@@ -1752,7 +1752,7 @@ export default function ResumenPage() {
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                              className="h-3.5 w-3.5 shrink-0 accent-[#f0c9a8]"
                               checked={todasMarcadasEnSet(
                                 (gastosTablaPivot?.gastos.rows ?? []).map((r) => r.familia),
                                 familiasMarcadas,
@@ -1796,7 +1796,7 @@ export default function ResumenPage() {
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                className="h-3.5 w-3.5 shrink-0 accent-[#e85e00]"
                                 checked={familiasMarcadas.has(r.familia)}
                                 aria-label={`Seleccionar familia ${r.familia}`}
                                 onClick={(e) => e.stopPropagation()}
@@ -1877,7 +1877,7 @@ export default function ResumenPage() {
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                              className="h-3.5 w-3.5 shrink-0 accent-[#f0c9a8]"
                               checked={todasMarcadasEnSet(
                                 creditosTablaRows.map((r) => r.credito),
                                 creditosMarcados,
@@ -1908,7 +1908,7 @@ export default function ResumenPage() {
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                className="h-3.5 w-3.5 shrink-0 accent-[#e85e00]"
                                 checked={creditosMarcados.has(r.credito)}
                                 aria-label={`Seleccionar crédito ${r.credito}`}
                                 onChange={() => toggleCreditoMarcado(r.credito)}
@@ -1982,7 +1982,7 @@ export default function ResumenPage() {
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              className="h-3.5 w-3.5 shrink-0 accent-sky-200"
+                              className="h-3.5 w-3.5 shrink-0 accent-[#f0c9a8]"
                               checked={todasMarcadasEnSet(
                                 (gastosTablaPivot?.gastosSocios?.rows ?? []).map((r) => r.familia),
                                 familiasMarcadas,
@@ -2026,7 +2026,7 @@ export default function ResumenPage() {
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="h-3.5 w-3.5 shrink-0 accent-sky-700"
+                                className="h-3.5 w-3.5 shrink-0 accent-[#e85e00]"
                                 checked={familiasMarcadas.has(r.familia)}
                                 aria-label={`Seleccionar familia ${r.familia}`}
                                 onClick={(e) => e.stopPropagation()}
@@ -2116,7 +2116,7 @@ export default function ResumenPage() {
                           <td
                             key={mk}
                             className={`${tdNum} font-medium ${
-                              v >= 0 ? "text-sky-900" : "text-red-800"
+                              v >= 0 ? "text-stone-900" : "text-red-800"
                             }`}
                           >
                             {formatClp(v)}
@@ -2126,7 +2126,7 @@ export default function ResumenPage() {
                       <td
                         className={`${tdNum} font-semibold ${
                           resultadoIngresosMenosEgresos.total >= 0
-                            ? "text-sky-900"
+                            ? "text-stone-900"
                             : "text-red-800"
                         }`}
                       >
@@ -2156,7 +2156,7 @@ export default function ResumenPage() {
                           <td
                             key={mk}
                             className={`${tdNum} font-semibold ${
-                              v >= 0 ? "text-sky-900" : "text-red-800"
+                              v >= 0 ? "text-stone-900" : "text-red-800"
                             }`}
                           >
                             {formatClp(v)}
@@ -2166,7 +2166,7 @@ export default function ResumenPage() {
                       <td
                         className={`${tdNum} font-bold ${
                           resultadoCajaConCredito.total >= 0
-                            ? "text-sky-900"
+                            ? "text-stone-900"
                             : "text-red-800"
                         }`}
                       >
@@ -2263,7 +2263,7 @@ export default function ResumenPage() {
                                     <td className={tdStickyFirst}>
                                       <button
                                         type="button"
-                                        className="flex w-full max-w-[min(100%,18rem)] items-start gap-2 rounded px-0.5 py-0.5 text-left text-slate-900 hover:bg-slate-100 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500"
+                                        className="flex w-full max-w-[min(100%,18rem)] items-start gap-2 rounded px-0.5 py-0.5 text-left text-slate-900 hover:bg-slate-100 focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#e85e00]"
                                         aria-expanded={categoriaMovAbierta === r.categoria}
                                         onClick={(e) => {
                                           e.stopPropagation();

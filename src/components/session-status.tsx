@@ -15,7 +15,7 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
   if (!ready) {
     return (
       <span
-        className={onBrand ? "text-xs text-sky-950" : "text-xs text-slate-600"}
+        className={onBrand ? "text-xs text-stone-900" : "text-xs text-slate-600"}
       >
         Verificando sesión...
       </span>
@@ -28,7 +28,7 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
         <span
           className={
             onBrand
-              ? "text-xs font-medium text-sky-950"
+              ? "text-xs font-medium text-stone-900"
               : "text-xs font-medium text-amber-800"
           }
         >
@@ -38,7 +38,7 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
           href="/login"
           className={
             onBrand
-              ? "rounded-md border border-sky-800/50 bg-sky-950/10 px-2 py-1 text-xs font-medium text-sky-950 hover:bg-sky-950/15"
+              ? "rounded-md border border-[#d45500]/50 bg-[#e85e00]/10 px-2 py-1 text-xs font-medium text-stone-900 hover:bg-[#e85e00]/15"
               : "rounded-md border border-amber-400 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900"
           }
         >
@@ -53,7 +53,7 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
       <span
         className={
           onBrand
-            ? "min-w-0 flex-1 truncate text-left text-xs font-medium text-sky-950 sm:flex-none sm:max-w-[min(100vw-8rem,14rem)] md:max-w-xs lg:max-w-sm"
+            ? "min-w-0 flex-1 truncate text-left text-xs font-medium text-stone-900 sm:flex-none sm:max-w-[min(100vw-8rem,14rem)] md:max-w-xs lg:max-w-sm"
             : "text-xs font-medium text-emerald-800"
         }
         title={email ?? undefined}
@@ -77,8 +77,8 @@ export function SessionStatus({ variant = "default" }: SessionStatusProps) {
         onClick={() => void signOut()}
         className={
           onBrand
-            ? "hidden shrink-0 rounded-md border border-sky-800/55 px-2 py-1 text-xs text-sky-950 hover:bg-sky-950/10 sm:inline-block"
-            : "rounded-md border border-slate-300 px-2 py-1 text-xs hover:border-sky-500"
+            ? "hidden shrink-0 rounded-md border border-[#d45500]/55 px-2 py-1 text-xs text-stone-900 hover:bg-[#e85e00]/10 sm:inline-block"
+            : "rounded-md border border-slate-300 px-2 py-1 text-xs hover:border-[#e85e00]"
         }
       >
         Cerrar sesión

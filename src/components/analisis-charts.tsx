@@ -80,7 +80,7 @@ const MES_COLORS = [
   "#dc2626",
   "#d97706",
   "#0f766e",
-  "#2563eb",
+  "#e85e00",
   "#c026d3",
   "#ca8a04",
   "#be123c",
@@ -167,7 +167,7 @@ function ChartKindToggle({
           type="button"
           className={`rounded-md px-2.5 py-1 text-xs font-medium ${
             value === k
-              ? "bg-[#0a2a6e] text-white"
+              ? "bg-[#1a1816] text-white"
               : "text-slate-600 hover:bg-slate-50"
           }`}
           onClick={() => onChange(k)}
@@ -745,7 +745,7 @@ export function AnalisisCharts() {
           </p>
           <p
             className={`mt-1 text-xl font-semibold tabular-nums ${
-              kpis.neto >= 0 ? "text-sky-800" : "text-rose-700"
+              kpis.neto >= 0 ? "text-[#9a3f00]" : "text-rose-700"
             }`}
           >
             {fmt(kpis.neto)}
@@ -755,7 +755,7 @@ export function AnalisisCharts() {
 
       <section>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+          <h2 className="text-lg font-semibold text-[#1a1816]">
             Ventas {periodoLabel}
           </h2>
           <ChartKindToggle
@@ -789,7 +789,7 @@ export function AnalisisCharts() {
 
       <section>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+          <h2 className="text-lg font-semibold text-[#1a1816]">
             Gastos {periodoLabel}
           </h2>
           <ChartKindToggle
@@ -823,7 +823,7 @@ export function AnalisisCharts() {
 
       <section>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[#0a2a6e]">
+          <h2 className="text-lg font-semibold text-[#1a1816]">
             Balance {periodoLabel}
           </h2>
           <ChartKindToggle
@@ -905,7 +905,7 @@ export function AnalisisCharts() {
         <section>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-[#0a2a6e]">
+              <h2 className="text-lg font-semibold text-[#1a1816]">
                 Comparación año contra año
               </h2>
               <p className="mt-1 text-sm text-slate-600">
