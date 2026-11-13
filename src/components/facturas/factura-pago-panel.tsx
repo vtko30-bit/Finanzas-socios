@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 export type PayableDocument = {
   invoiceKey: string;
@@ -40,6 +40,10 @@ const formatCLP = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n || 0);
 
+function paymentKey(payment: PaymentRow) {
+  return `${payment.source}:${payment.paymentId}`;
+}
+
 export function FacturaPagoPanel({
   doc,
   onClose,
@@ -55,9 +59,26 @@ export function FacturaPagoPanel({
   const [bankLoaded, setBankLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const remaining = Math.max(0, doc.totalAmount - doc.paidAmount);
+
+  const selectable = useMemo(
+    () => payments.filter((payment) => payment.remaining > 0),
+    [payments],
+  );
+
+  const selectedPayments = useMemo(
+    () => selectable.filter((payment) => selected.has(paymentKey(payment))),
+    [selectable, selected],
+  );
+
+  const selectedTotal = selectedPayments.reduce(
+    (sum, payment) => sum + payment.remaining,
+    0,
+  );
 
   const load = useCallback(
     async (search: string) => {
@@ -87,6 +108,7 @@ export function FacturaPagoPanel({
       setLinks(body.links ?? []);
       setPayments(body.payments ?? []);
       setBankLoaded(Boolean(body.bankLoaded));
+      setSelected(new Set());
     },
     [
       doc.book,
@@ -102,11 +124,28 @@ export function FacturaPagoPanel({
     void load("");
   }, [load]);
 
-  async function linkPayment(payment: PaymentRow) {
+  function togglePayment(payment: PaymentRow) {
+    if (payment.remaining <= 0) return;
+    const key = paymentKey(payment);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selectedPayments.length === selectable.length) {
+      setSelected(new Set());
+      return;
+    }
+    setSelected(new Set(selectable.map(paymentKey)));
+  }
+
+  async function linkOne(payment: PaymentRow) {
     const amount = payment.remaining;
-    if (amount <= 0) return;
-    setBusyId(payment.paymentId);
-    setError("");
+    if (amount <= 0) return false;
     const res = await fetch("/api/facturas/rcv/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -123,13 +162,30 @@ export function FacturaPagoPanel({
       }),
     });
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    setBusyId("");
     if (!res.ok) {
       setError(body.error || "No se pudo asociar el pago.");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async function linkSelected() {
+    if (selectedPayments.length === 0) return;
+    setBusy(true);
+    setError("");
+    for (const payment of selectedPayments) {
+      const ok = await linkOne(payment);
+      if (!ok) {
+        setBusy(false);
+        await onChanged();
+        await load(query);
+        return;
+      }
+    }
+    setBusy(false);
+    setSelected(new Set());
     await onChanged();
-    await load(query);
+    onClose();
   }
 
   async function unlink(linkId: string) {
@@ -183,7 +239,7 @@ export function FacturaPagoPanel({
               <button
                 type="button"
                 className="ui-btn-secondary ui-btn-sm"
-                disabled={busyId === link.id}
+                disabled={busy || busyId === link.id}
                 onClick={() => void unlink(link.id)}
               >
                 Quitar
@@ -214,44 +270,79 @@ export function FacturaPagoPanel({
       ) : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
 
+      {!loading && selectable.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              className="size-4 accent-[#e85e00]"
+              checked={
+                selectable.length > 0 && selectedPayments.length === selectable.length
+              }
+              onChange={toggleAll}
+            />
+            Seleccionar todos
+          </label>
+          <button
+            type="button"
+            className="ui-btn-primary ui-btn-sm"
+            disabled={busy || selectedPayments.length === 0}
+            onClick={() => void linkSelected()}
+          >
+            {busy
+              ? "Asociando…"
+              : selectedPayments.length === 0
+                ? "Asociar seleccionados"
+                : `Asociar ${selectedPayments.length} · ${formatCLP(selectedTotal)}`}
+          </button>
+        </div>
+      ) : null}
+
       <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
         {loading ? (
           <li className="py-2 text-slate-500">Buscando pagos…</li>
         ) : payments.length === 0 ? (
           <li className="py-2 text-slate-500">No hay pagos disponibles en esas fechas.</li>
         ) : (
-          payments.map((payment) => (
-            <li
-              key={`${payment.source}-${payment.paymentId}`}
-              className="flex flex-wrap items-center justify-between gap-2 py-2"
-            >
-              <div>
-                <div>
-                  {payment.source === "banco" ? "Banco" : "Fudo"} · {payment.paidOn} ·{" "}
-                  {payment.label}
-                </div>
-                <div className="text-xs text-slate-500">
-                  {payment.detail} · Gasto {formatCLP(payment.amount)}
-                  {payment.remaining !== payment.amount
-                    ? ` · Disponible ${formatCLP(payment.remaining)}`
-                    : ""}
-                </div>
-                {payment.remaining > remaining ? (
-                  <div className="text-xs text-slate-500">
-                    En esta factura faltan {formatCLP(remaining)}. El botón asocia el gasto completo.
+          payments.map((payment) => {
+            const key = paymentKey(payment);
+            const checked = selected.has(key);
+            const disabled = payment.remaining <= 0 || busy;
+            return (
+              <li key={key} className="py-2">
+                <label
+                  className={`flex cursor-pointer flex-wrap items-start gap-3 ${
+                    disabled ? "cursor-not-allowed opacity-60" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 accent-[#e85e00]"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => togglePayment(payment)}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div>
+                      {payment.source === "banco" ? "Banco" : "Fudo"} · {payment.paidOn} ·{" "}
+                      {payment.label}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {payment.detail} · Gasto {formatCLP(payment.amount)}
+                      {payment.remaining !== payment.amount
+                        ? ` · Disponible ${formatCLP(payment.remaining)}`
+                        : ""}
+                    </div>
+                    {payment.remaining > remaining ? (
+                      <div className="text-xs text-slate-500">
+                        En esta factura faltan {formatCLP(remaining)}. Se asocia el gasto completo.
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="ui-btn-primary ui-btn-sm"
-                disabled={busyId === payment.paymentId || payment.remaining <= 0}
-                onClick={() => void linkPayment(payment)}
-              >
-                Asociar {formatCLP(payment.remaining)}
-              </button>
-            </li>
-          ))
+                </label>
+              </li>
+            );
+          })
         )}
       </ul>
     </section>
