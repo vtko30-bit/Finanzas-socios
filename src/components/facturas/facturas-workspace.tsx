@@ -1,11 +1,21 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { FacturaPagoPanel } from "@/components/facturas/factura-pago-panel";
 import { RCV_COMPANIES } from "@/lib/facturas/rcv";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 
 type View = "compras" | "ventas" | "nc";
+type SortKey =
+  | "companyName"
+  | "issuedOn"
+  | "docLabel"
+  | "folio"
+  | "counterpartyName"
+  | "payment"
+  | "totalAmount";
+type SortDir = "asc" | "desc";
 
 type TaxDocument = {
   id: string;
@@ -23,6 +33,45 @@ type TaxDocument = {
   invoiceKey: string;
   paidAmount: number;
 };
+
+const SORT_COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
+  { key: "companyName", label: "Empresa" },
+  { key: "issuedOn", label: "Fecha" },
+  { key: "docLabel", label: "Tipo" },
+  { key: "folio", label: "Folio" },
+  { key: "counterpartyName", label: "Contraparte" },
+  { key: "payment", label: "Pago" },
+  { key: "totalAmount", label: "Total", align: "right" },
+];
+
+function paymentRank(doc: TaxDocument) {
+  if (doc.docType === "61") return 3;
+  if (doc.paidAmount <= 0) return 0;
+  if (doc.paidAmount + 1 >= doc.totalAmount) return 2;
+  return 1;
+}
+
+function compareDocs(a: TaxDocument, b: TaxDocument, key: SortKey, dir: SortDir) {
+  const sign = dir === "asc" ? 1 : -1;
+  let result = 0;
+  if (key === "totalAmount") {
+    result = a.totalAmount - b.totalAmount;
+  } else if (key === "payment") {
+    result = paymentRank(a) - paymentRank(b);
+  } else if (key === "folio") {
+    result = a.folio.localeCompare(b.folio, "es", { numeric: true });
+  } else {
+    result = String(a[key] || "").localeCompare(String(b[key] || ""), "es", {
+      sensitivity: "base",
+    });
+  }
+  if (result === 0) {
+    result =
+      b.issuedOn.localeCompare(a.issuedOn) || a.folio.localeCompare(b.folio);
+    return result;
+  }
+  return result * sign;
+}
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "compras", label: "Compras" },
@@ -92,6 +141,17 @@ export function FacturasWorkspace() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [paying, setPaying] = useState<TaxDocument | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("issuedOn");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir(key === "issuedOn" || key === "totalAmount" ? "desc" : "asc");
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,11 +197,8 @@ export function FacturasWorkspace() {
             (company === "todas" || doc.issuerRut === company) &&
             matchesQuery(doc, normalizedQuery),
         )
-        .sort(
-          (a, b) =>
-            b.issuedOn.localeCompare(a.issuedOn) || a.folio.localeCompare(b.folio),
-        ),
-    [company, docs, normalizedQuery, period, view],
+        .sort((a, b) => compareDocs(a, b, sortKey, sortDir)),
+    [company, docs, normalizedQuery, period, sortDir, sortKey, view],
   );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -285,13 +342,40 @@ export function FacturasWorkspace() {
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
             <tr>
-              <th className="px-3 py-2 font-medium">Empresa</th>
-              <th className="px-3 py-2 font-medium">Fecha</th>
-              <th className="px-3 py-2 font-medium">Tipo</th>
-              <th className="px-3 py-2 font-medium">Folio</th>
-              <th className="px-3 py-2 font-medium">Contraparte</th>
-              <th className="px-3 py-2 font-medium">Pago</th>
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              {SORT_COLUMNS.map((column) => {
+                const active = sortKey === column.key;
+                const Icon = !active
+                  ? ArrowUpDown
+                  : sortDir === "asc"
+                    ? ArrowUp
+                    : ArrowDown;
+                return (
+                  <th
+                    key={column.key}
+                    className={`px-3 py-2 font-medium ${
+                      column.align === "right" ? "text-right" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-200/70 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${
+                        active ? "text-slate-800 dark:text-slate-100" : ""
+                      } ${column.align === "right" ? "ml-auto" : ""}`}
+                      onClick={() => toggleSort(column.key)}
+                      aria-label={`Ordenar por ${column.label}`}
+                      title={`Ordenar por ${column.label}`}
+                    >
+                      <span>{column.label}</span>
+                      <Icon
+                        className={`h-3.5 w-3.5 ${
+                          active ? "opacity-100" : "opacity-45"
+                        }`}
+                        aria-hidden
+                      />
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
