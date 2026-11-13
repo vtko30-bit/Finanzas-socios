@@ -31,9 +31,6 @@ export default function FacturasPage() {
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Facturas
         </h1>
-        <p className="text-sm text-slate-500">
-          Compras, ventas con factura y notas de crédito (SII)
-        </p>
       </div>
       <FacturasWorkspace />
     </div>

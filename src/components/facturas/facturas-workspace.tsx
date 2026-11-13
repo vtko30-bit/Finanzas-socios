@@ -297,19 +297,23 @@ export function FacturasWorkspace() {
       {!capsLoading && canWrite ? (
         <form
           onSubmit={onSubmit}
-          className="flex shrink-0 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-end"
+          className="flex shrink-0 flex-wrap items-center gap-2"
         >
-          <label className="block flex-1 text-sm text-slate-600 dark:text-slate-300">
-            CSV del SII
+          <label className="inline-flex max-w-xs items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <span className="whitespace-nowrap">CSV</span>
             <input
               name="files"
               type="file"
               accept=".csv,text/csv"
               multiple
-              className="mt-1 block w-full text-sm"
+              className="block w-full max-w-[14rem] text-xs"
             />
           </label>
-          <button type="submit" className="ui-btn-primary" disabled={uploading}>
+          <button
+            type="submit"
+            className="ui-btn-primary ui-btn-sm"
+            disabled={uploading}
+          >
             {uploading ? "Cargando…" : "Actualizar"}
           </button>
         </form>
