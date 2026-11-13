@@ -536,13 +536,19 @@ button {
 
 .fin-app__main {
   display: flex;
+  min-height: 0;
   min-width: 0;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .fin-app__content {
+  display: flex;
+  min-height: 0;
   min-width: 0;
   flex: 1;
+  flex-direction: column;
+  overflow: hidden;
   padding-bottom: 6.5rem;
 }
 

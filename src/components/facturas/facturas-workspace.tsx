@@ -293,11 +293,11 @@ export function FacturasWorkspace() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       {!capsLoading && canWrite ? (
         <form
           onSubmit={onSubmit}
-          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-end"
+          className="flex shrink-0 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-end"
         >
           <label className="block flex-1 text-sm text-slate-600 dark:text-slate-300">
             CSV del SII
@@ -325,7 +325,7 @@ export function FacturasWorkspace() {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         {VIEWS.map((item) => (
           <button
             key={item.id}
@@ -381,7 +381,7 @@ export function FacturasWorkspace() {
         />
       ) : null}
 
-      <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+      <div className="shrink-0 text-sm font-medium text-slate-700 dark:text-slate-200">
         {visible.length} documentos ·{" "}
         {formatCLP(
           view === "nc"
@@ -390,9 +390,9 @@ export function FacturasWorkspace() {
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
+        <table className="min-w-full border-separate border-spacing-0 text-sm">
+          <thead className="sticky top-0 z-20 bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
             <tr>
               {SORT_COLUMNS.map((column) => {
                 const active = sortKey === column.key;
@@ -404,7 +404,7 @@ export function FacturasWorkspace() {
                 return (
                   <th
                     key={column.key}
-                    className={`px-3 py-2 font-medium ${
+                    className={`bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900 ${
                       column.align === "right" ? "text-right" : ""
                     }`}
                   >
@@ -454,8 +454,11 @@ export function FacturasWorkspace() {
                     : netOf(group.items);
                 return (
                   <Fragment key={group.period}>
-                    <tr className="border-t border-slate-200 bg-[#f6f5f2] dark:border-slate-700 dark:bg-slate-900/80">
-                      <td colSpan={7} className="px-2 py-1.5">
+                    <tr className="border-t border-slate-200 dark:border-slate-700">
+                      <td
+                        colSpan={7}
+                        className="sticky top-10 z-10 bg-[#f6f5f2] px-2 py-1.5 dark:bg-slate-900"
+                      >
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#efece8] dark:hover:bg-slate-800"
