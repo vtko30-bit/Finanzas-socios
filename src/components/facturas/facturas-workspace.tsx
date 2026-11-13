@@ -314,11 +314,6 @@ export function FacturasWorkspace() {
           </button>
         </form>
       ) : null}
-      <p className="text-sm text-slate-500">
-        Compras: RCV_COMPRA_REGISTRO. Ventas con factura y notas de crédito emitidas: RCV_VENTA.
-        Volver a cargar un mes reemplaza ese mes y conserva los pagos ya asociados. En la columna
-        Pago puedes asociar una factura con un gasto de Fudo o un movimiento del banco.
-      </p>
       {error ? (
         <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {error}
