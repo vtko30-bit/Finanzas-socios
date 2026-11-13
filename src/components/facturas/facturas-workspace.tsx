@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react";
 import { FacturaPagoPanel } from "@/components/facturas/factura-pago-panel";
 import { RCV_COMPANIES } from "@/lib/facturas/rcv";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
@@ -129,6 +129,31 @@ function netOf(docs: TaxDocument[]) {
   );
 }
 
+function formatPeriodLabel(period: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (!match) return period || "Sin mes";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+  const label = date.toLocaleDateString("es-CL", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function groupByPeriod(docs: TaxDocument[]) {
+  const map = new Map<string, TaxDocument[]>();
+  for (const doc of docs) {
+    const key = doc.period || "sin-mes";
+    const list = map.get(key);
+    if (list) list.push(doc);
+    else map.set(key, [doc]);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([period, items]) => ({ period, items }));
+}
+
 export function FacturasWorkspace() {
   const { canWrite, loading: capsLoading } = useOrgCapabilities();
   const [view, setView] = useState<View>("compras");
@@ -143,6 +168,7 @@ export function FacturasWorkspace() {
   const [paying, setPaying] = useState<TaxDocument | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("issuedOn");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [openPeriods, setOpenPeriods] = useState<Set<string>>(new Set());
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -151,6 +177,15 @@ export function FacturasWorkspace() {
     }
     setSortKey(key);
     setSortDir(key === "issuedOn" || key === "totalAmount" ? "desc" : "asc");
+  }
+
+  function togglePeriod(periodKey: string) {
+    setOpenPeriods((current) => {
+      const next = new Set(current);
+      if (next.has(periodKey)) next.delete(periodKey);
+      else next.add(periodKey);
+      return next;
+    });
   }
 
   const load = useCallback(async () => {
@@ -200,6 +235,28 @@ export function FacturasWorkspace() {
         .sort((a, b) => compareDocs(a, b, sortKey, sortDir)),
     [company, docs, normalizedQuery, period, sortDir, sortKey, view],
   );
+
+  const groups = useMemo(() => groupByPeriod(visible), [visible]);
+
+  useEffect(() => {
+    if (groups.length === 0) {
+      setOpenPeriods(new Set());
+      return;
+    }
+    if (period !== "todos") {
+      setOpenPeriods(new Set([period]));
+      return;
+    }
+    setOpenPeriods((current) => {
+      if (current.size > 0) {
+        const stillValid = new Set(
+          [...current].filter((key) => groups.some((group) => group.period === key)),
+        );
+        if (stillValid.size > 0) return stillValid;
+      }
+      return new Set([groups[0].period]);
+    });
+  }, [groups, period]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -394,39 +451,80 @@ export function FacturasWorkspace() {
                 </td>
               </tr>
             ) : (
-              visible.map((doc) => (
-                <tr
-                  key={doc.id}
-                  className="border-t border-slate-100 dark:border-slate-800"
-                >
-                  <td className="whitespace-nowrap px-3 py-2">{doc.companyName}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{doc.issuedOn}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{doc.docLabel}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{doc.folio}</td>
-                  <td className="px-3 py-2">
-                    <div>{doc.counterpartyName || "—"}</div>
-                    <div className="text-xs text-slate-500">{doc.counterpartyRut}</div>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    {doc.docType === "61" ? (
-                      "—"
-                    ) : canWrite ? (
-                      <button
-                        type="button"
-                        className="ui-btn-secondary ui-btn-sm"
-                        onClick={() => setPaying(doc)}
-                      >
-                        {paymentLabel(doc)}
-                      </button>
-                    ) : (
-                      paymentLabel(doc)
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatCLP(doc.totalAmount)}
-                  </td>
-                </tr>
-              ))
+              groups.map((group) => {
+                const open = openPeriods.has(group.period);
+                const groupTotal =
+                  view === "nc"
+                    ? group.items.reduce((sum, doc) => sum + doc.totalAmount, 0)
+                    : netOf(group.items);
+                return (
+                  <Fragment key={group.period}>
+                    <tr className="border-t border-slate-200 bg-[#f6f5f2] dark:border-slate-700 dark:bg-slate-900/80">
+                      <td colSpan={7} className="px-2 py-1.5">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#efece8] dark:hover:bg-slate-800"
+                          onClick={() => togglePeriod(group.period)}
+                          aria-expanded={open}
+                        >
+                          {open ? (
+                            <ChevronDown className="h-4 w-4 shrink-0 text-[#e85e00]" aria-hidden />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 shrink-0 text-[#e85e00]" aria-hidden />
+                          )}
+                          <span className="font-semibold text-stone-900 dark:text-stone-100">
+                            {formatPeriodLabel(group.period)}
+                          </span>
+                          <span className="text-xs text-stone-500">
+                            {group.items.length} documento
+                            {group.items.length === 1 ? "" : "s"}
+                          </span>
+                          <span className="ml-auto text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
+                            {formatCLP(groupTotal)}
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                    {open
+                      ? group.items.map((doc) => (
+                          <tr
+                            key={doc.id}
+                            className="border-t border-slate-100 dark:border-slate-800"
+                          >
+                            <td className="whitespace-nowrap px-3 py-2">{doc.companyName}</td>
+                            <td className="whitespace-nowrap px-3 py-2">{doc.issuedOn}</td>
+                            <td className="whitespace-nowrap px-3 py-2">{doc.docLabel}</td>
+                            <td className="whitespace-nowrap px-3 py-2">{doc.folio}</td>
+                            <td className="px-3 py-2">
+                              <div>{doc.counterpartyName || "—"}</div>
+                              <div className="text-xs text-slate-500">
+                                {doc.counterpartyRut}
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {doc.docType === "61" ? (
+                                "—"
+                              ) : canWrite ? (
+                                <button
+                                  type="button"
+                                  className="ui-btn-secondary ui-btn-sm"
+                                  onClick={() => setPaying(doc)}
+                                >
+                                  {paymentLabel(doc)}
+                                </button>
+                              ) : (
+                                paymentLabel(doc)
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatCLP(doc.totalAmount)}
+                            </td>
+                          </tr>
+                        ))
+                      : null}
+                  </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>
