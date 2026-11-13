@@ -129,29 +129,48 @@ function netOf(docs: TaxDocument[]) {
   );
 }
 
-function formatPeriodLabel(period: string) {
+function yearFromPeriod(period: string) {
+  const match = /^(\d{4})/.exec(period || "");
+  return match?.[1] || "Sin año";
+}
+
+function formatMonthLabel(period: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(period);
   if (!match) return period || "Sin mes";
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
   const label = date.toLocaleDateString("es-CL", {
     month: "long",
-    year: "numeric",
     timeZone: "UTC",
   });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function groupByPeriod(docs: TaxDocument[]) {
-  const map = new Map<string, TaxDocument[]>();
+function groupByYearAndPeriod(docs: TaxDocument[]) {
+  const byYear = new Map<string, Map<string, TaxDocument[]>>();
   for (const doc of docs) {
-    const key = doc.period || "sin-mes";
-    const list = map.get(key);
+    const period = doc.period || "sin-mes";
+    const year = yearFromPeriod(period);
+    let months = byYear.get(year);
+    if (!months) {
+      months = new Map();
+      byYear.set(year, months);
+    }
+    const list = months.get(period);
     if (list) list.push(doc);
-    else map.set(key, [doc]);
+    else months.set(period, [doc]);
   }
-  return Array.from(map.entries())
+  return Array.from(byYear.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([period, items]) => ({ period, items }));
+    .map(([year, months]) => {
+      const monthGroups = Array.from(months.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([period, items]) => ({ period, items }));
+      return {
+        year,
+        months: monthGroups,
+        items: monthGroups.flatMap((month) => month.items),
+      };
+    });
 }
 
 export function FacturasWorkspace() {
@@ -168,6 +187,7 @@ export function FacturasWorkspace() {
   const [paying, setPaying] = useState<TaxDocument | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("issuedOn");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [openYears, setOpenYears] = useState<Set<string>>(new Set());
   const [openPeriods, setOpenPeriods] = useState<Set<string>>(new Set());
 
   function toggleSort(key: SortKey) {
@@ -179,11 +199,11 @@ export function FacturasWorkspace() {
     setSortDir(key === "issuedOn" || key === "totalAmount" ? "desc" : "asc");
   }
 
-  function togglePeriod(periodKey: string) {
-    setOpenPeriods((current) => {
+  function toggleSetKey(setter: typeof setOpenYears, key: string) {
+    setter((current) => {
       const next = new Set(current);
-      if (next.has(periodKey)) next.delete(periodKey);
-      else next.add(periodKey);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -236,27 +256,46 @@ export function FacturasWorkspace() {
     [company, docs, normalizedQuery, period, sortDir, sortKey, view],
   );
 
-  const groups = useMemo(() => groupByPeriod(visible), [visible]);
+  const yearGroups = useMemo(() => groupByYearAndPeriod(visible), [visible]);
 
   useEffect(() => {
-    if (groups.length === 0) {
+    if (yearGroups.length === 0) {
+      setOpenYears(new Set());
       setOpenPeriods(new Set());
       return;
     }
     if (period !== "todos") {
+      const year = yearFromPeriod(period);
+      setOpenYears(new Set([year]));
       setOpenPeriods(new Set([period]));
       return;
     }
-    setOpenPeriods((current) => {
+    setOpenYears((current) => {
       if (current.size > 0) {
         const stillValid = new Set(
-          [...current].filter((key) => groups.some((group) => group.period === key)),
+          [...current].filter((key) =>
+            yearGroups.some((group) => group.year === key),
+          ),
         );
         if (stillValid.size > 0) return stillValid;
       }
-      return new Set([groups[0].period]);
+      return new Set([yearGroups[0].year]);
     });
-  }, [groups, period]);
+    setOpenPeriods((current) => {
+      const firstYear = yearGroups[0];
+      if (current.size > 0) {
+        const stillValid = new Set(
+          [...current].filter((key) =>
+            yearGroups.some((group) =>
+              group.months.some((month) => month.period === key),
+            ),
+          ),
+        );
+        if (stillValid.size > 0) return stillValid;
+      }
+      return new Set(firstYear.months[0] ? [firstYear.months[0].period] : []);
+    });
+  }, [period, yearGroups]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -459,79 +498,140 @@ export function FacturasWorkspace() {
                 </td>
               </tr>
             ) : (
-              groups.map((group) => {
-                const open = openPeriods.has(group.period);
-                const groupTotal =
+              yearGroups.map((yearGroup) => {
+                const yearOpen = openYears.has(yearGroup.year);
+                const yearTotal =
                   view === "nc"
-                    ? group.items.reduce((sum, doc) => sum + doc.totalAmount, 0)
-                    : netOf(group.items);
+                    ? yearGroup.items.reduce((sum, doc) => sum + doc.totalAmount, 0)
+                    : netOf(yearGroup.items);
                 return (
-                  <Fragment key={group.period}>
+                  <Fragment key={yearGroup.year}>
                     <tr className="border-t border-slate-200 dark:border-slate-700">
                       <td
                         colSpan={7}
-                        className="sticky top-10 z-10 bg-[#f6f5f2] px-2 py-1.5 dark:bg-slate-900"
+                        className="sticky top-10 z-20 bg-[#efece8] px-2 py-1.5 dark:bg-slate-950"
                       >
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#efece8] dark:hover:bg-slate-800"
-                          onClick={() => togglePeriod(group.period)}
-                          aria-expanded={open}
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#e7e3dd] dark:hover:bg-slate-900"
+                          onClick={() => toggleSetKey(setOpenYears, yearGroup.year)}
+                          aria-expanded={yearOpen}
                         >
-                          {open ? (
+                          {yearOpen ? (
                             <ChevronDown className="h-4 w-4 shrink-0 text-[#e85e00]" aria-hidden />
                           ) : (
                             <ChevronRight className="h-4 w-4 shrink-0 text-[#e85e00]" aria-hidden />
                           )}
-                          <span className="font-semibold text-stone-900 dark:text-stone-100">
-                            {formatPeriodLabel(group.period)}
+                          <span className="text-base font-bold text-stone-900 dark:text-stone-100">
+                            {yearGroup.year}
                           </span>
                           <span className="text-xs text-stone-500">
-                            {group.items.length} documento
-                            {group.items.length === 1 ? "" : "s"}
+                            {yearGroup.items.length} documento
+                            {yearGroup.items.length === 1 ? "" : "s"}
                           </span>
                           <span className="ml-auto text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
-                            {formatCLP(groupTotal)}
+                            {formatCLP(yearTotal)}
                           </span>
                         </button>
                       </td>
                     </tr>
-                    {open
-                      ? group.items.map((doc) => (
-                          <tr
-                            key={doc.id}
-                            className="border-t border-slate-100 dark:border-slate-800"
-                          >
-                            <td className="whitespace-nowrap px-3 py-2">{doc.companyName}</td>
-                            <td className="whitespace-nowrap px-3 py-2">{doc.issuedOn}</td>
-                            <td className="whitespace-nowrap px-3 py-2">{doc.docLabel}</td>
-                            <td className="whitespace-nowrap px-3 py-2">{doc.folio}</td>
-                            <td className="px-3 py-2">
-                              <div>{doc.counterpartyName || "—"}</div>
-                              <div className="text-xs text-slate-500">
-                                {doc.counterpartyRut}
-                              </div>
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-2">
-                              {doc.docType === "61" ? (
-                                "—"
-                              ) : canWrite ? (
-                                <button
-                                  type="button"
-                                  className="ui-btn-secondary ui-btn-sm"
-                                  onClick={() => setPaying(doc)}
+                    {yearOpen
+                      ? yearGroup.months.map((month) => {
+                          const monthOpen = openPeriods.has(month.period);
+                          const monthTotal =
+                            view === "nc"
+                              ? month.items.reduce(
+                                  (sum, doc) => sum + doc.totalAmount,
+                                  0,
+                                )
+                              : netOf(month.items);
+                          return (
+                            <Fragment key={month.period}>
+                              <tr className="border-t border-slate-200 dark:border-slate-700">
+                                <td
+                                  colSpan={7}
+                                  className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-2 py-1 dark:bg-slate-900"
                                 >
-                                  {paymentLabel(doc)}
-                                </button>
-                              ) : (
-                                paymentLabel(doc)
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatCLP(doc.totalAmount)}
-                            </td>
-                          </tr>
-                        ))
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pl-6 text-left hover:bg-[#efece8] dark:hover:bg-slate-800"
+                                    onClick={() =>
+                                      toggleSetKey(setOpenPeriods, month.period)
+                                    }
+                                    aria-expanded={monthOpen}
+                                  >
+                                    {monthOpen ? (
+                                      <ChevronDown
+                                        className="h-4 w-4 shrink-0 text-[#e85e00]"
+                                        aria-hidden
+                                      />
+                                    ) : (
+                                      <ChevronRight
+                                        className="h-4 w-4 shrink-0 text-[#e85e00]"
+                                        aria-hidden
+                                      />
+                                    )}
+                                    <span className="font-semibold text-stone-900 dark:text-stone-100">
+                                      {formatMonthLabel(month.period)}
+                                    </span>
+                                    <span className="text-xs text-stone-500">
+                                      {month.items.length} documento
+                                      {month.items.length === 1 ? "" : "s"}
+                                    </span>
+                                    <span className="ml-auto text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
+                                      {formatCLP(monthTotal)}
+                                    </span>
+                                  </button>
+                                </td>
+                              </tr>
+                              {monthOpen
+                                ? month.items.map((doc) => (
+                                    <tr
+                                      key={doc.id}
+                                      className="border-t border-slate-100 dark:border-slate-800"
+                                    >
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {doc.companyName}
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {doc.issuedOn}
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {doc.docLabel}
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {doc.folio}
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <div>{doc.counterpartyName || "—"}</div>
+                                        <div className="text-xs text-slate-500">
+                                          {doc.counterpartyRut}
+                                        </div>
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {doc.docType === "61" ? (
+                                          "—"
+                                        ) : canWrite ? (
+                                          <button
+                                            type="button"
+                                            className="ui-btn-secondary ui-btn-sm"
+                                            onClick={() => setPaying(doc)}
+                                          >
+                                            {paymentLabel(doc)}
+                                          </button>
+                                        ) : (
+                                          paymentLabel(doc)
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {formatCLP(doc.totalAmount)}
+                                      </td>
+                                    </tr>
+                                  ))
+                                : null}
+                            </Fragment>
+                          );
+                        })
                       : null}
                   </Fragment>
                 );
