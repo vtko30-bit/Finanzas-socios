@@ -36,8 +36,8 @@ type TaxDocument = {
 };
 
 const SORT_COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
-  { key: "companyName", label: "Empresa" },
   { key: "period", label: "Mes" },
+  { key: "companyName", label: "Empresa" },
   { key: "issuedOn", label: "Fecha" },
   { key: "docLabel", label: "Tipo" },
   { key: "folio", label: "Folio" },
@@ -510,14 +510,11 @@ export function FacturasWorkspace() {
                     : netOf(yearGroup.items);
                 return (
                   <Fragment key={yearGroup.year}>
-                    <tr className="border-t border-slate-200 dark:border-slate-700">
-                      <td
-                        colSpan={8}
-                        className="sticky top-10 z-20 bg-[#efece8] px-2 py-1.5 dark:bg-slate-950"
-                      >
+                    <tr className="border-t border-slate-200 bg-[#efece8] dark:border-slate-700 dark:bg-slate-950">
+                      <td className="sticky top-10 z-20 whitespace-nowrap bg-[#efece8] px-3 py-2 dark:bg-slate-950">
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#e7e3dd] dark:hover:bg-slate-900"
+                          className="inline-flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100"
                           onClick={() => toggleSetKey(setOpenYears, yearGroup.year)}
                           aria-expanded={yearOpen}
                         >
@@ -526,17 +523,20 @@ export function FacturasWorkspace() {
                           ) : (
                             <ChevronRight className="h-4 w-4 shrink-0 text-[#e85e00]" aria-hidden />
                           )}
-                          <span className="text-base font-bold text-stone-900 dark:text-stone-100">
-                            {yearGroup.year}
-                          </span>
-                          <span className="text-xs text-stone-500">
-                            {yearGroup.items.length} documento
-                            {yearGroup.items.length === 1 ? "" : "s"}
-                          </span>
-                          <span className="ml-auto text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
-                            {formatCLP(yearTotal)}
-                          </span>
+                          {yearGroup.year}
                         </button>
+                      </td>
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 text-xs text-stone-500 dark:bg-slate-950">
+                        {yearGroup.items.length} documento
+                        {yearGroup.items.length === 1 ? "" : "s"}
+                      </td>
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
+                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 text-right text-sm font-semibold tabular-nums text-stone-800 dark:bg-slate-950 dark:text-stone-100">
+                        {formatCLP(yearTotal)}
                       </td>
                     </tr>
                     {yearOpen
@@ -551,14 +551,11 @@ export function FacturasWorkspace() {
                               : netOf(month.items);
                           return (
                             <Fragment key={month.period}>
-                              <tr className="border-t border-slate-200 dark:border-slate-700">
-                                <td
-                                  colSpan={8}
-                                  className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-2 py-1 dark:bg-slate-900"
-                                >
+                              <tr className="border-t border-slate-200 bg-[#f6f5f2] dark:border-slate-700 dark:bg-slate-900">
+                                <td className="sticky top-[4.75rem] z-10 whitespace-nowrap bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900">
                                   <button
                                     type="button"
-                                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pl-6 text-left hover:bg-[#efece8] dark:hover:bg-slate-800"
+                                    className="inline-flex items-center gap-1.5 font-semibold text-stone-900 dark:text-stone-100"
                                     onClick={() =>
                                       toggleSetKey(setOpenPeriods, month.period)
                                     }
@@ -575,17 +572,20 @@ export function FacturasWorkspace() {
                                         aria-hidden
                                       />
                                     )}
-                                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                                      {formatMonthLabel(month.period)}
-                                    </span>
-                                    <span className="text-xs text-stone-500">
-                                      {month.items.length} documento
-                                      {month.items.length === 1 ? "" : "s"}
-                                    </span>
-                                    <span className="ml-auto text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
-                                      {formatCLP(monthTotal)}
-                                    </span>
+                                    {formatMonthLabel(month.period)}
                                   </button>
+                                </td>
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 text-xs text-stone-500 dark:bg-slate-900">
+                                  {month.items.length} documento
+                                  {month.items.length === 1 ? "" : "s"}
+                                </td>
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
+                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 text-right text-sm font-semibold tabular-nums text-stone-800 dark:bg-slate-900 dark:text-stone-100">
+                                  {formatCLP(monthTotal)}
                                 </td>
                               </tr>
                               {monthOpen
@@ -594,11 +594,9 @@ export function FacturasWorkspace() {
                                       key={doc.id}
                                       className="border-t border-slate-100 dark:border-slate-800"
                                     >
+                                      <td className="px-3 py-2" />
                                       <td className="whitespace-nowrap px-3 py-2">
                                         {doc.companyName}
-                                      </td>
-                                      <td className="whitespace-nowrap px-3 py-2">
-                                        {formatMonthLabel(doc.period)}
                                       </td>
                                       <td className="whitespace-nowrap px-3 py-2">
                                         {doc.issuedOn}
