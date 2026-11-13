@@ -340,7 +340,9 @@ export function FacturasWorkspace() {
             key={item.id}
             type="button"
             className={
-              view === item.id ? "ui-btn-primary ui-btn-sm" : "ui-btn-secondary ui-btn-sm"
+              view === item.id
+                ? "ui-btn-primary ui-btn-sm h-8"
+                : "ui-btn-secondary ui-btn-sm h-8"
             }
             onClick={() => setView(item.id)}
           >
@@ -348,7 +350,7 @@ export function FacturasWorkspace() {
           </button>
         ))}
         <select
-          className="ui-field w-auto"
+          className="ui-btn-secondary ui-btn-sm h-8 w-auto appearance-none pr-8"
           value={company}
           onChange={(event) => setCompany(event.target.value)}
           aria-label="Razón social"
@@ -361,14 +363,14 @@ export function FacturasWorkspace() {
           ))}
         </select>
         <input
-          className="ui-field min-w-48 flex-1"
+          className="ui-btn-secondary ui-btn-sm h-8 min-w-48 flex-1 font-normal"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar proveedor, RUT o folio"
           aria-label="Buscar facturas"
         />
         <select
-          className="ui-field w-auto"
+          className="ui-btn-secondary ui-btn-sm h-8 w-auto appearance-none pr-8"
           value={period}
           onChange={(event) => setPeriod(event.target.value)}
           aria-label="Mes"
