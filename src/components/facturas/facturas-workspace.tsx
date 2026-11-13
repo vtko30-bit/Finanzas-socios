@@ -301,21 +301,21 @@ export function FacturasWorkspace() {
         {!capsLoading && canWrite ? (
           <form
             onSubmit={onSubmit}
-            className="ml-auto flex flex-wrap items-center justify-end gap-2"
+            className="ml-auto flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm"
           >
-            <label className="inline-flex max-w-xs items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-              <span className="whitespace-nowrap">CSV</span>
+            <label className="inline-flex h-7 cursor-pointer items-center rounded-lg px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-100">
+              Cargar CSV SII
               <input
                 name="files"
                 type="file"
                 accept=".csv,text/csv"
                 multiple
-                className="block w-full max-w-[14rem] text-xs"
+                className="sr-only"
               />
             </label>
             <button
               type="submit"
-              className="ui-btn-primary ui-btn-sm"
+              className="ui-btn-primary ui-btn-sm h-7 !rounded-lg"
               disabled={uploading}
             >
               {uploading ? "Cargando…" : "Actualizar"}
