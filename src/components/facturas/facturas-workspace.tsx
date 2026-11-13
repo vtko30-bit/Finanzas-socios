@@ -294,14 +294,14 @@ export function FacturasWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold leading-none text-slate-900 dark:text-slate-100">
           Facturas
         </h1>
         {!capsLoading && canWrite ? (
           <form
             onSubmit={onSubmit}
-            className="ml-auto flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm"
+            className="ml-auto mt-2 flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm"
           >
             <label className="inline-flex h-7 cursor-pointer items-center rounded-lg px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-100">
               Cargar CSV SII
