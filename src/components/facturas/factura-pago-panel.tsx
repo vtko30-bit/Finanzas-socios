@@ -169,6 +169,21 @@ export function FacturaPagoPanel({
     return true;
   }
 
+  async function linkOneAndClose(payment: PaymentRow) {
+    setBusy(true);
+    setError("");
+    const ok = await linkOne(payment);
+    setBusy(false);
+    if (!ok) {
+      await onChanged();
+      await load(query);
+      return;
+    }
+    setSelected(new Set());
+    await onChanged();
+    onClose();
+  }
+
   async function linkSelected() {
     if (selectedPayments.length === 0) return;
     setBusy(true);
@@ -309,9 +324,12 @@ export function FacturaPagoPanel({
             const checked = selected.has(key);
             const disabled = payment.remaining <= 0 || busy;
             return (
-              <li key={key} className="py-2">
+              <li
+                key={key}
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
+              >
                 <label
-                  className={`flex cursor-pointer flex-wrap items-start gap-3 ${
+                  className={`flex min-w-0 flex-1 cursor-pointer items-start gap-3 ${
                     disabled ? "cursor-not-allowed opacity-60" : ""
                   }`}
                 >
@@ -340,6 +358,14 @@ export function FacturaPagoPanel({
                     ) : null}
                   </div>
                 </label>
+                <button
+                  type="button"
+                  className="ui-btn-primary ui-btn-sm"
+                  disabled={disabled}
+                  onClick={() => void linkOneAndClose(payment)}
+                >
+                  Asociar {formatCLP(payment.remaining)}
+                </button>
               </li>
             );
           })
