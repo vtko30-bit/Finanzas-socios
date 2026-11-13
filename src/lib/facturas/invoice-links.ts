@@ -46,12 +46,13 @@ export async function saveInvoiceLinks(params: {
     if (error) throw new Error(error.message);
     return;
   }
+  // No guardar created_by: el id de usuario de Finanzas no existe en auth.users de RG Suite.
   const { error } = await admin.schema("finanzas").from("import_batches").insert({
     organization_id: params.organizationId,
     filename: FILE_NAME,
     status: "imported",
     summary_json: summary,
-    created_by: params.createdBy ?? null,
+    created_by: null,
   });
   if (error) throw new Error(error.message);
 }
