@@ -26,7 +26,7 @@ export default function FacturasPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+    <div className="facturas-page mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
       <div className="shrink-0">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Facturas

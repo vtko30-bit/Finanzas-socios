@@ -315,12 +315,12 @@ export function FacturasWorkspace() {
         </form>
       ) : null}
       {error ? (
-        <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+        <p className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {error}
         </p>
       ) : null}
       {status ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <p className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {status}
         </p>
       ) : null}
@@ -374,11 +374,13 @@ export function FacturasWorkspace() {
       </div>
 
       {paying && paying.docType !== "61" ? (
-        <FacturaPagoPanel
-          doc={paying}
-          onClose={() => setPaying(null)}
-          onChanged={load}
-        />
+        <div className="max-h-[40%] shrink-0 overflow-auto">
+          <FacturaPagoPanel
+            doc={paying}
+            onClose={() => setPaying(null)}
+            onChanged={load}
+          />
+        </div>
       ) : null}
 
       <div className="shrink-0 text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -390,7 +392,7 @@ export function FacturasWorkspace() {
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border border-slate-200 dark:border-slate-800">
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20 bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
             <tr>

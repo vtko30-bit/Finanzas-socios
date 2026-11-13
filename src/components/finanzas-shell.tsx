@@ -289,7 +289,13 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
             <p className="fin-topbar__date">{today}</p>
           </div>
         </header>
-        <div className="fin-app__content">{children}</div>
+        <div
+          className={`fin-app__content${
+            pathname.startsWith("/facturas") ? " fin-app__content--locked" : ""
+          }`}
+        >
+          {children}
+        </div>
       </div>
 
       <SuiteDock />

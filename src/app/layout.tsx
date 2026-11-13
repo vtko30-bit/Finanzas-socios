@@ -38,7 +38,7 @@ export default function RootLayout({
       lang="es"
       className={`${dmSans.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full min-w-0 flex-col overflow-x-hidden bg-[#f6f5f2] font-sans text-stone-900">
+      <body className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#f6f5f2] font-sans text-stone-900">
         <AuthProvider>
           <OrgCapabilitiesProvider>
             <FinanzasShell>{children}</FinanzasShell>

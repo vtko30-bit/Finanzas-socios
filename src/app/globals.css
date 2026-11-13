@@ -525,8 +525,12 @@ button {
   --sidebar-width: 16.5rem;
   --sidebar-width-icon: 4.75rem;
   display: grid;
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
   background: var(--background);
 }
 
@@ -536,6 +540,7 @@ button {
 
 .fin-app__main {
   display: flex;
+  height: 100%;
   min-height: 0;
   min-width: 0;
   flex-direction: column;
@@ -543,13 +548,22 @@ button {
 }
 
 .fin-app__content {
-  display: flex;
   min-height: 0;
   min-width: 0;
   flex: 1;
+  overflow: auto;
+  padding-bottom: 6.5rem;
+}
+
+/* Facturas: no scrollea la página; solo el listado */
+.fin-app__content--locked {
+  display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: 6.5rem;
+}
+
+.fin-app__content--locked > * {
+  min-height: 0;
 }
 
 .fin-sidebar {
@@ -906,6 +920,7 @@ button {
   .fin-app,
   .fin-app--collapsed {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr);
   }
   .fin-topbar__date { display: none; }
 }
