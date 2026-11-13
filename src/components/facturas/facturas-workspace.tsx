@@ -9,6 +9,7 @@ import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 type View = "compras" | "ventas" | "nc";
 type SortKey =
   | "companyName"
+  | "period"
   | "issuedOn"
   | "docLabel"
   | "folio"
@@ -36,6 +37,7 @@ type TaxDocument = {
 
 const SORT_COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "companyName", label: "Empresa" },
+  { key: "period", label: "Mes" },
   { key: "issuedOn", label: "Fecha" },
   { key: "docLabel", label: "Tipo" },
   { key: "folio", label: "Folio" },
@@ -60,6 +62,8 @@ function compareDocs(a: TaxDocument, b: TaxDocument, key: SortKey, dir: SortDir)
     result = paymentRank(a) - paymentRank(b);
   } else if (key === "folio") {
     result = a.folio.localeCompare(b.folio, "es", { numeric: true });
+  } else if (key === "period") {
+    result = (a.period || "").localeCompare(b.period || "");
   } else {
     result = String(a[key] || "").localeCompare(String(b[key] || ""), "es", {
       sensitivity: "base",
@@ -485,13 +489,13 @@ export function FacturasWorkspace() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={7}>
+                <td className="px-3 py-4 text-slate-500" colSpan={8}>
                   Cargando…
                 </td>
               </tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={7}>
+                <td className="px-3 py-4 text-slate-500" colSpan={8}>
                   {query.trim()
                     ? "Ningún documento coincide con la búsqueda."
                     : "No hay documentos en esta vista."}
@@ -508,7 +512,7 @@ export function FacturasWorkspace() {
                   <Fragment key={yearGroup.year}>
                     <tr className="border-t border-slate-200 dark:border-slate-700">
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="sticky top-10 z-20 bg-[#efece8] px-2 py-1.5 dark:bg-slate-950"
                       >
                         <button
@@ -549,7 +553,7 @@ export function FacturasWorkspace() {
                             <Fragment key={month.period}>
                               <tr className="border-t border-slate-200 dark:border-slate-700">
                                 <td
-                                  colSpan={7}
+                                  colSpan={8}
                                   className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-2 py-1 dark:bg-slate-900"
                                 >
                                   <button
@@ -592,6 +596,9 @@ export function FacturasWorkspace() {
                                     >
                                       <td className="whitespace-nowrap px-3 py-2">
                                         {doc.companyName}
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {formatMonthLabel(doc.period)}
                                       </td>
                                       <td className="whitespace-nowrap px-3 py-2">
                                         {doc.issuedOn}
