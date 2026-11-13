@@ -294,30 +294,35 @@ export function FacturasWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {!capsLoading && canWrite ? (
-        <form
-          onSubmit={onSubmit}
-          className="flex shrink-0 flex-wrap items-center gap-2"
-        >
-          <label className="inline-flex max-w-xs items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <span className="whitespace-nowrap">CSV</span>
-            <input
-              name="files"
-              type="file"
-              accept=".csv,text/csv"
-              multiple
-              className="block w-full max-w-[14rem] text-xs"
-            />
-          </label>
-          <button
-            type="submit"
-            className="ui-btn-primary ui-btn-sm"
-            disabled={uploading}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+          Facturas
+        </h1>
+        {!capsLoading && canWrite ? (
+          <form
+            onSubmit={onSubmit}
+            className="ml-auto flex flex-wrap items-center justify-end gap-2"
           >
-            {uploading ? "Cargando…" : "Actualizar"}
-          </button>
-        </form>
-      ) : null}
+            <label className="inline-flex max-w-xs items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <span className="whitespace-nowrap">CSV</span>
+              <input
+                name="files"
+                type="file"
+                accept=".csv,text/csv"
+                multiple
+                className="block w-full max-w-[14rem] text-xs"
+              />
+            </label>
+            <button
+              type="submit"
+              className="ui-btn-primary ui-btn-sm"
+              disabled={uploading}
+            >
+              {uploading ? "Cargando…" : "Actualizar"}
+            </button>
+          </form>
+        ) : null}
+      </div>
       {error ? (
         <p className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {error}
