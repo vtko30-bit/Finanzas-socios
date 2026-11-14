@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import {
-  ChevronDown,
-  Home,
-  LogOut,
-  PanelLeft,
-  PanelLeftClose,
-} from "lucide-react";
+import { LogOut, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
 import { SuiteDock } from "@/components/suite-dock";
@@ -160,28 +154,6 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
           )}
         </button>
       </div>
-
-      {!collapsed ? (
-        <details className="fin-sidebar__switcher">
-          <summary>
-            Cambiar de app
-            <ChevronDown className="h-3.5 w-3.5" />
-          </summary>
-          <a href={RG_SUITE_URL} className="fin-sidebar__switcher-item">
-            <Home className="h-3.5 w-3.5" />
-            Mis aplicaciones
-          </a>
-        </details>
-      ) : (
-        <a
-          href={RG_SUITE_URL}
-          className="fin-sidebar__icon-btn"
-          title="Mis aplicaciones"
-          aria-label="Mis aplicaciones"
-        >
-          <Home className="h-4 w-4" />
-        </a>
-      )}
 
       <nav className="fin-sidebar__nav">
         <NavGroup
