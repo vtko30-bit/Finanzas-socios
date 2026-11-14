@@ -704,7 +704,7 @@ export default function PrestamosOtorgadosPage() {
                 {canWrite ? (
                   <button
                     type="button"
-                    className="rounded p-1 text-indigo-700 hover:bg-indigo-50"
+                    className="rounded p-1 text-[#d45500] hover:bg-[#fbe7d8]"
                     title="Editar préstamo"
                     aria-label="Editar préstamo"
                     onClick={() =>
@@ -1025,7 +1025,7 @@ export default function PrestamosOtorgadosPage() {
               </button>
               <button
                 type="submit"
-                className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded bg-[#e85e00] px-3 py-2 text-sm font-medium text-white hover:bg-[#d45500] disabled:opacity-50"
                 disabled={editBusy}
               >
                 {editBusy ? "Guardando…" : "Guardar cambios"}

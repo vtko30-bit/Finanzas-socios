@@ -2650,7 +2650,7 @@ function GastosPageContent() {
               {canWrite && isReconcilableImportSource(detailRow.source) ? (
                 <button
                   type="button"
-                  className="rounded border border-indigo-700 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                  className="rounded border border-[#d45500] bg-[#fbe7d8] px-3 py-2 text-sm text-[#9a3f00] hover:bg-[#f6d7bf] disabled:opacity-50"
                   disabled={uiBloqueadoGuardado}
                   title="Marcar este egreso importado como correspondiente a una cuota ya pagada. Deja de aparecer en Gastos."
                   onClick={() => {

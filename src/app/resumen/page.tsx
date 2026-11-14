@@ -1947,7 +1947,7 @@ export default function ResumenPage() {
                               {formatClp(totalesCreditosTabla.porMes[mk] ?? 0)}
                             </td>
                           ))}
-                          <td className={`${tdNum} font-semibold text-indigo-800`}>
+                          <td className={`${tdNum} font-semibold text-[#d45500]`}>
                             {formatClp(totalesCreditosTabla.total)}
                           </td>
                         </tr>

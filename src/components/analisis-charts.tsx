@@ -63,28 +63,28 @@ const MES_CORTO = [
 
 const SUCURSAL_COLOR: Record<string, string> = {
   Rg: "#059669",
-  Happy: "#0284c7",
-  Eventos: "#7c3aed",
+  Happy: "#0f766e",
+  Eventos: "#a16207",
 };
 
 const SUCURSAL_COLOR_B: Record<string, string> = {
   Rg: "#6ee7b7",
-  Happy: "#7dd3fc",
-  Eventos: "#c4b5fd",
+  Happy: "#5eead4",
+  Eventos: "#fcd34d",
 };
 
 const MES_COLORS = [
   "#059669",
-  "#0284c7",
-  "#7c3aed",
+  "#0f766e",
+  "#a16207",
   "#dc2626",
   "#d97706",
-  "#0f766e",
+  "#115e59",
   "#e85e00",
-  "#c026d3",
+  "#b45309",
   "#ca8a04",
   "#be123c",
-  "#4338ca",
+  "#9a3412",
   "#15803d",
 ];
 
@@ -851,7 +851,7 @@ export function AnalisisCharts() {
                   type="monotone"
                   dataKey="neto"
                   name="Neto del mes"
-                  stroke="#0369a6"
+                  stroke="#e85e00"
                   strokeWidth={2}
                   dot={false}
                 />
@@ -883,7 +883,7 @@ export function AnalisisCharts() {
                   {evoData.map((m) => (
                     <Cell
                       key={m.periodo}
-                      fill={m.neto >= 0 ? "#0369a6" : "#dc2626"}
+                      fill={m.neto >= 0 ? "#e85e00" : "#dc2626"}
                     />
                   ))}
                 </Bar>

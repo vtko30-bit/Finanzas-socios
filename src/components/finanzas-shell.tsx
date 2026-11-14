@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut, PanelLeft, PanelLeftClose } from "lucide-react";
+import { ChevronDown, LogOut, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
 import { SuiteDock } from "@/components/suite-dock";
@@ -35,7 +35,7 @@ const NAV_FINANCE: NavItem[] = [
   { href: "/inversiones", label: "Inversiones" },
 ];
 
-const NAV_CATALOG: NavItem[] = [
+const NAV_CONFIG: NavItem[] = [
   { href: "/empresa", label: "Empresa" },
   { href: "/categorias", label: "Categorías" },
   { href: "/familias", label: "Familias" },
@@ -52,41 +52,72 @@ function linkActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function groupHasActive(pathname: string, items: NavItem[]) {
+  return items.some((item) => linkActive(pathname, item.href));
+}
+
 function NavGroup({
+  id,
   title,
   items,
   pathname,
   onNavigate,
   collapsed,
+  open,
+  onToggle,
+  alwaysOpen,
 }: {
+  id: string;
   title: string;
   items: NavItem[];
   pathname: string;
   onNavigate?: () => void;
   collapsed?: boolean;
+  open: boolean;
+  onToggle: (id: string) => void;
+  alwaysOpen?: boolean;
 }) {
   if (items.length === 0) return null;
+
+  const showLinks = collapsed || alwaysOpen || open;
+
   return (
-    <div className="fin-sidebar__group">
+    <div className={`fin-sidebar__group${open || alwaysOpen ? " is-open" : ""}`}>
       {!collapsed ? (
-        <p className="fin-sidebar__group-title">{title}</p>
+        alwaysOpen ? (
+          <p className="fin-sidebar__group-title">{title}</p>
+        ) : (
+          <button
+            type="button"
+            className="fin-sidebar__group-toggle"
+            aria-expanded={open}
+            onClick={() => onToggle(id)}
+          >
+            <span>{title}</span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform${open ? " rotate-180" : ""}`}
+            />
+          </button>
+        )
       ) : null}
-      <div className="fin-sidebar__group-list">
-        {items.map((item) => {
-          const active = linkActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`fin-sidebar__link${active ? " is-active" : ""}`}
-              title={item.label}
-              onClick={onNavigate}
-            >
-              {collapsed ? item.label.slice(0, 1) : item.label}
-            </Link>
-          );
-        })}
-      </div>
+      {showLinks ? (
+        <div className="fin-sidebar__group-list">
+          {items.map((item) => {
+            const active = linkActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`fin-sidebar__link${active ? " is-active" : ""}`}
+                title={item.label}
+                onClick={onNavigate}
+              >
+                {collapsed ? item.label.slice(0, 1) : item.label}
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -99,10 +130,31 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const ownerItems = useMemo(
-    () => (capsLoading || canWrite ? NAV_OWNER : []),
+  const configItems = useMemo(
+    () => [
+      ...NAV_CONFIG,
+      ...(capsLoading || canWrite ? NAV_OWNER : []),
+    ],
     [capsLoading, canWrite],
   );
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    analysis: false,
+    finance: false,
+    config: false,
+  });
+
+  useEffect(() => {
+    setOpenGroups((prev) => ({
+      analysis: groupHasActive(pathname, NAV_ANALYSIS) || prev.analysis,
+      finance: groupHasActive(pathname, NAV_FINANCE) || prev.finance,
+      config: groupHasActive(pathname, configItems) || prev.config,
+    }));
+  }, [pathname, configItems]);
+
+  const toggleGroup = useCallback((id: string) => {
+    setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
@@ -157,47 +209,57 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
 
       <nav className="fin-sidebar__nav">
         <NavGroup
+          id="main"
           title="Principal"
           items={NAV_MAIN}
           pathname={pathname}
           onNavigate={closeMobile}
           collapsed={collapsed}
+          open
+          alwaysOpen
+          onToggle={toggleGroup}
         />
         <NavGroup
+          id="analysis"
           title="Análisis"
           items={NAV_ANALYSIS}
           pathname={pathname}
           onNavigate={closeMobile}
           collapsed={collapsed}
+          open={!!openGroups.analysis}
+          onToggle={toggleGroup}
         />
         <NavGroup
+          id="finance"
           title="Financiamiento"
           items={NAV_FINANCE}
           pathname={pathname}
           onNavigate={closeMobile}
           collapsed={collapsed}
+          open={!!openGroups.finance}
+          onToggle={toggleGroup}
         />
         <NavGroup
-          title="Catálogo"
-          items={NAV_CATALOG}
+          id="config"
+          title="Configuración"
+          items={configItems}
           pathname={pathname}
           onNavigate={closeMobile}
           collapsed={collapsed}
-        />
-        <NavGroup
-          title="Administración"
-          items={ownerItems}
-          pathname={pathname}
-          onNavigate={closeMobile}
-          collapsed={collapsed}
+          open={!!openGroups.config}
+          onToggle={toggleGroup}
         />
         {!authenticated ? (
           <NavGroup
+            id="account"
             title="Cuenta"
             items={[{ href: "/login", label: "Login" }]}
             pathname={pathname}
             onNavigate={closeMobile}
             collapsed={collapsed}
+            open
+            alwaysOpen
+            onToggle={toggleGroup}
           />
         ) : null}
       </nav>

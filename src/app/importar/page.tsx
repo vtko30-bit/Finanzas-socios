@@ -158,12 +158,12 @@ export default function ImportarPage() {
 
       <section
         aria-label="Períodos cerrados"
-        className="rounded-xl border border-indigo-200 bg-indigo-50/90 px-4 py-3 text-sm text-slate-800"
+        className="rounded-xl border border-[#f0c9a8] bg-[#fbe7d8]/90 px-4 py-3 text-sm text-stone-800"
       >
-        <h2 className="font-semibold text-indigo-950">Períodos cerrados</h2>
+        <h2 className="font-semibold text-stone-900">Períodos cerrados</h2>
         <p className="mt-2 text-slate-700">
           Un mes o un año cerrado no recibe movimientos nuevos de Fudo ni de los bancos.{" "}
-          <a href="/periodos-cerrados" className="font-medium text-indigo-800 underline">
+          <a href="/periodos-cerrados" className="font-medium text-[#d45500] underline">
             Gestionar períodos cerrados
           </a>
           .
