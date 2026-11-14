@@ -1358,12 +1358,7 @@ export function FudoWorkspace({
               </button>
             ))}
           </nav>
-        ) : (
-          <p className="mt-1 text-sm text-stone-500">
-            Ventas del POS. Gastos Fudo, caja y reportes están en el módulo Fudo
-            de RG Suite.
-          </p>
-        )}
+        ) : null}
       </div>
 
       <section className="ui-card fudo-filter-fields overflow-hidden p-4 sm:p-5">
