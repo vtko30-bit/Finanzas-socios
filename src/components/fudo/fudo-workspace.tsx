@@ -7,6 +7,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, RefreshCw } from "lucide-
 type FudoWorkspaceProps = {
   canWrite: boolean;
   initialView?: string;
+  /** En Finanzas: solo ventas. El módulo completo vive en RG Suite → Fudo. */
+  mode?: "full" | "ventas";
 };
 
 type MainViewId = "ventas" | "gastos" | "caja" | "reportes";
@@ -333,15 +335,18 @@ function ShareBar({ share, max = 1 }: { share: number; max?: number }) {
 export function FudoWorkspace({
   canWrite,
   initialView,
+  mode = "full",
 }: FudoWorkspaceProps) {
+  const ventasOnly = mode === "ventas";
   const today = todaySantiago();
   const router = useRouter();
   const pathname = usePathname();
-  const [view, setView] = useState<MainViewId>(() =>
-    MAIN_VIEWS.some((v) => v.id === initialView)
+  const [view, setView] = useState<MainViewId>(() => {
+    if (ventasOnly) return "ventas";
+    return MAIN_VIEWS.some((v) => v.id === initialView)
       ? (initialView as MainViewId)
-      : "reportes",
-  );
+      : "reportes";
+  });
   const [reportTab, setReportTab] = useState<ReportTabId>("resumen");
   const [period, setPeriod] = useState<PeriodId>("day");
   const initialDay = rangeForPeriod("day", today);
@@ -385,6 +390,7 @@ export function FudoWorkspace({
   >([]);
 
   const goView = (id: MainViewId) => {
+    if (ventasOnly) return;
     setView(id);
     router.replace(`${pathname}?view=${id}`, { scroll: false });
   };
@@ -1333,24 +1339,31 @@ export function FudoWorkspace({
     <div className="fudo-theme fudo-tight-rows space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          Fudo
+          {ventasOnly ? "Ventas" : "Fudo"}
         </h1>
-        <nav className="mt-2 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700">
-          {MAIN_VIEWS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => goView(item.id)}
-              className={
-                view === item.id
-                  ? "fudo-tab-active px-3 py-2 text-sm font-semibold"
-                  : "px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-              }
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+        {!ventasOnly ? (
+          <nav className="mt-2 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700">
+            {MAIN_VIEWS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => goView(item.id)}
+                className={
+                  view === item.id
+                    ? "fudo-tab-active px-3 py-2 text-sm font-semibold"
+                    : "px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                }
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        ) : (
+          <p className="mt-1 text-sm text-stone-500">
+            Ventas del POS. Gastos Fudo, caja y reportes están en el módulo Fudo
+            de RG Suite.
+          </p>
+        )}
       </div>
 
       <section className="ui-card fudo-filter-fields overflow-hidden p-4 sm:p-5">
