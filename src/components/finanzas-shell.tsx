@@ -26,7 +26,6 @@ const NAV_ANALYSIS: NavItem[] = [
   { href: "/analisis", label: "Análisis y gráficos" },
   { href: "/reportes", label: "Reportes" },
   { href: "/pagos-recurrentes", label: "Pagos recurrentes" },
-  { href: "/gastos-pago-servicios", label: "Pago de servicios" },
 ];
 
 const NAV_FINANCE: NavItem[] = [
