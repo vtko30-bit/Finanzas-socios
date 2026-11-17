@@ -36,7 +36,6 @@ type TaxDocument = {
 };
 
 const SORT_COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
-  { key: "period", label: "Mes" },
   { key: "companyName", label: "Empresa" },
   { key: "issuedOn", label: "Fecha" },
   { key: "docLabel", label: "Tipo" },
@@ -45,6 +44,8 @@ const SORT_COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "payment", label: "Pago" },
   { key: "totalAmount", label: "Total", align: "right" },
 ];
+
+const COL_COUNT = SORT_COLUMNS.length;
 
 function paymentRank(doc: TaxDocument) {
   if (doc.docType === "61") return 3;
@@ -448,54 +449,16 @@ export function FacturasWorkspace() {
 
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border border-slate-200 dark:border-slate-800">
         <table className="min-w-full border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-20 bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
-            <tr>
-              {SORT_COLUMNS.map((column) => {
-                const active = sortKey === column.key;
-                const Icon = !active
-                  ? ArrowUpDown
-                  : sortDir === "asc"
-                    ? ArrowUp
-                    : ArrowDown;
-                return (
-                  <th
-                    key={column.key}
-                    className={`bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900 ${
-                      column.align === "right" ? "text-right" : ""
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-200/70 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${
-                        active ? "text-slate-800 dark:text-slate-100" : ""
-                      } ${column.align === "right" ? "ml-auto" : ""}`}
-                      onClick={() => toggleSort(column.key)}
-                      aria-label={`Ordenar por ${column.label}`}
-                      title={`Ordenar por ${column.label}`}
-                    >
-                      <span>{column.label}</span>
-                      <Icon
-                        className={`h-3.5 w-3.5 ${
-                          active ? "opacity-100" : "opacity-45"
-                        }`}
-                        aria-hidden
-                      />
-                    </button>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={8}>
+                <td className="px-3 py-4 text-slate-500" colSpan={COL_COUNT}>
                   Cargando…
                 </td>
               </tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={8}>
+                <td className="px-3 py-4 text-slate-500" colSpan={COL_COUNT}>
                   {query.trim()
                     ? "Ningún documento coincide con la búsqueda."
                     : "No hay documentos en esta vista."}
@@ -511,7 +474,10 @@ export function FacturasWorkspace() {
                 return (
                   <Fragment key={yearGroup.year}>
                     <tr className="border-t border-slate-200 bg-[#efece8] dark:border-slate-700 dark:bg-slate-950">
-                      <td className="sticky top-10 z-20 whitespace-nowrap bg-[#efece8] px-3 py-2 dark:bg-slate-950">
+                      <td
+                        colSpan={COL_COUNT - 1}
+                        className="sticky top-0 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950"
+                      >
                         <button
                           type="button"
                           className="inline-flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100"
@@ -524,18 +490,13 @@ export function FacturasWorkspace() {
                             <ChevronRight className="h-4 w-4 shrink-0 text-[#e85e00]" aria-hidden />
                           )}
                           {yearGroup.year}
+                          <span className="ml-1 text-xs font-medium text-stone-500">
+                            · {yearGroup.items.length} documento
+                            {yearGroup.items.length === 1 ? "" : "s"}
+                          </span>
                         </button>
                       </td>
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 text-xs text-stone-500 dark:bg-slate-950">
-                        {yearGroup.items.length} documento
-                        {yearGroup.items.length === 1 ? "" : "s"}
-                      </td>
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 dark:bg-slate-950" />
-                      <td className="sticky top-10 z-20 bg-[#efece8] px-3 py-2 text-right text-sm font-semibold tabular-nums text-stone-800 dark:bg-slate-950 dark:text-stone-100">
+                      <td className="sticky top-0 z-20 bg-[#efece8] px-3 py-2 text-right text-sm font-semibold tabular-nums text-stone-800 dark:bg-slate-950 dark:text-stone-100">
                         {formatCLP(yearTotal)}
                       </td>
                     </tr>
@@ -552,7 +513,10 @@ export function FacturasWorkspace() {
                           return (
                             <Fragment key={month.period}>
                               <tr className="border-t border-slate-200 bg-[#f6f5f2] dark:border-slate-700 dark:bg-slate-900">
-                                <td className="sticky top-[4.75rem] z-10 whitespace-nowrap bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900">
+                                <td
+                                  colSpan={COL_COUNT - 1}
+                                  className="sticky top-0 z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900"
+                                >
                                   <button
                                     type="button"
                                     className="inline-flex items-center gap-1.5 font-semibold text-stone-900 dark:text-stone-100"
@@ -573,28 +537,70 @@ export function FacturasWorkspace() {
                                       />
                                     )}
                                     {formatMonthLabel(month.period)}
+                                    <span className="ml-1 text-xs font-medium text-stone-500">
+                                      · {month.items.length} documento
+                                      {month.items.length === 1 ? "" : "s"}
+                                    </span>
                                   </button>
                                 </td>
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 text-xs text-stone-500 dark:bg-slate-900">
-                                  {month.items.length} documento
-                                  {month.items.length === 1 ? "" : "s"}
-                                </td>
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 dark:bg-slate-900" />
-                                <td className="sticky top-[4.75rem] z-10 bg-[#f6f5f2] px-3 py-2 text-right text-sm font-semibold tabular-nums text-stone-800 dark:bg-slate-900 dark:text-stone-100">
+                                <td className="sticky top-0 z-10 bg-[#f6f5f2] px-3 py-2 text-right text-sm font-semibold tabular-nums text-stone-800 dark:bg-slate-900 dark:text-stone-100">
                                   {formatCLP(monthTotal)}
                                 </td>
                               </tr>
-                              {monthOpen
-                                ? month.items.map((doc) => (
+                              {monthOpen ? (
+                                <>
+                                  <tr className="sticky top-0 z-[15] bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
+                                    {SORT_COLUMNS.map((column) => {
+                                      const active = sortKey === column.key;
+                                      const Icon = !active
+                                        ? ArrowUpDown
+                                        : sortDir === "asc"
+                                          ? ArrowUp
+                                          : ArrowDown;
+                                      return (
+                                        <th
+                                          key={`${month.period}-${column.key}`}
+                                          scope="col"
+                                          className={`bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900 ${
+                                            column.align === "right"
+                                              ? "text-right"
+                                              : ""
+                                          }`}
+                                        >
+                                          <button
+                                            type="button"
+                                            className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-200/70 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${
+                                              active
+                                                ? "text-slate-800 dark:text-slate-100"
+                                                : ""
+                                            } ${
+                                              column.align === "right"
+                                                ? "ml-auto"
+                                                : ""
+                                            }`}
+                                            onClick={() => toggleSort(column.key)}
+                                            aria-label={`Ordenar por ${column.label}`}
+                                            title={`Ordenar por ${column.label}`}
+                                          >
+                                            <span>{column.label}</span>
+                                            <Icon
+                                              className={`h-3.5 w-3.5 ${
+                                                active
+                                                  ? "opacity-100"
+                                                  : "opacity-45"
+                                              }`}
+                                              aria-hidden
+                                            />
+                                          </button>
+                                        </th>
+                                      );
+                                    })}
+                                  </tr>
+                                  {month.items.map((doc) => (
                                     <tr
                                       key={doc.id}
                                       className="border-t border-slate-100 dark:border-slate-800"
                                     >
-                                      <td className="px-3 py-2" />
                                       <td className="whitespace-nowrap px-3 py-2">
                                         {doc.companyName}
                                       </td>
@@ -632,8 +638,9 @@ export function FacturasWorkspace() {
                                         {formatCLP(doc.totalAmount)}
                                       </td>
                                     </tr>
-                                  ))
-                                : null}
+                                  ))}
+                                </>
+                              ) : null}
                             </Fragment>
                           );
                         })
