@@ -1,33 +1,60 @@
 import { Building2, CreditCard, PiggyBank, Wallet } from "lucide-react";
 
+type Accent = "orange" | "green" | "blue" | "rose";
+
+const ACCENT_STYLES: Record<
+  Accent,
+  { wrap: string; icon: string }
+> = {
+  orange: {
+    wrap: "bg-[#fbe7d8] text-[#e85e00]",
+    icon: "text-[#e85e00]",
+  },
+  green: {
+    wrap: "bg-emerald-50 text-emerald-600",
+    icon: "text-emerald-600",
+  },
+  blue: {
+    wrap: "bg-sky-50 text-sky-600",
+    icon: "text-sky-600",
+  },
+  rose: {
+    wrap: "bg-rose-50 text-rose-600",
+    icon: "text-rose-600",
+  },
+};
+
 export function BalanceMiniCard({
   label,
   compactLabel,
   amount,
   icon: Icon,
-  accent = "cyan",
+  accent = "orange",
 }: {
   label: string;
   compactLabel?: string;
   amount: string;
   icon: typeof Building2;
-  accent?: "cyan" | "rose";
+  accent?: Accent;
 }) {
-  const iconClass =
-    accent === "rose"
-      ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-rose-500 shadow-sm sm:h-10 sm:w-10"
-      : "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-cyan-500 shadow-sm sm:h-10 sm:w-10";
+  const tone = ACCENT_STYLES[accent];
   return (
-    <div className="flex min-w-0 items-start gap-1.5 rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-2 sm:gap-3 sm:rounded-xl sm:px-4 sm:py-4">
-      <div className={iconClass}>
-        <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" strokeWidth={1.75} aria-hidden />
+    <div className="relative min-w-0 overflow-hidden rounded-2xl border border-stone-200/80 bg-white px-4 py-4 shadow-sm sm:px-5 sm:py-5">
+      <div
+        className={`absolute right-3 top-3 flex size-9 items-center justify-center rounded-full sm:right-4 sm:top-4 sm:size-10 ${tone.wrap}`}
+      >
+        <Icon
+          className={`h-4 w-4 sm:h-5 sm:w-5 ${tone.icon}`}
+          strokeWidth={1.75}
+          aria-hidden
+        />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium leading-snug text-slate-600 sm:text-sm">
+      <div className="pr-12">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500 sm:text-xs">
           <span className="sm:hidden">{compactLabel ?? label}</span>
           <span className="hidden sm:inline">{label}</span>
         </p>
-        <p className="mt-0.5 break-all text-[11px] font-bold leading-tight tabular-nums text-slate-900 sm:mt-1 sm:break-normal sm:text-[15px]">
+        <p className="mt-2 break-all text-lg font-bold leading-tight tabular-nums text-stone-900 sm:mt-3 sm:break-normal sm:text-2xl">
           {amount}
         </p>
       </div>
@@ -39,7 +66,7 @@ export function BalanceSparkline({ className = "" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 200 48"
-      className={`h-12 w-full max-w-[220px] text-cyan-400 ${className}`.trim()}
+      className={`h-12 w-full max-w-[220px] text-[#e85e00] ${className}`.trim()}
       aria-hidden
     >
       <defs>

@@ -38,16 +38,16 @@ export function DashboardHome() {
           <Link
             key={href}
             href={href}
-            className="group flex flex-col items-center rounded-lg border border-slate-100 bg-white p-2.5 text-center shadow-sm transition-all duration-200 hover:border-cyan-200 hover:shadow-md sm:items-start sm:rounded-xl sm:p-6 sm:text-left sm:hover:-translate-y-1 sm:hover:shadow-lg"
+            className="group flex flex-col items-center rounded-lg border border-stone-200/80 bg-white p-2.5 text-center shadow-sm transition-all duration-200 hover:border-[#f0c9a8] hover:shadow-md sm:items-start sm:rounded-xl sm:p-6 sm:text-left sm:hover:-translate-y-1 sm:hover:shadow-lg"
           >
-            <div className="mb-1.5 flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-50 text-cyan-500 transition-colors group-hover:bg-cyan-100 sm:mb-4 sm:h-12 sm:w-12 sm:rounded-xl">
+            <div className="mb-1.5 flex h-8 w-8 items-center justify-center rounded-lg bg-[#fbe7d8] text-[#e85e00] transition-colors group-hover:bg-[#f6d7bf] sm:mb-4 sm:h-12 sm:w-12 sm:rounded-xl">
               <Icon
                 className="h-4 w-4 sm:h-7 sm:w-7"
                 strokeWidth={1.75}
                 aria-hidden
               />
             </div>
-            <h2 className="text-[11px] font-semibold leading-tight text-cyan-500 sm:text-base">
+            <h2 className="text-[11px] font-semibold leading-tight text-[#d45500] sm:text-base">
               <span className="sm:hidden">{shortTitle}</span>
               <span className="hidden sm:inline">{title}</span>
             </h2>

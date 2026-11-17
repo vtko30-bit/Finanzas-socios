@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, FileDown, RefreshCw } from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import {
   BalanceMiniCard,
-  BalanceSparkline,
   Building2,
   CreditCard,
   PiggyBank,
@@ -324,93 +323,109 @@ export function BankPositionSection({
       type="button"
       className={
         variant === "premium"
-          ? "rounded-md bg-[#e85e00] px-2.5 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-[#e85e00] disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs"
+          ? "inline-flex items-center gap-1.5 rounded-xl bg-[#e85e00] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#d45500] disabled:opacity-50 sm:px-4 sm:text-sm"
           : "rounded border border-[#d45500] bg-[#fbe7d8] px-2 py-0.5 text-[10px] font-medium text-stone-900 hover:bg-[#fbe7d8] disabled:opacity-50 sm:px-2.5 sm:py-1 sm:text-xs"
       }
       disabled={loading}
       onClick={abrirModal}
     >
+      {variant === "premium" ? (
+        <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+      ) : null}
       Actualizar
     </button>
   ) : null;
 
   const balanceContent =
     variant === "premium" ? (
-      <div className="space-y-3 sm:space-y-8">
-        <div className="flex flex-col gap-3 sm:gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-1 sm:space-y-2">
-            <h2 className="text-base font-semibold text-slate-800 sm:text-lg">
-              Balance General
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+              Finanzas
             </h2>
-            <p className="text-xs font-medium text-slate-500 sm:text-sm">Total Balance</p>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <p className="mt-1 text-sm text-stone-500">
+              Balance general · actualizado{" "}
+              <span className="tabular-nums">
+                {formatFecha(data?.snapshotDate ?? null)}
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/reportes"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 shadow-sm transition hover:border-[#e85e00] hover:text-[#e85e00] sm:px-4 sm:text-sm"
+            >
+              <FileDown className="h-3.5 w-3.5" aria-hidden />
+              Exportar
+            </Link>
+            {updateButton}
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl bg-[#e85e00] px-5 py-6 text-white shadow-md sm:rounded-3xl sm:px-8 sm:py-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85 sm:text-xs">
+                Saldo total
+              </p>
               <p
-                className={`text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl ${
+                className={`mt-2 text-3xl font-bold tracking-tight sm:text-5xl ${
                   !balanceVisible && !loading ? "select-none tracking-widest" : ""
                 }`}
                 aria-live="polite"
               >
-                {montoVisible(formatClp(totals.total))}
-              </p>
-              {!loading ? (
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 sm:h-10 sm:w-10"
-                  onClick={toggleBalanceVisible}
-                  aria-pressed={balanceVisible}
-                  aria-label={
-                    balanceVisible
-                      ? "Ocultar total del balance"
-                      : "Mostrar total del balance"
-                  }
-                  title={balanceVisible ? "Ocultar montos" : "Mostrar montos"}
-                >
-                  {balanceVisible ? (
-                    <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.75} aria-hidden />
-                  ) : (
-                    <Eye className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.75} aria-hidden />
-                  )}
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2 sm:mt-2">
-              <p className="inline-flex max-w-full flex-wrap items-baseline gap-x-1 gap-y-0.5 rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[10px] text-slate-800 sm:gap-x-1.5 sm:px-2 sm:py-1 sm:text-xs">
-                <span className="font-medium text-cyan-800">
-                  Fecha de actualización
-                </span>
-                <span className="font-semibold tabular-nums text-slate-900">
-                  {formatFecha(data?.snapshotDate ?? null)}
-                </span>
+                {loading ? "…" : montoVisible(formatClp(totals.total))}
               </p>
             </div>
+            {!loading ? (
+              <button
+                type="button"
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-white/15 text-white transition hover:bg-white/25 sm:size-10"
+                onClick={toggleBalanceVisible}
+                aria-pressed={balanceVisible}
+                aria-label={
+                  balanceVisible
+                    ? "Ocultar total del balance"
+                    : "Mostrar total del balance"
+                }
+                title={balanceVisible ? "Ocultar montos" : "Mostrar montos"}
+              >
+                {balanceVisible ? (
+                  <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <Eye className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+            ) : null}
           </div>
-          {!loading ? (
-            <BalanceSparkline className="hidden sm:block" />
-          ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <BalanceMiniCard
             label="Cta. Principal"
             compactLabel="Cta. Principal"
             amount={montoVisible(formatClp(totals.saldoCtaCte))}
             icon={Building2}
+            accent="orange"
           />
           <BalanceMiniCard
             label="Ahorro Mensual"
             compactLabel="Ahorro"
             amount={montoVisible(formatClp(totals.ahorro))}
             icon={PiggyBank}
+            accent="green"
           />
           <BalanceMiniCard
             label="Efectivo Disponible"
             compactLabel="Efectivo"
             amount={montoVisible(formatClp(totals.efectivo))}
             icon={Wallet}
+            accent="blue"
           />
           <Link
             href="/creditos"
-            className="block min-w-0 rounded-xl transition hover:ring-2 hover:ring-rose-200"
+            className="block min-w-0 rounded-2xl transition hover:ring-2 hover:ring-rose-200"
           >
             <BalanceMiniCard
               label="Deuda (Créditos)"
@@ -421,12 +436,6 @@ export function BankPositionSection({
             />
           </Link>
         </div>
-
-        {updateButton ? (
-          <div className="flex justify-end border-t border-slate-100 pt-2.5 sm:pt-4">
-            {updateButton}
-          </div>
-        ) : null}
       </div>
     ) : (
       <div className="overflow-x-auto px-2 pb-2 pt-1">
@@ -475,7 +484,7 @@ export function BankPositionSection({
     <section
       className={
         variant === "premium"
-          ? "min-w-0 rounded-2xl border border-slate-100 bg-white p-3 shadow-md sm:rounded-3xl sm:p-8"
+          ? "min-w-0 rounded-2xl border border-stone-200/70 bg-transparent p-0 shadow-none sm:rounded-3xl"
           : "min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm"
       }
     >
