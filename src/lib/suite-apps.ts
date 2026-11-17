@@ -1,7 +1,7 @@
 import {
   Boxes,
-  Building2,
   ChefHat,
+  Landmark,
   ListChecks,
   RefreshCw,
   ShieldCheck,
@@ -36,7 +36,7 @@ export const SUITE_APPS: SuiteApp[] = [
     id: "finanzas",
     title: "Finanzas Rg",
     href: "/",
-    icon: Building2,
+    icon: Landmark,
     current: true,
   },
   {
