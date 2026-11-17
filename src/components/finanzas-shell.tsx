@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LogOut, PanelLeft, PanelLeftClose } from "lucide-react";
+import {
+  Building2,
+  ChevronDown,
+  LogOut,
+  PanelLeft,
+  PanelLeftClose,
+} from "lucide-react";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { useAuthContext } from "@/components/auth-provider";
 import { SuiteDock } from "@/components/suite-dock";
@@ -179,17 +185,22 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
     >
       <div className="fin-sidebar__top">
         {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-bold text-stone-900">
-              Finanzas Rg
-            </p>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500">
-              RG Suite
-            </p>
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#e85e00] text-white shadow-sm">
+              <Building2 className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold leading-tight text-[#e85e00]">
+                Finanzas Rg
+              </p>
+              <p className="text-[11px] leading-tight text-stone-500">
+                RG Suite
+              </p>
+            </div>
           </div>
         ) : (
-          <span className="inline-flex size-9 items-center justify-center rounded-xl bg-[#e85e00] text-xs font-bold text-white">
-            F
+          <span className="inline-flex size-9 items-center justify-center rounded-xl bg-[#e85e00] text-white shadow-sm">
+            <Building2 className="h-5 w-5" strokeWidth={2} aria-hidden />
           </span>
         )}
         <button
