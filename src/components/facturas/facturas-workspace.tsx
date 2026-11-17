@@ -45,7 +45,8 @@ const SORT_COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "totalAmount", label: "Total", align: "right" },
 ];
 
-const COL_COUNT = SORT_COLUMNS.length;
+const DATA_COL_COUNT = SORT_COLUMNS.length;
+const COL_COUNT = DATA_COL_COUNT + 1;
 
 function paymentRank(doc: TaxDocument) {
   if (doc.docType === "61") return 3;
@@ -194,6 +195,8 @@ export function FacturasWorkspace() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [openYears, setOpenYears] = useState<Set<string>>(new Set());
   const [openPeriods, setOpenPeriods] = useState<Set<string>>(new Set());
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [showOnlySelected, setShowOnlySelected] = useState(false);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -209,6 +212,26 @@ export function FacturasWorkspace() {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleSelected(invoiceKey: string) {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(invoiceKey)) next.delete(invoiceKey);
+      else next.add(invoiceKey);
+      return next;
+    });
+  }
+
+  function setMonthSelection(items: TaxDocument[], selectAll: boolean) {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      for (const doc of items) {
+        if (selectAll) next.add(doc.invoiceKey);
+        else next.delete(doc.invoiceKey);
+      }
       return next;
     });
   }
@@ -247,7 +270,7 @@ export function FacturasWorkspace() {
   );
 
   const normalizedQuery = normalizeSearch(query);
-  const visible = useMemo(
+  const filtered = useMemo(
     () =>
       docs
         .filter(
@@ -261,12 +284,44 @@ export function FacturasWorkspace() {
     [company, docs, normalizedQuery, period, sortDir, sortKey, view],
   );
 
+  const visible = useMemo(
+    () =>
+      showOnlySelected
+        ? filtered.filter((doc) => selectedKeys.has(doc.invoiceKey))
+        : filtered,
+    [filtered, selectedKeys, showOnlySelected],
+  );
+
+  const selectedInFiltered = useMemo(
+    () => filtered.filter((doc) => selectedKeys.has(doc.invoiceKey)),
+    [filtered, selectedKeys],
+  );
+
+  const selectedTotal = useMemo(
+    () =>
+      view === "nc"
+        ? selectedInFiltered.reduce((sum, doc) => sum + doc.totalAmount, 0)
+        : netOf(selectedInFiltered),
+    [selectedInFiltered, view],
+  );
+
   const yearGroups = useMemo(() => groupByYearAndPeriod(visible), [visible]);
 
   useEffect(() => {
     if (yearGroups.length === 0) {
       setOpenYears(new Set());
       setOpenPeriods(new Set());
+      return;
+    }
+    if (showOnlySelected) {
+      setOpenYears(new Set(yearGroups.map((group) => group.year)));
+      setOpenPeriods(
+        new Set(
+          yearGroups.flatMap((group) =>
+            group.months.map((month) => month.period),
+          ),
+        ),
+      );
       return;
     }
     if (period !== "todos") {
@@ -300,7 +355,7 @@ export function FacturasWorkspace() {
       }
       return new Set(firstYear.months[0] ? [firstYear.months[0].period] : []);
     });
-  }, [period, yearGroups]);
+  }, [period, showOnlySelected, yearGroups]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -438,13 +493,48 @@ export function FacturasWorkspace() {
         </div>
       ) : null}
 
-      <div className="shrink-0 text-sm font-medium text-slate-700 dark:text-slate-200">
-        {visible.length} documentos ·{" "}
-        {formatCLP(
-          view === "nc"
-            ? visible.reduce((sum, doc) => sum + doc.totalAmount, 0)
-            : netOf(visible),
-        )}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+        <span>
+          {visible.length} documento{visible.length === 1 ? "" : "s"} ·{" "}
+          {formatCLP(
+            view === "nc"
+              ? visible.reduce((sum, doc) => sum + doc.totalAmount, 0)
+              : netOf(visible),
+          )}
+        </span>
+        {selectedInFiltered.length > 0 ? (
+          <>
+            <span className="text-stone-400" aria-hidden>
+              ·
+            </span>
+            <span className="text-[#d45500]">
+              {selectedInFiltered.length} seleccionada
+              {selectedInFiltered.length === 1 ? "" : "s"} ·{" "}
+              {formatCLP(selectedTotal)}
+            </span>
+            <button
+              type="button"
+              className={
+                showOnlySelected
+                  ? "ui-btn-primary ui-btn-sm h-7"
+                  : "ui-btn-secondary ui-btn-sm h-7"
+              }
+              onClick={() => setShowOnlySelected((current) => !current)}
+            >
+              {showOnlySelected ? "Ver todas" : "Ver solo seleccionadas"}
+            </button>
+            <button
+              type="button"
+              className="ui-btn-secondary ui-btn-sm h-7"
+              onClick={() => {
+                setSelectedKeys(new Set());
+                setShowOnlySelected(false);
+              }}
+            >
+              Limpiar selección
+            </button>
+          </>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border border-slate-200 dark:border-slate-800">
@@ -459,9 +549,11 @@ export function FacturasWorkspace() {
             ) : visible.length === 0 ? (
               <tr>
                 <td className="px-3 py-4 text-slate-500" colSpan={COL_COUNT}>
-                  {query.trim()
-                    ? "Ningún documento coincide con la búsqueda."
-                    : "No hay documentos en esta vista."}
+                  {showOnlySelected
+                    ? "No hay facturas seleccionadas con los filtros actuales."
+                    : query.trim()
+                      ? "Ningún documento coincide con la búsqueda."
+                      : "No hay documentos en esta vista."}
                 </td>
               </tr>
             ) : (
@@ -550,6 +642,29 @@ export function FacturasWorkspace() {
                               {monthOpen ? (
                                 <>
                                   <tr className="sticky top-0 z-[15] bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
+                                    <th
+                                      scope="col"
+                                      className="bg-slate-50 px-3 py-2 dark:bg-slate-900"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="size-4 accent-[#e85e00]"
+                                        checked={
+                                          month.items.length > 0 &&
+                                          month.items.every((doc) =>
+                                            selectedKeys.has(doc.invoiceKey),
+                                          )
+                                        }
+                                        onChange={(event) =>
+                                          setMonthSelection(
+                                            month.items,
+                                            event.target.checked,
+                                          )
+                                        }
+                                        aria-label={`Seleccionar todas de ${formatMonthLabel(month.period)}`}
+                                        title="Seleccionar todas del mes"
+                                      />
+                                    </th>
                                     {SORT_COLUMNS.map((column) => {
                                       const active = sortKey === column.key;
                                       const Icon = !active
@@ -596,49 +711,71 @@ export function FacturasWorkspace() {
                                       );
                                     })}
                                   </tr>
-                                  {month.items.map((doc) => (
-                                    <tr
-                                      key={doc.id}
-                                      className="border-t border-slate-100 dark:border-slate-800"
-                                    >
-                                      <td className="whitespace-nowrap px-3 py-2">
-                                        {doc.companyName}
-                                      </td>
-                                      <td className="whitespace-nowrap px-3 py-2">
-                                        {doc.issuedOn}
-                                      </td>
-                                      <td className="whitespace-nowrap px-3 py-2">
-                                        {doc.docLabel}
-                                      </td>
-                                      <td className="whitespace-nowrap px-3 py-2">
-                                        {doc.folio}
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <div>{doc.counterpartyName || "—"}</div>
-                                        <div className="text-xs text-slate-500">
-                                          {doc.counterpartyRut}
-                                        </div>
-                                      </td>
-                                      <td className="whitespace-nowrap px-3 py-2">
-                                        {doc.docType === "61" ? (
-                                          "—"
-                                        ) : canWrite ? (
-                                          <button
-                                            type="button"
-                                            className="ui-btn-secondary ui-btn-sm"
-                                            onClick={() => setPaying(doc)}
-                                          >
-                                            {paymentLabel(doc)}
-                                          </button>
-                                        ) : (
-                                          paymentLabel(doc)
-                                        )}
-                                      </td>
-                                      <td className="px-3 py-2 text-right tabular-nums">
-                                        {formatCLP(doc.totalAmount)}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {month.items.map((doc) => {
+                                    const selected = selectedKeys.has(
+                                      doc.invoiceKey,
+                                    );
+                                    return (
+                                      <tr
+                                        key={doc.id}
+                                        className={`border-t border-slate-100 dark:border-slate-800 ${
+                                          selected
+                                            ? "bg-[#fbe7d8]/45 dark:bg-[#e85e00]/10"
+                                            : ""
+                                        }`}
+                                      >
+                                        <td className="px-3 py-2">
+                                          <input
+                                            type="checkbox"
+                                            className="size-4 accent-[#e85e00]"
+                                            checked={selected}
+                                            onChange={() =>
+                                              toggleSelected(doc.invoiceKey)
+                                            }
+                                            aria-label={`Seleccionar folio ${doc.folio}`}
+                                          />
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-2">
+                                          {doc.companyName}
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-2">
+                                          {doc.issuedOn}
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-2">
+                                          {doc.docLabel}
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-2">
+                                          {doc.folio}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <div>
+                                            {doc.counterpartyName || "—"}
+                                          </div>
+                                          <div className="text-xs text-slate-500">
+                                            {doc.counterpartyRut}
+                                          </div>
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-2">
+                                          {doc.docType === "61" ? (
+                                            "—"
+                                          ) : canWrite ? (
+                                            <button
+                                              type="button"
+                                              className="ui-btn-secondary ui-btn-sm"
+                                              onClick={() => setPaying(doc)}
+                                            >
+                                              {paymentLabel(doc)}
+                                            </button>
+                                          ) : (
+                                            paymentLabel(doc)
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                          {formatCLP(doc.totalAmount)}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </>
                               ) : null}
                             </Fragment>
