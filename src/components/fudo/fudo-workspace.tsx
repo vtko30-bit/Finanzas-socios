@@ -1634,8 +1634,8 @@ export function FudoWorkspace({
                 const open = openSucursales.includes(suc.code);
                 return (
                   <li key={suc.code}>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                      <span className="min-w-0 text-sm font-medium">
+                    <div className="flex items-center gap-x-3 px-4 py-2">
+                      <span className="min-w-0 truncate text-sm font-medium">
                         {suc.label}
                       </span>
                       <button
@@ -1665,13 +1665,13 @@ export function FudoWorkspace({
                           <table className="min-w-full text-sm">
                             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/60">
                               <tr>
-                                <th className="px-4 py-2 font-medium">
+                                <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                   Forma de pago
                                 </th>
-                                <th className="px-4 py-2 font-medium text-right">
-                                  Transacciones
+                                <th className="whitespace-nowrap px-3 py-1.5 font-medium text-right">
+                                  Tx
                                 </th>
-                                <th className="px-4 py-2 font-medium text-right">
+                                <th className="whitespace-nowrap px-3 py-1.5 font-medium text-right">
                                   Total
                                 </th>
                               </tr>
@@ -1682,11 +1682,13 @@ export function FudoWorkspace({
                                   key={row.key}
                                   className="border-t border-slate-100 dark:border-slate-800"
                                 >
-                                  <td className="px-4 py-2.5">{row.medio}</td>
-                                  <td className="px-4 py-2.5 text-right tabular-nums">
+                                  <td className="whitespace-nowrap px-3 py-1.5">
+                                    {row.medio}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
                                     {row.cantidad}
                                   </td>
-                                  <td className="px-4 py-2.5 text-right font-medium tabular-nums">
+                                  <td className="whitespace-nowrap px-3 py-1.5 text-right font-medium tabular-nums">
                                     {formatCLP(row.monto)}
                                   </td>
                                 </tr>
@@ -1696,16 +1698,16 @@ export function FudoWorkspace({
                         </div>
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-100/80 px-4 py-2.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
-                      <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                    <div className="flex items-center gap-x-3 border-t border-slate-200 bg-slate-100/80 px-4 py-1.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
+                      <span className="ml-auto flex items-center justify-end gap-x-4 whitespace-nowrap">
                         <span className="text-right tabular-nums">
-                          <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                            Transacciones
+                          <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
+                            Tx
                           </span>
                           {suc.cantidad}
                         </span>
                         <span className="text-right tabular-nums">
-                          <span className="mr-2 text-xs font-medium uppercase text-slate-500">
+                          <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
                             Total
                           </span>
                           {formatCLP(suc.monto)}
@@ -1717,21 +1719,17 @@ export function FudoWorkspace({
               })}
               {ventasPorSucursal.length > 0 ? (
                 <li className="fudo-total">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5">
+                  <div className="flex items-center gap-x-3 px-4 py-2.5">
                     <span className="min-w-0 text-sm font-bold tracking-wide">
                       Totales
                     </span>
-                    <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                    <span className="ml-auto flex items-center justify-end gap-x-4 whitespace-nowrap">
                       <span className="text-right text-sm font-semibold tabular-nums">
-                        <span className="fudo-total-label">
-                          Transacciones
-                        </span>
+                        <span className="fudo-total-label">Tx</span>
                         {mediosShare.cantidadTotal}
                       </span>
                       <span className="text-right text-sm font-bold tabular-nums">
-                        <span className="fudo-total-label">
-                          Total
-                        </span>
+                        <span className="fudo-total-label">Total</span>
                         {formatCLP(mediosShare.total)}
                       </span>
                     </span>
@@ -1758,8 +1756,8 @@ export function FudoWorkspace({
                 const open = openGastosSucursales.includes(suc.code);
                 return (
                   <li key={suc.code}>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                      <span className="min-w-0 text-sm font-medium">
+                    <div className="flex items-center gap-x-3 px-4 py-2">
+                      <span className="min-w-0 truncate text-sm font-medium">
                         {suc.label}
                       </span>
                       <button
@@ -1801,9 +1799,9 @@ export function FudoWorkspace({
                                     )
                                   }
                                   aria-expanded={dayOpen}
-                                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left text-sm hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
+                                  className="flex w-full items-center gap-x-3 px-4 py-1.5 text-left text-sm hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
                                 >
-                                  <span className="min-w-[4.5rem] font-medium tabular-nums text-slate-800 dark:text-slate-100">
+                                  <span className="min-w-[4.5rem] whitespace-nowrap font-medium tabular-nums text-slate-800 dark:text-slate-100">
                                     {formatDateShort(dia.fecha)}
                                   </span>
                                   <ChevronDown
@@ -1812,15 +1810,15 @@ export function FudoWorkspace({
                                     }`}
                                     aria-hidden
                                   />
-                                  <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1 tabular-nums">
+                                  <span className="ml-auto flex items-center justify-end gap-x-3 whitespace-nowrap tabular-nums">
                                     <span className="text-right">
-                                      <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                                        Transacciones
+                                      <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
+                                        Tx
                                       </span>
                                       {dia.cantidad}
                                     </span>
                                     <span className="text-right font-medium">
-                                      <span className="mr-2 text-xs font-medium uppercase text-slate-500">
+                                      <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
                                         Total
                                       </span>
                                       {formatCLP(dia.monto)}
@@ -1836,19 +1834,19 @@ export function FudoWorkspace({
                                       <table className="min-w-full text-sm">
                                         <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/60">
                                           <tr>
-                                            <th className="px-4 py-2 font-medium">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                               Proveedor
                                             </th>
-                                            <th className="px-4 py-2 font-medium">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                               Categoría
                                             </th>
-                                            <th className="px-4 py-2 font-medium">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                               Descripción
                                             </th>
-                                            <th className="px-4 py-2 font-medium">
-                                              Medio de pago
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
+                                              Medio
                                             </th>
-                                            <th className="px-4 py-2 font-medium text-right">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium text-right">
                                               Monto
                                             </th>
                                           </tr>
@@ -1859,19 +1857,19 @@ export function FudoWorkspace({
                                               key={row.key}
                                               className="border-t border-slate-100 dark:border-slate-800"
                                             >
-                                              <td className="px-4 py-2.5 text-slate-500">
+                                              <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">
                                                 {row.provider}
                                               </td>
-                                              <td className="max-w-xs truncate px-4 py-2.5">
+                                              <td className="max-w-[8rem] truncate px-3 py-1.5">
                                                 {row.category}
                                               </td>
-                                              <td className="max-w-xs truncate px-4 py-2.5 text-slate-500">
+                                              <td className="max-w-[10rem] truncate px-3 py-1.5 text-slate-500">
                                                 {row.description}
                                               </td>
-                                              <td className="px-4 py-2.5 text-slate-500">
+                                              <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">
                                                 {row.medio}
                                               </td>
-                                              <td className="px-4 py-2.5 text-right tabular-nums">
+                                              <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
                                                 {formatCLP(row.monto)}
                                               </td>
                                             </tr>
@@ -1887,17 +1885,17 @@ export function FudoWorkspace({
                         </ul>
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-100/80 px-4 py-2.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
+                    <div className="flex items-center gap-x-3 border-t border-slate-200 bg-slate-100/80 px-4 py-1.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
                       <span>Totales</span>
-                      <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                      <span className="ml-auto flex items-center justify-end gap-x-3 whitespace-nowrap">
                         <span className="text-right tabular-nums">
-                          <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                            Transacciones
+                          <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
+                            Tx
                           </span>
                           {suc.cantidad}
                         </span>
                         <span className="text-right tabular-nums">
-                          <span className="mr-2 text-xs font-medium uppercase text-slate-500">
+                          <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
                             Total
                           </span>
                           {formatCLP(suc.monto)}
@@ -1912,13 +1910,13 @@ export function FudoWorkspace({
               })}
               {gastosPorSucursal.length > 0 ? (
                 <li className="fudo-total">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5">
+                  <div className="flex items-center gap-x-3 px-4 py-2.5">
                     <span className="min-w-0 text-sm font-bold tracking-wide">
                       Totales
                     </span>
-                    <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                    <span className="ml-auto flex items-center justify-end gap-x-4 whitespace-nowrap">
                       <span className="text-right text-sm font-semibold tabular-nums">
-                        <span className="fudo-total-label">Transacciones</span>
+                        <span className="fudo-total-label">Tx</span>
                         {gastosPorSucursal.reduce(
                           (sum, suc) => sum + suc.cantidad,
                           0,
@@ -1952,8 +1950,8 @@ export function FudoWorkspace({
                 const open = openCajaSucursales.includes(suc.code);
                 return (
                   <li key={suc.code}>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                      <span className="min-w-0 text-sm font-medium">
+                    <div className="flex items-center gap-x-3 px-4 py-2">
+                      <span className="min-w-0 truncate text-sm font-medium">
                         {suc.label}
                       </span>
                       <button
@@ -1995,9 +1993,9 @@ export function FudoWorkspace({
                                     )
                                   }
                                   aria-expanded={dayOpen}
-                                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left text-sm hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
+                                  className="flex w-full items-center gap-x-3 px-4 py-1.5 text-left text-sm hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
                                 >
-                                  <span className="min-w-[4.5rem] font-medium tabular-nums text-slate-800 dark:text-slate-100">
+                                  <span className="min-w-[4.5rem] whitespace-nowrap font-medium tabular-nums text-slate-800 dark:text-slate-100">
                                     {formatDateShort(dia.fecha)}
                                   </span>
                                   <ChevronDown
@@ -2006,15 +2004,15 @@ export function FudoWorkspace({
                                     }`}
                                     aria-hidden
                                   />
-                                  <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1 tabular-nums">
+                                  <span className="ml-auto flex items-center justify-end gap-x-3 whitespace-nowrap tabular-nums">
                                     <span className="text-right">
-                                      <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                                        Transacciones
+                                      <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
+                                        Tx
                                       </span>
                                       {dia.cantidad}
                                     </span>
                                     <span className="text-right font-medium">
-                                      <span className="mr-2 text-xs font-medium uppercase text-slate-500">
+                                      <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
                                         Total
                                       </span>
                                       {formatCLP(dia.monto)}
@@ -2030,16 +2028,16 @@ export function FudoWorkspace({
                                       <table className="min-w-full text-sm">
                                         <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/60">
                                           <tr>
-                                            <th className="px-4 py-2 font-medium">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                               Tipo
                                             </th>
-                                            <th className="px-4 py-2 font-medium">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                               Comentario
                                             </th>
-                                            <th className="px-4 py-2 font-medium">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium">
                                               Medio
                                             </th>
-                                            <th className="px-4 py-2 font-medium text-right">
+                                            <th className="whitespace-nowrap px-3 py-1.5 font-medium text-right">
                                               Monto
                                             </th>
                                           </tr>
@@ -2050,7 +2048,7 @@ export function FudoWorkspace({
                                               key={row.key}
                                               className="border-t border-slate-100 dark:border-slate-800"
                                             >
-                                              <td className="px-4 py-2.5">
+                                              <td className="whitespace-nowrap px-3 py-1.5">
                                                 <span
                                                   className={
                                                     row.tipo === "income"
@@ -2063,13 +2061,13 @@ export function FudoWorkspace({
                                                     : "Egreso"}
                                                 </span>
                                               </td>
-                                              <td className="max-w-xs truncate px-4 py-2.5">
+                                              <td className="max-w-[10rem] truncate px-3 py-1.5">
                                                 {row.comment}
                                               </td>
-                                              <td className="px-4 py-2.5 text-slate-500">
+                                              <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">
                                                 {row.medio}
                                               </td>
-                                              <td className="px-4 py-2.5 text-right tabular-nums">
+                                              <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
                                                 {formatCLP(row.monto)}
                                               </td>
                                             </tr>
@@ -2085,17 +2083,17 @@ export function FudoWorkspace({
                         </ul>
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-100/80 px-4 py-2.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
+                    <div className="flex items-center gap-x-3 border-t border-slate-200 bg-slate-100/80 px-4 py-1.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
                       <span>Totales</span>
-                      <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                      <span className="ml-auto flex items-center justify-end gap-x-3 whitespace-nowrap">
                         <span className="text-right tabular-nums">
-                          <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                            Transacciones
+                          <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
+                            Tx
                           </span>
                           {suc.cantidad}
                         </span>
                         <span className="text-right tabular-nums">
-                          <span className="mr-2 text-xs font-medium uppercase text-slate-500">
+                          <span className="mr-1.5 text-xs font-medium uppercase text-slate-500">
                             Total
                           </span>
                           {formatCLP(suc.monto)}
@@ -2110,13 +2108,13 @@ export function FudoWorkspace({
               })}
               {cajaPorSucursal.length > 0 ? (
                 <li className="fudo-total">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5">
+                  <div className="flex items-center gap-x-3 px-4 py-2.5">
                     <span className="min-w-0 text-sm font-bold tracking-wide">
                       Totales
                     </span>
-                    <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                    <span className="ml-auto flex items-center justify-end gap-x-4 whitespace-nowrap">
                       <span className="text-right text-sm font-semibold tabular-nums">
-                        <span className="fudo-total-label">Transacciones</span>
+                        <span className="fudo-total-label">Tx</span>
                         {cajaPorSucursal.reduce(
                           (sum, suc) => sum + suc.cantidad,
                           0,
@@ -2323,7 +2321,7 @@ export function FudoWorkspace({
                     <th className="px-4 py-2 font-medium">Fecha</th>
                     <th className="px-4 py-2 font-medium">Sucursal</th>
                     <th className="px-4 py-2 font-medium">Medio</th>
-                    <th className="px-4 py-2 font-medium text-right">Transacciones</th>
+                    <th className="px-4 py-2 font-medium text-right">Tx</th>
                     <th className="px-4 py-2 font-medium text-right">Total</th>
                   </tr>
                 </thead>
