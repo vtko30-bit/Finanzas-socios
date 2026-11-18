@@ -318,12 +318,15 @@ export function BankPositionSection({
   };
   const deudaCreditos = data?.deudaCreditos ?? 0;
 
+  const premiumActionBtn =
+    "inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold shadow-sm transition sm:px-4 sm:text-sm";
+
   const updateButton = !capsLoading && canWrite ? (
     <button
       type="button"
       className={
         variant === "premium"
-          ? "inline-flex items-center gap-1.5 rounded-xl bg-[#e85e00] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#d45500] disabled:opacity-50 sm:px-4 sm:text-sm"
+          ? `${premiumActionBtn} bg-[#e85e00] text-white hover:bg-[#d45500] disabled:opacity-50`
           : "rounded border border-[#d45500] bg-[#fbe7d8] px-2 py-0.5 text-[10px] font-medium text-stone-900 hover:bg-[#fbe7d8] disabled:opacity-50 sm:px-2.5 sm:py-1 sm:text-xs"
       }
       disabled={loading}
@@ -354,7 +357,7 @@ export function BankPositionSection({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/reportes"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 shadow-sm transition hover:border-[#e85e00] hover:text-[#e85e00] sm:px-4 sm:text-sm"
+              className={`${premiumActionBtn} border border-stone-200 bg-white text-stone-700 hover:border-[#e85e00] hover:text-[#e85e00]`}
             >
               <FileDown className="h-3.5 w-3.5" aria-hidden />
               Exportar
