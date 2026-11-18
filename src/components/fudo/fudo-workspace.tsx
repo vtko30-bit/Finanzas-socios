@@ -1469,11 +1469,6 @@ export function FudoWorkspace({
                       {formatDateShort(from)} → {formatDateShort(to)}
                     </p>
                   ) : null}
-                  {period === "month" ? (
-                    <p className="col-span-2 pb-0.5 text-xs tabular-nums text-slate-500 sm:col-auto">
-                      {formatDateShort(from)} → {formatDateShort(to)}
-                    </p>
-                  ) : null}
                 </>
               ) : (
                 <>
