@@ -1931,10 +1931,10 @@ function GastosPageContent() {
                 </label>
               ) : null}
               {modoFecha === "mes" ? (
-                <label className="flex min-w-[7.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                <label className="flex shrink-0 flex-col gap-0.5 text-xs text-slate-600">
                   Mes
                   <MonthField
-                    className="ui-filter-control w-full"
+                    className="ui-filter-control w-[5.5rem]"
                     value={mes}
                     onChange={setMes}
                   />

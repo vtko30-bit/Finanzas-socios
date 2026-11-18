@@ -699,7 +699,7 @@ export function AnalisisCharts() {
             <label className="text-sm text-slate-700">
               Desde
               <MonthField
-                className="ui-field mt-1"
+                className="ui-field mt-1 w-[5.5rem]"
                 value={rangoDesde}
                 onChange={setRangoDesde}
               />
@@ -707,7 +707,7 @@ export function AnalisisCharts() {
             <label className="text-sm text-slate-700">
               Hasta
               <MonthField
-                className="ui-field mt-1"
+                className="ui-field mt-1 w-[5.5rem]"
                 value={rangoHasta}
                 onChange={setRangoHasta}
               />
