@@ -1089,78 +1089,154 @@ function GastosPageContent() {
     });
   }, [rows, excludedFamilyNames, excludedFamilyIds, catalogo]);
 
-  const nombresFamiliaOpciones = useMemo(() => {
-    const fromCat = catalogo
-      .filter((f) => !excludedFamilyIds.has(f.id))
-      .map((f) => f.name)
-      .filter((n) => {
-        const key = String(n).trim().toLowerCase();
-        return Boolean(key) && !excludedFamilyNames.has(key);
-      });
-    const fromRows = rowsSinExcluidas
-      .map((r) => r.familia)
-      .filter((x): x is string => {
-        if (!x || !String(x).trim()) return false;
-        return !excludedFamilyNames.has(String(x).trim().toLowerCase());
-      });
-    return [...new Set([...fromCat, ...fromRows])].sort((a, b) =>
-      a.localeCompare(b, "es"),
-    );
-  }, [catalogo, rowsSinExcluidas, excludedFamilyIds, excludedFamilyNames]);
-
-  const nombresCategoriaOpciones = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rowsSinExcluidas) {
-      const c = categoriaDisplayLabel(r, catalogo).trim();
-      if (c) set.add(c);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [rowsSinExcluidas, catalogo]);
-
-  const hayGastosSinCategoria = useMemo(
+  // Opciones de listas: solo lo que aparece con los filtros "anteriores"
+  // (fecha, nombre, descripción, origen…), no el catálogo completo.
+  const rowsParaOpcionesOrigen = useMemo(
     () =>
-      rowsSinExcluidas.some((r) => !categoriaDisplayLabel(r, catalogo).trim()),
-    [rowsSinExcluidas, catalogo],
+      filtrarGastos(rowsSinExcluidas, {
+        modoFecha,
+        dia,
+        mes,
+        anio,
+        rangoDesde,
+        rangoHasta,
+        nombreDestino: filtroNombreDestino,
+        descripcion: filtroDescripcion,
+        origenes: null,
+        familias: null,
+        categorias: null,
+        catalogo,
+      }),
+    [
+      rowsSinExcluidas,
+      modoFecha,
+      dia,
+      mes,
+      anio,
+      rangoDesde,
+      rangoHasta,
+      filtroNombreDestino,
+      filtroDescripcion,
+      catalogo,
+    ],
   );
 
-  const hayGastosSinFamilia = useMemo(
+  const rowsParaOpcionesFamilia = useMemo(
     () =>
-      rowsSinExcluidas.some((r) => !r.familia || !String(r.familia).trim()),
-    [rowsSinExcluidas],
+      filtrarGastos(rowsSinExcluidas, {
+        modoFecha,
+        dia,
+        mes,
+        anio,
+        rangoDesde,
+        rangoHasta,
+        nombreDestino: filtroNombreDestino,
+        descripcion: filtroDescripcion,
+        origenes: filtroOrigenes,
+        familias: null,
+        categorias: null,
+        catalogo,
+      }),
+    [
+      rowsSinExcluidas,
+      modoFecha,
+      dia,
+      mes,
+      anio,
+      rangoDesde,
+      rangoHasta,
+      filtroNombreDestino,
+      filtroDescripcion,
+      filtroOrigenes,
+      catalogo,
+    ],
+  );
+
+  const rowsParaOpcionesCategoria = useMemo(
+    () =>
+      filtrarGastos(rowsSinExcluidas, {
+        modoFecha,
+        dia,
+        mes,
+        anio,
+        rangoDesde,
+        rangoHasta,
+        nombreDestino: filtroNombreDestino,
+        descripcion: filtroDescripcion,
+        origenes: filtroOrigenes,
+        familias: filtroFamilias,
+        categorias: null,
+        catalogo,
+      }),
+    [
+      rowsSinExcluidas,
+      modoFecha,
+      dia,
+      mes,
+      anio,
+      rangoDesde,
+      rangoHasta,
+      filtroNombreDestino,
+      filtroDescripcion,
+      filtroOrigenes,
+      filtroFamilias,
+      catalogo,
+    ],
   );
 
   const opcionesOrigen = useMemo((): GastosMultiSelectOption[] => {
     const set = new Set<string>();
-    for (const r of rowsSinExcluidas) {
+    for (const r of rowsParaOpcionesOrigen) {
       const v = (r.origen || "").trim();
       if (v) set.add(v);
     }
     return [...set]
       .sort((a, b) => a.localeCompare(b, "es"))
       .map((v) => ({ value: v, label: v }));
-  }, [rowsSinExcluidas]);
+  }, [rowsParaOpcionesOrigen]);
 
   const opcionesFamilia = useMemo((): GastosMultiSelectOption[] => {
     const opts: GastosMultiSelectOption[] = [];
-    if (hayGastosSinFamilia) {
+    let sinFamilia = false;
+    const set = new Set<string>();
+    for (const r of rowsParaOpcionesFamilia) {
+      const f = (r.familia || "").trim();
+      if (!f) {
+        sinFamilia = true;
+        continue;
+      }
+      if (excludedFamilyNames.has(f.toLowerCase())) continue;
+      set.add(f);
+    }
+    if (sinFamilia) {
       opts.push({ value: SIN_FAMILIA, label: "Sin familia" });
     }
-    for (const n of nombresFamiliaOpciones) {
+    for (const n of [...set].sort((a, b) => a.localeCompare(b, "es"))) {
       opts.push({ value: n, label: n });
     }
     return opts;
-  }, [nombresFamiliaOpciones, hayGastosSinFamilia]);
+  }, [rowsParaOpcionesFamilia, excludedFamilyNames]);
 
   const opcionesCategoria = useMemo((): GastosMultiSelectOption[] => {
     const opts: GastosMultiSelectOption[] = [];
-    if (hayGastosSinCategoria) {
+    let sinCategoria = false;
+    const set = new Set<string>();
+    for (const r of rowsParaOpcionesCategoria) {
+      const c = categoriaDisplayLabel(r, catalogo).trim();
+      if (!c) {
+        sinCategoria = true;
+        continue;
+      }
+      set.add(c);
+    }
+    if (sinCategoria) {
       opts.push({ value: SIN_CATEGORIA, label: "Sin categoría" });
     }
-    for (const n of nombresCategoriaOpciones) {
+    for (const n of [...set].sort((a, b) => a.localeCompare(b, "es"))) {
       opts.push({ value: n, label: n });
     }
     return opts;
-  }, [nombresCategoriaOpciones, hayGastosSinCategoria]);
+  }, [rowsParaOpcionesCategoria, catalogo]);
 
   useEffect(() => {
     const validas = new Set(valoresOpciones(opcionesOrigen));
