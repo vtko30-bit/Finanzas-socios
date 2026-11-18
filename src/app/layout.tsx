@@ -7,6 +7,19 @@ import { FinanzasShell } from "@/components/finanzas-shell";
 export const metadata: Metadata = {
   title: "Finanzas Rg",
   description: "Control financiero multiusuario en la nube",
+  applicationName: "Finanzas Rg",
+  appleWebApp: {
+    capable: true,
+    title: "Finanzas Rg",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({
@@ -17,6 +30,8 @@ export default function RootLayout({
   return (
     <html lang="es" className="h-full antialiased">
       <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#e34584" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
