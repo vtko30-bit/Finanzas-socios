@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, RefreshCw } from "lucide-react";
-import { MonthField } from "@/components/ui/month-field";
+import { formatMonthAbr, MonthField } from "@/components/ui/month-field";
 
 type FudoWorkspaceProps = {
   canWrite: boolean;
@@ -1357,7 +1357,9 @@ export function FudoWorkspace({
   const dateSummary =
     period === "day"
       ? formatDateShort(from)
-      : `${formatDateShort(from)} → ${formatDateShort(to)}`;
+      : period === "month"
+        ? formatMonthAbr(from)
+        : `${formatDateShort(from)} → ${formatDateShort(to)}`;
   const filterSummary = `${periodLabel} · ${dateSummary} · ${branchSummary} · ${medioSummary}`;
 
   return (
@@ -1460,7 +1462,7 @@ export function FudoWorkspace({
                         value={from.slice(0, 7)}
                         max={today.slice(0, 7)}
                         onChange={(v) => applyPeriod("month", `${v}-01`)}
-                        className="ui-field mt-0.5 w-full min-w-[11.5rem] sm:w-[11.5rem]"
+                        className="ui-field mt-0.5 w-full max-w-full sm:w-[7.25rem]"
                       />
                     </label>
                   ) : null}

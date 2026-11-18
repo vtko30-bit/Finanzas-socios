@@ -1316,7 +1316,7 @@ export default function ResumenPage() {
                     ) : null}
                     {modo === "mensual" ? (
                       <MonthField
-                        className="box-border h-8 w-[11.5rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
+                        className="box-border h-8 w-[7.25rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                         value={mes}
                         onChange={setMes}
                       />

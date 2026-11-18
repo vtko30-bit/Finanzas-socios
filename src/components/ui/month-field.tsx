@@ -1,6 +1,6 @@
 "use client";
 
-/** Abreviaturas para etiquetas (tablas, listados). */
+/** Abreviaturas cortas para la casilla cerrada. */
 export const MESES_ABR = [
   "Ene",
   "Feb",
@@ -41,8 +41,8 @@ type MonthFieldProps = {
 };
 
 /**
- * Usa el selector nativo del navegador (dos columnas: mes y año).
- * El campo va un poco más ancho para que no se corte el nombre del mes.
+ * Casilla corta con texto "Nov 2026". Al tocar abre el selector nativo
+ * de dos columnas (mes / año).
  */
 export function MonthField({
   value,
@@ -52,18 +52,31 @@ export function MonthField({
   className,
   "aria-label": ariaLabel,
 }: MonthFieldProps) {
+  const normalized = value.slice(0, 7);
+  const label = parseYearMonth(normalized)
+    ? formatMonthAbr(normalized)
+    : "Mes";
+
   return (
-    <input
-      type="month"
-      value={value.slice(0, 7)}
-      max={max?.slice(0, 7)}
-      min={min?.slice(0, 7)}
-      aria-label={ariaLabel ?? "Mes"}
-      onChange={(e) => {
-        const next = e.target.value;
-        if (next) onChange(next);
-      }}
-      className={className}
-    />
+    <div className={`relative isolate overflow-hidden ${className ?? ""}`}>
+      <span
+        aria-hidden
+        className="pointer-events-none relative z-0 flex h-full min-h-[2.25rem] w-full items-center truncate tabular-nums"
+      >
+        {label}
+      </span>
+      <input
+        type="month"
+        value={normalized}
+        max={max?.slice(0, 7)}
+        min={min?.slice(0, 7)}
+        aria-label={ariaLabel ?? "Mes"}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next) onChange(next);
+        }}
+        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+      />
+    </div>
   );
 }
