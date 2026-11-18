@@ -173,25 +173,30 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  const sidebar = (
+  const renderSidebar = (opts: {
+    collapsedMode: boolean;
+    showCollapseToggle: boolean;
+  }) => (
     <aside
-      className={`fin-sidebar${collapsed ? " fin-sidebar--collapsed" : ""}`}
+      className={`fin-sidebar${opts.collapsedMode ? " fin-sidebar--collapsed" : ""}`}
       aria-label="Menú de Finanzas"
     >
       <div className="fin-sidebar__top">
-        <AppSwitcher collapsed={collapsed} />
-        <button
-          type="button"
-          className="fin-sidebar__icon-btn hidden md:inline-flex"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-label={collapsed ? "Expandir menú" : "Plegar menú"}
-        >
-          {collapsed ? (
-            <PanelLeft className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-        </button>
+        <AppSwitcher collapsed={opts.collapsedMode} />
+        {opts.showCollapseToggle ? (
+          <button
+            type="button"
+            className="fin-sidebar__icon-btn inline-flex"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={opts.collapsedMode ? "Expandir menú" : "Plegar menú"}
+          >
+            {opts.collapsedMode ? (
+              <PanelLeft className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
+        ) : null}
       </div>
 
       <nav className="fin-sidebar__nav">
@@ -201,7 +206,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
           items={NAV_MAIN}
           pathname={pathname}
           onNavigate={closeMobile}
-          collapsed={collapsed}
+          collapsed={opts.collapsedMode}
           open
           alwaysOpen
           onToggle={toggleGroup}
@@ -212,7 +217,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
           items={NAV_ANALYSIS}
           pathname={pathname}
           onNavigate={closeMobile}
-          collapsed={collapsed}
+          collapsed={opts.collapsedMode}
           open={!!openGroups.analysis}
           onToggle={toggleGroup}
         />
@@ -222,7 +227,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
           items={NAV_FINANCE}
           pathname={pathname}
           onNavigate={closeMobile}
-          collapsed={collapsed}
+          collapsed={opts.collapsedMode}
           open={!!openGroups.finance}
           onToggle={toggleGroup}
         />
@@ -232,7 +237,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
           items={configItems}
           pathname={pathname}
           onNavigate={closeMobile}
-          collapsed={collapsed}
+          collapsed={opts.collapsedMode}
           open={!!openGroups.config}
           onToggle={toggleGroup}
         />
@@ -243,7 +248,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
             items={[{ href: "/login", label: "Login" }]}
             pathname={pathname}
             onNavigate={closeMobile}
-            collapsed={collapsed}
+            collapsed={opts.collapsedMode}
             open
             alwaysOpen
             onToggle={toggleGroup}
@@ -252,7 +257,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className="fin-sidebar__footer">
-        {!collapsed && authReady && authenticated ? (
+        {!opts.collapsedMode && authReady && authenticated ? (
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-stone-900">
               {(email || "").split("@")[0] || "Usuario"}
@@ -263,7 +268,7 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
         {authReady && authenticated ? (
           <button
             type="button"
-            className="fin-sidebar__icon-btn"
+            className="fin-sidebar__icon-btn inline-flex"
             onClick={() => void signOut()}
             aria-label="Cerrar sesión"
             title="Cerrar sesión"
@@ -277,7 +282,12 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={`fin-app${collapsed ? " fin-app--collapsed" : ""}`}>
-      <div className="hidden md:block">{sidebar}</div>
+      <div className="hidden md:block">
+        {renderSidebar({
+          collapsedMode: collapsed,
+          showCollapseToggle: true,
+        })}
+      </div>
 
       {mobileOpen ? (
         <div className="fin-mobile-drawer md:hidden">
@@ -287,7 +297,12 @@ export function FinanzasShell({ children }: { children: React.ReactNode }) {
             aria-label="Cerrar menú"
             onClick={closeMobile}
           />
-          <div className="fin-mobile-drawer__panel">{sidebar}</div>
+          <div className="fin-mobile-drawer__panel">
+            {renderSidebar({
+              collapsedMode: false,
+              showCollapseToggle: false,
+            })}
+          </div>
         </div>
       ) : null}
 
