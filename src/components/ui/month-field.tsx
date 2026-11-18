@@ -25,6 +25,11 @@ function parseYearMonth(value: string): { y: number; m: number } | null {
   return { y, m };
 }
 
+function currentYearMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function formatMonthAbr(value: string): string {
   const parsed = parseYearMonth(value.slice(0, 7));
   if (!parsed) return value;
@@ -52,10 +57,11 @@ export function MonthField({
   className,
   "aria-label": ariaLabel,
 }: MonthFieldProps) {
-  const normalized = value.slice(0, 7);
-  const label = parseYearMonth(normalized)
-    ? formatMonthAbr(normalized)
-    : "Mes";
+  const parsed = parseYearMonth(value.slice(0, 7));
+  const inputValue = parsed
+    ? `${parsed.y}-${String(parsed.m).padStart(2, "0")}`
+    : currentYearMonth();
+  const label = parsed ? formatMonthAbr(inputValue) : "Mes";
 
   return (
     <div
@@ -69,15 +75,24 @@ export function MonthField({
       </span>
       <input
         type="month"
-        value={normalized}
-        max={max?.slice(0, 7)}
-        min={min?.slice(0, 7)}
+        value={inputValue}
+        max={max?.slice(0, 7) || undefined}
+        min={min?.slice(0, 7) || undefined}
         aria-label={ariaLabel ?? "Mes"}
         onChange={(e) => {
           const next = e.target.value;
           if (next) onChange(next);
         }}
-        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+        onClick={(e) => {
+          // Algunos navegadores solo abren el picker al tocar el ícono.
+          const input = e.currentTarget;
+          try {
+            input.showPicker?.();
+          } catch {
+            /* ignore */
+          }
+        }}
+        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
       />
     </div>
   );

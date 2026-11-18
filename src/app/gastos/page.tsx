@@ -1910,7 +1910,16 @@ function GastosPageContent() {
                 <select
                   className="ui-filter-control w-full"
                   value={modoFecha}
-                  onChange={(e) => setModoFecha(e.target.value as FechaFiltroModo)}
+                  onChange={(e) => {
+                    const next = e.target.value as FechaFiltroModo;
+                    setModoFecha(next);
+                    if (next === "mes" && !/^\d{4}-\d{2}$/.test(mes)) {
+                      const now = new Date();
+                      setMes(
+                        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+                      );
+                    }
+                  }}
                 >
                   <option value="todo">Todas las fechas</option>
                   <option value="dia">Día</option>
