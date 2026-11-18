@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   const { data: txRows, error: txError } = await finanzas
     .from("transactions")
     .select(
-      "id, date, amount, type, description, counterparty, external_ref, payment_method, origen_cuenta, source",
+      "id, date, amount, type, description, counterparty, external_ref, payment_method, origen_cuenta, source, source_id",
     )
     .eq("organization_id", ctx.organizationId)
     .eq("type", book === "venta" ? "income" : "expense")
@@ -67,8 +67,13 @@ export async function GET(request: Request) {
   if (txError) return NextResponse.json({ error: txError.message }, { status: 500 });
 
   const candidates: PaymentCandidate[] = [];
+  const seenKeys = new Set<string>();
+  const fudoSourceIds = new Set<string>();
+
   for (const row of txRows ?? []) {
     const source = isFudoSource(String(row.source || "")) ? "fudo" : "banco";
+    const sourceId = String(row.source_id || "").trim();
+    if (source === "fudo" && sourceId) fudoSourceIds.add(sourceId);
     const label = String(
       row.counterparty || row.description || row.origen_cuenta || "Movimiento",
     );
@@ -78,9 +83,13 @@ export async function GET(request: Request) {
     if (query && !`${label} ${detail}`.toLowerCase().includes(query.toLowerCase())) {
       continue;
     }
+    const paymentId = String(row.id);
+    const key = `${source}:${paymentId}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
     candidates.push({
       source,
-      paymentId: String(row.id),
+      paymentId,
       paidOn: String(row.date).slice(0, 10),
       amount: Number(row.amount) || 0,
       label,
@@ -90,18 +99,29 @@ export async function GET(request: Request) {
   }
 
   // Compatibilidad: gastos Fudo crudos en RG Suite (vínculos antiguos).
+  // Si ya están en transactions (source_id = id Fudo), no los repetimos.
   if (book === "compra") {
     const rg = createRgSuiteAdmin();
     const { data: expenses } = await rg
       .schema("fudo")
       .from("expenses")
-      .select("id, business_date, amount, provider_name, description, payment_method, branch_label")
+      .select(
+        "id, fudo_expense_id, business_date, amount, provider_name, description, payment_method, branch_label",
+      )
       .eq("organization_id", rgOrgId)
       .gte("business_date", from)
       .lte("business_date", to)
       .order("business_date", { ascending: false })
       .limit(200);
     for (const row of expenses ?? []) {
+      const fudoId = String(row.fudo_expense_id || "").trim();
+      const rowId = String(row.id);
+      if (
+        (fudoId && fudoSourceIds.has(fudoId)) ||
+        fudoSourceIds.has(rowId)
+      ) {
+        continue;
+      }
       const label = String(row.provider_name || row.description || "Gasto Fudo");
       const detail = [row.branch_label, row.payment_method, row.description]
         .filter(Boolean)
@@ -109,9 +129,12 @@ export async function GET(request: Request) {
       if (query && !`${label} ${detail}`.toLowerCase().includes(query.toLowerCase())) {
         continue;
       }
+      const key = `fudo:${rowId}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
       candidates.push({
         source: "fudo",
-        paymentId: String(row.id),
+        paymentId: rowId,
         paidOn: String(row.business_date).slice(0, 10),
         amount: Number(row.amount) || 0,
         label,
@@ -122,8 +145,24 @@ export async function GET(request: Request) {
   }
 
   const ranked = rankPayments({ name, rut, total, issuedOn }, candidates);
-  const visible = (query ? ranked : ranked.filter((item) => item.score > 0)).slice(0, 20);
-  const list = (visible.length ? visible : ranked.slice(0, 12)).map((item) => {
+  // Misma fecha + monto + proveedor: un solo ítem (prioriza el mejor score).
+  const uniqueRanked: typeof ranked = [];
+  const seenFingerprints = new Set<string>();
+  for (const item of ranked) {
+    const fingerprint = [
+      item.payment.paidOn,
+      String(item.payment.amount),
+      item.payment.label.trim().toLowerCase().replace(/\s+/g, " "),
+    ].join("|");
+    if (seenFingerprints.has(fingerprint)) continue;
+    seenFingerprints.add(fingerprint);
+    uniqueRanked.push(item);
+  }
+
+  const visible = (
+    query ? uniqueRanked : uniqueRanked.filter((item) => item.score > 0)
+  ).slice(0, 20);
+  const list = (visible.length ? visible : uniqueRanked.slice(0, 12)).map((item) => {
     const used = paymentUsed(links, item.payment.source, item.payment.paymentId);
     return {
       ...item.payment,
