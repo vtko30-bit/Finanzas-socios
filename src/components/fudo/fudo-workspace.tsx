@@ -384,6 +384,7 @@ export function FudoWorkspace({
   const [prevExpenses, setPrevExpenses] = useState<ExpenseRow[]>([]);
   const [prevCash, setPrevCash] = useState<CashRow[]>([]);
   const [autoSyncHours, setAutoSyncHours] = useState(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [branchesMeta, setBranchesMeta] = useState<
     { code: string; label: string }[]
@@ -1335,6 +1336,19 @@ export function FudoWorkspace({
     window.localStorage.setItem(autoSyncStorageKey(), String(next));
   };
 
+  const periodLabel =
+    PERIODS.find((item) => item.id === period)?.label ?? period;
+  const branchSummary =
+    branchFilter === "all"
+      ? "Todas"
+      : branchesMeta.find((b) => b.code === branchFilter)?.label || branchFilter;
+  const medioSummary = medioFilter === "all" ? "Todas" : medioFilter;
+  const dateSummary =
+    period === "day"
+      ? formatDateShort(from)
+      : `${formatDateShort(from)} → ${formatDateShort(to)}`;
+  const filterSummary = `${periodLabel} · ${dateSummary} · ${branchSummary} · ${medioSummary}`;
+
   return (
     <div className="fudo-theme fudo-tight-rows space-y-4">
       <div>
@@ -1361,8 +1375,39 @@ export function FudoWorkspace({
         ) : null}
       </div>
 
-      <section className="ui-card fudo-filter-fields overflow-hidden p-4 sm:p-5">
-        <div className="flex flex-col gap-3">
+      <section className="ui-card fudo-filter-fields overflow-hidden p-3 sm:p-5">
+        <div className="flex items-center gap-2 sm:hidden">
+          <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-600 dark:text-slate-300">
+            {filterSummary}
+          </p>
+          <button
+            type="button"
+            onClick={() => applyPeriod("day", today)}
+            className="ui-btn-secondary ui-btn-sm shrink-0"
+          >
+            Hoy
+          </button>
+          <button
+            type="button"
+            className="ui-btn-secondary ui-btn-sm inline-flex shrink-0 items-center gap-1"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            Filtros
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform${
+                filtersOpen ? " rotate-180" : ""
+              }`}
+              aria-hidden
+            />
+          </button>
+        </div>
+
+        <div
+          className={`flex-col gap-3 ${
+            filtersOpen ? "mt-3 flex" : "hidden"
+          } sm:mt-0 sm:flex`}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
             <div className="flex flex-wrap items-end gap-3">
               <label className="inline-block w-[8.8rem] text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -1553,6 +1598,12 @@ export function FudoWorkspace({
               ) : null}
             </div>
           </div>
+          {canWrite && autoSyncHours > 0 ? (
+            <p className="text-xs text-slate-500">
+              Con esta pantalla abierta, además de la madrugada, se leen ayer y hoy
+              de Rg y Happy cada {autoSyncHours} horas. No ingresa pedidos en Fudo.
+            </p>
+          ) : null}
         </div>
         {error ? (
           <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{error}</p>
@@ -1560,12 +1611,6 @@ export function FudoWorkspace({
         {message ? (
           <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">
             {message}
-          </p>
-        ) : null}
-        {canWrite && autoSyncHours > 0 ? (
-          <p className="mt-2 text-xs text-slate-500">
-            Con esta pantalla abierta, además de la madrugada, se leen ayer y hoy
-            de Rg y Happy cada {autoSyncHours} horas. No ingresa pedidos en Fudo.
           </p>
         ) : null}
       </section>
