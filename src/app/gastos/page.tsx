@@ -13,6 +13,7 @@ import { useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { GastosCargasPanel } from "@/components/gastos/gastos-cargas-panel";
+import { GastoFacturaLinkModal } from "@/components/gastos/gasto-factura-link-modal";
 import { MonthField } from "@/components/ui/month-field";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
@@ -818,6 +819,7 @@ function GastosPageContent() {
     descripcion: string;
   } | null>(null);
   const [detailRow, setDetailRow] = useState<GastoRow | null>(null);
+  const [facturaLinkRow, setFacturaLinkRow] = useState<GastoRow | null>(null);
   const [reconcileModal, setReconcileModal] = useState<{
     transactionId: string;
     monto: number;
@@ -2638,11 +2640,11 @@ function GastosPageContent() {
                 </dd>
               </div>
             </dl>
-            <div className="mt-6 flex items-center gap-2">
+            <div className="mt-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto">
               {canWrite && isReconcilableImportSource(detailRow.source) ? (
                 <button
                   type="button"
-                  className="rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  className="shrink-0 rounded border border-emerald-700 bg-emerald-50 px-2 py-1 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                   disabled={uiBloqueadoGuardado}
                   title="Vincular este egreso importado con el pago de una cuota (reemplaza el movimiento por el desglose contable)"
                   onClick={() => {
@@ -2653,13 +2655,13 @@ function GastosPageContent() {
                     setDetailRow(null);
                   }}
                 >
-                  Conciliar con cuota de crédito
+                  Conciliar cuota
                 </button>
               ) : null}
               {canWrite && isReconcilableImportSource(detailRow.source) ? (
                 <button
                   type="button"
-                  className="rounded border border-[#d45500] bg-[#fbe7d8] px-3 py-2 text-sm text-[#9a3f00] hover:bg-[#f6d7bf] disabled:opacity-50"
+                  className="shrink-0 rounded border border-[#d45500] bg-[#fbe7d8] px-2 py-1 text-xs text-[#9a3f00] hover:bg-[#f6d7bf] disabled:opacity-50"
                   disabled={uiBloqueadoGuardado}
                   title="Marcar este egreso importado como correspondiente a una cuota ya pagada. Deja de aparecer en Gastos."
                   onClick={() => {
@@ -2671,12 +2673,26 @@ function GastosPageContent() {
                     setDetailRow(null);
                   }}
                 >
-                  Vincular como cuota ya pagada
+                  Cuota pagada
+                </button>
+              ) : null}
+              {canWrite ? (
+                <button
+                  type="button"
+                  className="shrink-0 rounded border border-sky-700 bg-sky-50 px-2 py-1 text-xs text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                  disabled={uiBloqueadoGuardado}
+                  title="Vincular este gasto con una factura de compra pendiente"
+                  onClick={() => {
+                    setFacturaLinkRow(detailRow);
+                    setDetailRow(null);
+                  }}
+                >
+                  Vincular factura
                 </button>
               ) : null}
               <button
                 type="button"
-                className="ml-auto rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-200"
+                className="ml-auto shrink-0 rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-200"
                 onClick={() => setDetailRow(null)}
               >
                 Cerrar
@@ -2685,6 +2701,20 @@ function GastosPageContent() {
           </div>
         </div>
       ) : null}
+
+      {mounted && facturaLinkRow
+        ? createPortal(
+            <GastoFacturaLinkModal
+              gasto={facturaLinkRow}
+              onClose={() => setFacturaLinkRow(null)}
+              onLinked={() => {
+                setFacturaLinkRow(null);
+                setStatus("Gasto vinculado a la factura.");
+              }}
+            />,
+            document.body,
+          )
+        : null}
 
       {mounted && reconcileModal
         ? createPortal(
