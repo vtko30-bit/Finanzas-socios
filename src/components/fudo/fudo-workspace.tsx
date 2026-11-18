@@ -1460,7 +1460,7 @@ export function FudoWorkspace({
                         value={from.slice(0, 7)}
                         max={today.slice(0, 7)}
                         onChange={(v) => applyPeriod("month", `${v}-01`)}
-                        className="ui-field mt-0.5 w-[5.5rem]"
+                        className="ui-field mt-0.5 w-full min-w-[11.5rem] sm:w-[11.5rem]"
                       />
                     </label>
                   ) : null}
