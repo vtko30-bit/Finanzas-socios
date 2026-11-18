@@ -597,14 +597,14 @@ function GastosMultiSelect({
           id={`${id}-lista`}
           role="listbox"
           aria-multiselectable
-          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
+          className="absolute left-0 top-full z-40 mt-1 max-h-52 min-w-full w-max max-w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto overflow-x-hidden rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
           onMouseDown={(e) => e.preventDefault()}
         >
           <li className="border-b border-slate-100 px-3 py-2">
             <label className="flex cursor-pointer items-center gap-2 text-slate-700">
               <input
                 type="checkbox"
-                className="h-3.5 w-3.5 accent-[#e85e00]"
+                className="h-3.5 w-3.5 shrink-0 accent-[#e85e00]"
                 checked={todasMarcadas}
                 ref={(el) => {
                   if (el) el.indeterminate = algunasMarcadas;
@@ -616,16 +616,18 @@ function GastosMultiSelect({
           </li>
           {opciones.map((opt) => (
             <li key={opt.value} className="px-3 py-1.5 hover:bg-slate-50">
-              <label className="flex cursor-pointer items-center gap-2 text-slate-800">
+              <label className="flex cursor-pointer items-start gap-2 text-slate-800">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 accent-[#e85e00]"
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#e85e00]"
                   checked={opcionMultiMarcada(opt.value, seleccion, opciones.length)}
                   onChange={() =>
                     onChange(toggleSeleccionMulti(opt.value, seleccion, valores))
                   }
                 />
-                <span className="min-w-0 truncate text-xs">{opt.label}</span>
+                <span className="whitespace-normal break-words text-xs leading-snug">
+                  {opt.label}
+                </span>
               </label>
             </li>
           ))}
