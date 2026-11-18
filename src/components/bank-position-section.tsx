@@ -319,7 +319,7 @@ export function BankPositionSection({
   const deudaCreditos = data?.deudaCreditos ?? 0;
 
   const premiumActionBtn =
-    "inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold shadow-sm transition sm:px-4 sm:text-sm";
+    "inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold shadow-sm transition sm:px-3 sm:text-xs";
 
   const updateButton = !capsLoading && canWrite ? (
     <button
