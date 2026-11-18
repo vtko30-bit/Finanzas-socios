@@ -118,17 +118,8 @@ function todaySantiago(): string {
   }).format(new Date());
 }
 
-const AUTO_SYNC_HOURS = [0, 6, 4, 2] as const;
-
-function autoSyncStorageKey() {
-  return "fudo-auto-sync-hours";
-}
-
-function readAutoSyncHours(): number {
-  if (typeof window === "undefined") return 0;
-  const n = Number(window.localStorage.getItem(autoSyncStorageKey()));
-  return (AUTO_SYNC_HOURS as readonly number[]).includes(n) ? n : 0;
-}
+/** Con la pantalla abierta, lee ayer y hoy desde Fudo cada N horas. */
+const AUTO_SYNC_HOURS = 2;
 
 function addDays(ymd: string, days: number): string {
   const d = new Date(`${ymd}T12:00:00Z`);
@@ -383,7 +374,6 @@ export function FudoWorkspace({
   const [prevPayments, setPrevPayments] = useState<PaymentRow[]>([]);
   const [prevExpenses, setPrevExpenses] = useState<ExpenseRow[]>([]);
   const [prevCash, setPrevCash] = useState<CashRow[]>([]);
-  const [autoSyncHours, setAutoSyncHours] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [branchesMeta, setBranchesMeta] = useState<
@@ -1252,10 +1242,6 @@ export function FudoWorkspace({
     branchFilter === "all"
       ? null
       : branchesMeta.find((b) => b.code === branchFilter)?.label || branchFilter;
-  useEffect(() => {
-    setAutoSyncHours(readAutoSyncHours());
-  }, []);
-
   const onSync = useCallback(async (request?: {
     from?: string;
     to?: string;
@@ -1341,8 +1327,8 @@ export function FudoWorkspace({
   }, [onSync]);
 
   useEffect(() => {
-    if (!canWrite || autoSyncHours <= 0) return;
-    const timer = window.setInterval(() => {
+    if (!canWrite) return;
+    const runQuiet = () => {
       if (document.hidden) return;
       const day = todaySantiago();
       void onSyncRef.current({
@@ -1351,15 +1337,14 @@ export function FudoWorkspace({
         includeEvents: false,
         quiet: true,
       });
-    }, autoSyncHours * 60 * 60 * 1000);
+    };
+    runQuiet();
+    const timer = window.setInterval(
+      runQuiet,
+      AUTO_SYNC_HOURS * 60 * 60 * 1000,
+    );
     return () => window.clearInterval(timer);
-  }, [autoSyncHours, canWrite]);
-
-  const changeAutoSyncHours = (hours: number) => {
-    const next = (AUTO_SYNC_HOURS as readonly number[]).includes(hours) ? hours : 0;
-    setAutoSyncHours(next);
-    window.localStorage.setItem(autoSyncStorageKey(), String(next));
-  };
+  }, [canWrite]);
 
   const periodLabel =
     PERIODS.find((item) => item.id === period)?.label ?? period;
@@ -1605,30 +1590,8 @@ export function FudoWorkspace({
                       : "Sync Fudo"}
                 </button>
               ) : null}
-              {canWrite ? (
-                <label className="col-span-2 block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:col-auto sm:w-auto">
-                  Frecuencia extra
-                  <select
-                    value={autoSyncHours}
-                    onChange={(e) => changeAutoSyncHours(Number(e.target.value))}
-                    className="ui-field mt-0.5 w-full sm:w-auto"
-                    disabled={syncing}
-                  >
-                    <option value={0}>Solo madrugada</option>
-                    <option value={6}>Cada 6 horas</option>
-                    <option value={4}>Cada 4 horas</option>
-                    <option value={2}>Cada 2 horas</option>
-                  </select>
-                </label>
-              ) : null}
             </div>
           </div>
-          {canWrite && autoSyncHours > 0 ? (
-            <p className="text-xs text-slate-500">
-              Con esta pantalla abierta, además de la madrugada, se leen ayer y hoy
-              de Rg y Happy cada {autoSyncHours} horas. No ingresa pedidos en Fudo.
-            </p>
-          ) : null}
         </div>
         {error ? (
           <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{error}</p>
