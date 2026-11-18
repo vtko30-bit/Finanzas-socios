@@ -54,6 +54,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
   }
 
+  const { data: prev } = await supabase
+    .from("concept_catalog")
+    .select("id, label, family_id")
+    .eq("id", id)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+
   const { data: row, error } = await supabase
     .from("concept_catalog")
     .update(updates)
@@ -76,14 +83,49 @@ export async function PATCH(
   }
 
   if (updates.label) {
+    const now = new Date().toISOString();
     await supabase
       .from("transactions")
       .update({
         concepto: updates.label,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq("organization_id", orgId)
       .eq("concept_id", id);
+
+    // También corrige gastos con el mismo nombre en otra capitalización
+    // (sin concept_id o con texto viejo).
+    const oldLabel = String(prev?.label ?? "").trim();
+    if (oldLabel && oldLabel.toLowerCase() !== updates.label.toLowerCase()) {
+      // no-op: distinto nombre, no tocar
+    } else if (oldLabel && oldLabel !== updates.label) {
+      const { data: candidates } = await supabase
+        .from("transactions")
+        .select("id, concepto")
+        .eq("organization_id", orgId)
+        .in("type", ["expense", "gasto", "egreso"])
+        .is("concept_id", null)
+        .limit(2000);
+      const ids = (candidates ?? [])
+        .filter(
+          (r) =>
+            String(r.concepto ?? "")
+              .trim()
+              .replace(/\s+/g, " ")
+              .toLowerCase() === oldLabel.replace(/\s+/g, " ").toLowerCase(),
+        )
+        .map((r) => String(r.id));
+      if (ids.length) {
+        await supabase
+          .from("transactions")
+          .update({
+            concepto: updates.label,
+            concept_id: id,
+            updated_at: now,
+          })
+          .in("id", ids);
+      }
+    }
   }
 
   return NextResponse.json({ concept: row });

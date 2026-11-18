@@ -1613,9 +1613,28 @@ function GastosPageContent() {
       if (existingConcept) {
         let targetFamilyId = existingConcept.familyId;
         if (famTrim) {
-          const matched = findFamilyByName(famTrim, families)?.id;
-          if (matched) {
-            targetFamilyId = matched;
+          const matchedFamily = findFamilyByName(famTrim, families);
+          if (matchedFamily) {
+            targetFamilyId = matchedFamily.id;
+            // Corrige mayúsculas/minúsculas de la familia si el usuario las cambió.
+            if (matchedFamily.name !== famTrim) {
+              const resRenameFam = await fetch(
+                `/api/familias/${matchedFamily.id}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ name: famTrim }),
+                },
+              );
+              const dataRenameFam = await resRenameFam.json();
+              if (resRenameFam.ok && dataRenameFam.family) {
+                families = families.map((f) =>
+                  f.id === matchedFamily.id
+                    ? { ...f, name: String(dataRenameFam.family.name) }
+                    : f,
+                );
+              }
+            }
           } else {
             const resFam = await fetch("/api/familias", {
               method: "POST",
@@ -1628,12 +1647,12 @@ function GastosPageContent() {
               families = agregarFamiliaAlCatalogo(families, dataFam.family);
             } else if (resFam.status === 409) {
               families = await fetchFamilies();
-              const retryFamilyId = findFamilyByName(famTrim, families)?.id;
-              if (!retryFamilyId) {
+              const retryFamily = findFamilyByName(famTrim, families);
+              if (!retryFamily) {
                 mostrarAviso("No se pudo resolver la familia.");
                 return;
               }
-              targetFamilyId = retryFamilyId;
+              targetFamilyId = retryFamily.id;
             } else {
               mostrarAviso(dataFam.error || "No se pudo crear la familia");
               return;
@@ -1641,44 +1660,49 @@ function GastosPageContent() {
           }
         }
 
-        if (targetFamilyId === existingConcept.familyId) {
+        // Si solo cambia mayúsculas/minúsculas (o la familia), actualiza el catálogo.
+        const needsLabelFix = existingConcept.label !== catTrim;
+        const needsFamilyMove = targetFamilyId !== existingConcept.familyId;
+        if (needsLabelFix || needsFamilyMove) {
+          const resRename = await fetch(
+            `/api/conceptos-catalogo/${existingConcept.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                label: catTrim,
+                family_id: targetFamilyId,
+              }),
+            },
+          );
+          const dataRename = await resRename.json();
+          if (!resRename.ok) {
+            mostrarAviso(
+              dataRename.error || "No se pudo actualizar la categoría",
+            );
+            return;
+          }
+          const renamed = dataRename.concept as {
+            id: string;
+            label: string;
+            family_id: string;
+          };
+          const nextCatalogo = actualizarCatalogoConcepto(families, renamed);
+          setCatalogo(nextCatalogo);
+          setClientCache(FAMILIAS_CACHE_KEY, nextCatalogo);
           const ok = await guardarConceptoCatalogo(
             editModal.gastoIds,
-            existingConcept.id,
-            guardarOpts,
+            renamed.id,
+            { ...guardarOpts, catalogoSnapshot: nextCatalogo },
           );
           await cerrarSiOk(ok);
           return;
         }
 
-        const resUpsert = await fetch("/api/conceptos-catalogo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            family_id: targetFamilyId,
-            label: existingConcept.label,
-            vincular_gastos_sin_catalogo: false,
-          }),
-        });
-        const dataUpsert = await resUpsert.json();
-        if (!resUpsert.ok) {
-          mostrarAviso(
-            dataUpsert.error || "No se pudo actualizar la categoría",
-          );
-          return;
-        }
-        const conceptUpsert = dataUpsert.concept as {
-          id: string;
-          label: string;
-          family_id: string;
-        };
-        const nextCatalogo = actualizarCatalogoConcepto(families, conceptUpsert);
-        setCatalogo(nextCatalogo);
-        setClientCache(FAMILIAS_CACHE_KEY, nextCatalogo);
         const ok = await guardarConceptoCatalogo(
           editModal.gastoIds,
           existingConcept.id,
-          { ...guardarOpts, catalogoSnapshot: nextCatalogo },
+          guardarOpts,
         );
         await cerrarSiOk(ok);
         return;
@@ -2994,10 +3018,19 @@ function GastosPageContent() {
                           const famName =
                             catalogo.find((f) => f.id === found.familyId)
                               ?.name ?? "";
+                          // Si eligió de la lista (mismo texto), completa familia.
+                          // Si está escribiendo otra capitalización, no forzar minúsculas.
+                          const exacto =
+                            found.label.trim().replace(/\s+/g, " ") ===
+                            v.trim().replace(/\s+/g, " ");
                           return {
                             ...m,
-                            categoria: found.label,
-                            familia: famName,
+                            categoria: exacto ? found.label : v,
+                            familia: exacto
+                              ? famName
+                              : m.familia.trim()
+                                ? m.familia
+                                : famName,
                           };
                         }
                         return { ...m, categoria: v };
