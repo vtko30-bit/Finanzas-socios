@@ -768,12 +768,37 @@ export function FudoWorkspace({
             };
           })
           .sort((a, b) => b.fecha.localeCompare(a.fecha));
+        const mediosMap = new Map<string, VentaMedioLine>();
+        for (const dia of dias) {
+          for (const m of dia.medios) {
+            const cur = mediosMap.get(m.key);
+            if (cur) {
+              cur.cantidad += m.cantidad;
+              cur.monto += m.monto;
+            } else {
+              mediosMap.set(m.key, {
+                key: m.key,
+                medio: m.medio,
+                cantidad: m.cantidad,
+                monto: m.monto,
+                share: 0,
+              });
+            }
+          }
+        }
+        const medios = [...mediosMap.values()]
+          .map((m) => ({
+            ...m,
+            share: s.monto > 0 ? (m.monto / s.monto) * 100 : 0,
+          }))
+          .sort((a, b) => b.monto - a.monto);
         return {
           code: s.code,
           label: s.label,
           cantidad: s.cantidad,
           monto: s.monto,
           dias,
+          medios,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, "es"));
@@ -1673,91 +1698,39 @@ export function FudoWorkspace({
                     </div>
                     {open ? (
                       <div className="border-t border-slate-200/80 bg-slate-50/70 dark:border-slate-700/80 dark:bg-slate-900/30">
-                        <ul className="divide-y divide-slate-200/80 dark:divide-slate-700/80">
-                          {suc.dias.map((dia) => {
-                            const dayKey = `${suc.code}|${dia.fecha}`;
-                            const dayOpen = openVentasDias.includes(dayKey);
-                            return (
-                              <li key={dayKey}>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setOpenVentasDias((prev) =>
-                                      dayOpen
-                                        ? prev.filter((k) => k !== dayKey)
-                                        : [...prev, dayKey],
-                                    )
-                                  }
-                                  aria-expanded={dayOpen}
-                                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left text-sm hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/60">
+                              <tr>
+                                <th className="px-4 py-2 font-medium">
+                                  Forma de pago
+                                </th>
+                                <th className="px-4 py-2 font-medium text-right">
+                                  Transacciones
+                                </th>
+                                <th className="px-4 py-2 font-medium text-right">
+                                  Total
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {suc.medios.map((row) => (
+                                <tr
+                                  key={row.key}
+                                  className="border-t border-slate-100 dark:border-slate-800"
                                 >
-                                  <span className="min-w-[4.5rem] font-medium tabular-nums text-slate-800 dark:text-slate-100">
-                                    {formatDateShort(dia.fecha)}
-                                  </span>
-                                  <ChevronDown
-                                    className={`fudo-accent h-3.5 w-3.5 shrink-0 transition ${
-                                      dayOpen ? "rotate-180" : ""
-                                    }`}
-                                    aria-hidden
-                                  />
-                                  <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1 tabular-nums">
-                                    <span className="text-right">
-                                      <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                                        Transacciones
-                                      </span>
-                                      {dia.cantidad}
-                                    </span>
-                                    <span className="text-right font-medium">
-                                      <span className="mr-2 text-xs font-medium uppercase text-slate-500">
-                                        Total
-                                      </span>
-                                      {formatCLP(dia.monto)}
-                                    </span>
-                                  </span>
-                                </button>
-                                {dayOpen ? (
-                                  <div className="border-t border-slate-200/60 bg-white/60 dark:border-slate-700/60 dark:bg-slate-900/40">
-                                    <div className="overflow-x-auto">
-                                      <table className="min-w-full text-sm">
-                                        <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/60">
-                                          <tr>
-                                            <th className="px-4 py-2 font-medium">
-                                              Forma de pago
-                                            </th>
-                                            <th className="px-4 py-2 font-medium text-right">
-                                              Transacciones
-                                            </th>
-                                            <th className="px-4 py-2 font-medium text-right">
-                                              Total
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {dia.medios.map((row) => (
-                                            <tr
-                                              key={row.key}
-                                              className="border-t border-slate-100 dark:border-slate-800"
-                                            >
-                                              <td className="px-4 py-2.5">
-                                                {row.medio}
-                                              </td>
-                                              <td className="px-4 py-2.5 text-right tabular-nums">
-                                                {row.cantidad}
-                                              </td>
-                                              <td className="px-4 py-2.5 text-right font-medium tabular-nums">
-                                                {formatCLP(row.monto)}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </li>
-                            );
-                          })}
-                        </ul>
+                                  <td className="px-4 py-2.5">{row.medio}</td>
+                                  <td className="px-4 py-2.5 text-right tabular-nums">
+                                    {row.cantidad}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right font-medium tabular-nums">
+                                    {formatCLP(row.monto)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     ) : null}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-100/80 px-4 py-2.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
