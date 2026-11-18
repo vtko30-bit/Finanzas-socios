@@ -1409,8 +1409,8 @@ export function FudoWorkspace({
           } sm:mt-0 sm:flex`}
         >
           <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-3">
-            <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end">
-              <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:inline-block sm:w-[8.8rem]">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
+              <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-[8.8rem]">
                 Período
                 <select
                   value={period}
@@ -1427,7 +1427,7 @@ export function FudoWorkspace({
               {period !== "custom" ? (
                 <>
                   {period === "day" ? (
-                    <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
+                    <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
                       Día
                       <input
                         type="date"
@@ -1443,7 +1443,7 @@ export function FudoWorkspace({
                     </label>
                   ) : null}
                   {period === "month" ? (
-                    <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
+                    <label className="col-span-1 block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
                       Mes
                       <input
                         type="month"
@@ -1459,19 +1459,19 @@ export function FudoWorkspace({
                     </label>
                   ) : null}
                   {period === "week" ? (
-                    <p className="pb-0.5 text-sm tabular-nums text-slate-700 dark:text-slate-200">
+                    <p className="col-span-1 self-end pb-0.5 text-sm tabular-nums text-slate-700 dark:text-slate-200 sm:col-auto">
                       {formatDateShort(from)} → {formatDateShort(to)}
                     </p>
                   ) : null}
                   {period === "month" ? (
-                    <p className="pb-0.5 text-xs tabular-nums text-slate-500">
+                    <p className="col-span-2 pb-0.5 text-xs tabular-nums text-slate-500 sm:col-auto">
                       {formatDateShort(from)} → {formatDateShort(to)}
                     </p>
                   ) : null}
                 </>
               ) : (
                 <>
-                  <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
+                  <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
                     Desde
                     <input
                       type="date"
@@ -1485,7 +1485,7 @@ export function FudoWorkspace({
                       className="ui-field mt-0.5 w-full sm:w-auto"
                     />
                   </label>
-                  <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
+                  <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
                     Hasta
                     <input
                       type="date"
@@ -1498,7 +1498,7 @@ export function FudoWorkspace({
                   </label>
                 </>
               )}
-              <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:inline-block sm:w-[8.25rem]">
+              <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-[8.25rem]">
                 Sucursal / Evento
                 <select
                   value={branchFilter}
@@ -1513,7 +1513,7 @@ export function FudoWorkspace({
                   ))}
                 </select>
               </label>
-              <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
+              <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
                 Forma de pago
                 <select
                   value={medioFilter}
@@ -1529,7 +1529,7 @@ export function FudoWorkspace({
                 </select>
               </label>
               {view === "caja" ? (
-                <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
+                <label className="col-span-2 block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:col-auto sm:w-auto">
                   Tipo
                   <select
                     value={cashTypeFilter}
@@ -1545,7 +1545,7 @@ export function FudoWorkspace({
                 </label>
               ) : null}
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
               <button
                 type="button"
                 onClick={() => applyPeriod("day", today)}
@@ -1561,22 +1561,6 @@ export function FudoWorkspace({
               >
                 Actualizar
               </button>
-              {canWrite ? (
-                <label className="block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
-                  Frecuencia extra
-                  <select
-                    value={autoSyncHours}
-                    onChange={(e) => changeAutoSyncHours(Number(e.target.value))}
-                    className="ui-field mt-0.5 w-full sm:w-auto"
-                    disabled={syncing}
-                  >
-                    <option value={0}>Solo madrugada</option>
-                    <option value={6}>Cada 6 horas</option>
-                    <option value={4}>Cada 4 horas</option>
-                    <option value={2}>Cada 2 horas</option>
-                  </select>
-                </label>
-              ) : null}
               {canWrite ? (
                 <button
                   type="button"
@@ -1595,6 +1579,22 @@ export function FudoWorkspace({
                       ? `Sync ${syncBranchLabel}`
                       : "Sync Fudo"}
                 </button>
+              ) : null}
+              {canWrite ? (
+                <label className="col-span-2 block w-full text-xs font-medium text-slate-600 dark:text-slate-300 sm:col-auto sm:w-auto">
+                  Frecuencia extra
+                  <select
+                    value={autoSyncHours}
+                    onChange={(e) => changeAutoSyncHours(Number(e.target.value))}
+                    className="ui-field mt-0.5 w-full sm:w-auto"
+                    disabled={syncing}
+                  >
+                    <option value={0}>Solo madrugada</option>
+                    <option value={6}>Cada 6 horas</option>
+                    <option value={4}>Cada 4 horas</option>
+                    <option value={2}>Cada 2 horas</option>
+                  </select>
+                </label>
               ) : null}
             </div>
           </div>
