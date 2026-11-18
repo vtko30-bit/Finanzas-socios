@@ -49,12 +49,12 @@ export function BalanceMiniCard({
           aria-hidden
         />
       </div>
-      <div className="pr-12">
+      <div className="min-w-0 pr-11 sm:pr-12">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500 sm:text-xs">
           <span className="sm:hidden">{compactLabel ?? label}</span>
           <span className="hidden sm:inline">{label}</span>
         </p>
-        <p className="mt-2 break-all text-lg font-bold leading-tight tabular-nums text-stone-900 sm:mt-3 sm:break-normal sm:text-2xl">
+        <p className="mt-2 whitespace-nowrap text-[clamp(0.95rem,3.6vw,1.5rem)] font-bold leading-none tabular-nums text-stone-900 sm:mt-3">
           {amount}
         </p>
       </div>
