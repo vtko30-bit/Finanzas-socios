@@ -681,163 +681,171 @@ export function FacturasWorkspace() {
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-200 px-4 py-3 dark:border-slate-800 sm:px-5">
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-                  {formatMonthLabel(detailPeriod)} {yearFromPeriod(detailPeriod)}
+                  {paying && paying.docType !== "61"
+                    ? "Asociar gasto a la factura"
+                    : `${formatMonthLabel(detailPeriod)} ${yearFromPeriod(detailPeriod)}`}
                 </h2>
                 <p className="text-sm text-stone-500">
-                  {detailItems.length} documento
-                  {detailItems.length === 1 ? "" : "s"} · {formatCLP(detailTotal)}
+                  {paying && paying.docType !== "61"
+                    ? `${paying.docLabel} ${paying.folio} · ${paying.counterpartyName}`
+                    : `${detailItems.length} documento${
+                        detailItems.length === 1 ? "" : "s"
+                      } · ${formatCLP(detailTotal)}`}
                 </p>
               </div>
               <button
                 type="button"
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700 transition hover:border-[#e85e00] hover:text-[#e85e00] dark:border-slate-700 dark:bg-slate-900 dark:text-stone-200"
-                onClick={closeMonthDetail}
-                aria-label="Cerrar"
+                onClick={() => {
+                  if (paying) setPaying(null);
+                  else closeMonthDetail();
+                }}
+                aria-label={paying ? "Volver a facturas" : "Cerrar"}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {paying && paying.docType !== "61" ? (
-              <div className="max-h-[30%] shrink-0 overflow-auto border-b border-stone-200 px-4 py-3 dark:border-slate-800 sm:px-5">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <FacturaPagoPanel
                   doc={paying}
                   onClose={() => setPaying(null)}
                   onChanged={load}
                 />
               </div>
-            ) : null}
-
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="min-w-full border-separate border-spacing-0 text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
-                  <tr>
-                    <th scope="col" className="bg-slate-50 px-3 py-2 dark:bg-slate-900">
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-[#e85e00]"
-                        checked={
-                          detailItems.length > 0 &&
-                          detailItems.every((doc) =>
-                            selectedKeys.has(doc.invoiceKey),
-                          )
-                        }
-                        onChange={(event) =>
-                          setMonthSelection(detailItems, event.target.checked)
-                        }
-                        aria-label={`Seleccionar todas de ${formatMonthLabel(detailPeriod)}`}
-                        title="Seleccionar todas del mes"
-                      />
-                    </th>
-                    {SORT_COLUMNS.map((column) => {
-                      const active = sortKey === column.key;
-                      const Icon = !active
-                        ? ArrowUpDown
-                        : sortDir === "asc"
-                          ? ArrowUp
-                          : ArrowDown;
-                      return (
-                        <th
-                          key={column.key}
-                          scope="col"
-                          className={`bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900 ${
-                            column.align === "right" ? "text-right" : ""
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-200/70 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${
-                              active ? "text-slate-800 dark:text-slate-100" : ""
-                            } ${column.align === "right" ? "ml-auto" : ""}`}
-                            onClick={() => toggleSort(column.key)}
-                            aria-label={`Ordenar por ${column.label}`}
-                            title={`Ordenar por ${column.label}`}
-                          >
-                            <span>{column.label}</span>
-                            <Icon
-                              className={`h-3.5 w-3.5 ${
-                                active ? "opacity-100" : "opacity-45"
-                              }`}
-                              aria-hidden
-                            />
-                          </button>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {detailItems.length === 0 ? (
+            ) : (
+              <div className="min-h-0 flex-1 overflow-auto">
+                <table className="min-w-full border-separate border-spacing-0 text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)] dark:bg-slate-900 dark:shadow-[0_1px_0_0_rgb(51_65_85)]">
                     <tr>
-                      <td
-                        className="px-3 py-4 text-slate-500"
-                        colSpan={DETAIL_COL_COUNT}
-                      >
-                        No hay documentos en este mes.
-                      </td>
+                      <th scope="col" className="bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-[#e85e00]"
+                          checked={
+                            detailItems.length > 0 &&
+                            detailItems.every((doc) =>
+                              selectedKeys.has(doc.invoiceKey),
+                            )
+                          }
+                          onChange={(event) =>
+                            setMonthSelection(detailItems, event.target.checked)
+                          }
+                          aria-label={`Seleccionar todas de ${formatMonthLabel(detailPeriod)}`}
+                          title="Seleccionar todas del mes"
+                        />
+                      </th>
+                      {SORT_COLUMNS.map((column) => {
+                        const active = sortKey === column.key;
+                        const Icon = !active
+                          ? ArrowUpDown
+                          : sortDir === "asc"
+                            ? ArrowUp
+                            : ArrowDown;
+                        return (
+                          <th
+                            key={column.key}
+                            scope="col"
+                            className={`bg-slate-50 px-3 py-2 font-medium dark:bg-slate-900 ${
+                              column.align === "right" ? "text-right" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-200/70 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${
+                                active ? "text-slate-800 dark:text-slate-100" : ""
+                              } ${column.align === "right" ? "ml-auto" : ""}`}
+                              onClick={() => toggleSort(column.key)}
+                              aria-label={`Ordenar por ${column.label}`}
+                              title={`Ordenar por ${column.label}`}
+                            >
+                              <span>{column.label}</span>
+                              <Icon
+                                className={`h-3.5 w-3.5 ${
+                                  active ? "opacity-100" : "opacity-45"
+                                }`}
+                                aria-hidden
+                              />
+                            </button>
+                          </th>
+                        );
+                      })}
                     </tr>
-                  ) : (
-                    detailItems.map((doc) => {
-                      const selected = selectedKeys.has(doc.invoiceKey);
-                      return (
-                        <tr
-                          key={doc.id}
-                          className={`border-t border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-950 ${
-                            selected ? "bg-[#fbe7d8]/45 dark:bg-[#e85e00]/10" : ""
-                          }`}
+                  </thead>
+                  <tbody>
+                    {detailItems.length === 0 ? (
+                      <tr>
+                        <td
+                          className="px-3 py-4 text-slate-500"
+                          colSpan={DETAIL_COL_COUNT}
                         >
-                          <td className="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              className="size-4 accent-[#e85e00]"
-                              checked={selected}
-                              onChange={() => toggleSelected(doc.invoiceKey)}
-                              aria-label={`Seleccionar folio ${doc.folio}`}
-                            />
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {doc.companyName}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {doc.issuedOn}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {doc.docLabel}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {doc.folio}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div>{doc.counterpartyName || "—"}</div>
-                            <div className="text-xs text-slate-500">
-                              {doc.counterpartyRut}
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2">
-                            {doc.docType === "61" ? (
-                              "—"
-                            ) : canWrite ? (
-                              <button
-                                type="button"
-                                className="ui-btn-secondary ui-btn-sm"
-                                onClick={() => setPaying(doc)}
-                              >
-                                {paymentLabel(doc)}
-                              </button>
-                            ) : (
-                              paymentLabel(doc)
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {formatCLP(doc.totalAmount)}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          No hay documentos en este mes.
+                        </td>
+                      </tr>
+                    ) : (
+                      detailItems.map((doc) => {
+                        const selected = selectedKeys.has(doc.invoiceKey);
+                        return (
+                          <tr
+                            key={doc.id}
+                            className={`border-t border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-950 ${
+                              selected ? "bg-[#fbe7d8]/45 dark:bg-[#e85e00]/10" : ""
+                            }`}
+                          >
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                className="size-4 accent-[#e85e00]"
+                                checked={selected}
+                                onChange={() => toggleSelected(doc.invoiceKey)}
+                                aria-label={`Seleccionar folio ${doc.folio}`}
+                              />
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {doc.companyName}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {doc.issuedOn}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {doc.docLabel}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {doc.folio}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div>{doc.counterpartyName || "—"}</div>
+                              <div className="text-xs text-slate-500">
+                                {doc.counterpartyRut}
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {doc.docType === "61" ? (
+                                "—"
+                              ) : canWrite ? (
+                                <button
+                                  type="button"
+                                  className="ui-btn-secondary ui-btn-sm"
+                                  onClick={() => setPaying(doc)}
+                                >
+                                  {paymentLabel(doc)}
+                                </button>
+                              ) : (
+                                paymentLabel(doc)
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatCLP(doc.totalAmount)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

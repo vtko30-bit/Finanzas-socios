@@ -223,101 +223,111 @@ export function FacturaPagoPanel({
 
   function onSearch(event: FormEvent) {
     event.preventDefault();
+    event.stopPropagation();
     void load(query);
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">
-            {doc.docLabel} {doc.folio}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {doc.counterpartyName} · {doc.issuedOn} · Falta {formatCLP(remaining)} de{" "}
-            {formatCLP(doc.totalAmount)}
-          </p>
-        </div>
-        <button type="button" className="ui-btn-secondary ui-btn-sm" onClick={onClose}>
-          Cerrar
-        </button>
-      </div>
-
-      {links.length > 0 ? (
-        <ul className="mt-3 space-y-2 text-sm">
-          {links.map((link) => (
-            <li key={link.id} className="flex flex-wrap items-center justify-between gap-2">
-              <span>
-                {link.source === "banco" ? "Banco" : "Fudo"} · {link.paidOn} · {link.label} ·{" "}
-                {formatCLP(link.amount)}
-              </span>
-              <button
-                type="button"
-                className="ui-btn-secondary ui-btn-sm"
-                disabled={busy || busyId === link.id}
-                onClick={() => void unlink(link.id)}
-              >
-                Quitar
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <form onSubmit={onSearch} className="mt-3 flex gap-2">
-        <input
-          className="ui-field flex-1"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={
-            doc.book === "venta" ? "Buscar abono del banco" : "Buscar gasto o transferencia"
-          }
-          aria-label="Buscar pago"
-        />
-        <button type="submit" className="ui-btn-secondary">
-          Buscar
-        </button>
-      </form>
-      {doc.book === "compra" && !bankLoaded ? (
-        <p className="mt-2 text-sm text-slate-500">
-          Todavía no hay movimientos de banco en esas fechas. Puedes asociar un gasto de Fudo.
-        </p>
-      ) : null}
-      {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-
-      {!loading && selectable.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              className="size-4 accent-[#e85e00]"
-              checked={
-                selectable.length > 0 && selectedPayments.length === selectable.length
-              }
-              onChange={toggleAll}
-            />
-            Seleccionar todos
-          </label>
-          <button
-            type="button"
-            className="ui-btn-primary ui-btn-sm"
-            disabled={busy || selectedPayments.length === 0}
-            onClick={() => void linkSelected()}
-          >
-            {busy
-              ? "Asociando…"
-              : selectedPayments.length === 0
-                ? "Asociar seleccionados"
-                : `Asociar ${selectedPayments.length} · ${formatCLP(selectedTotal)}`}
+    <section className="flex h-full min-h-0 flex-col bg-white dark:bg-slate-900">
+      <div className="shrink-0 space-y-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">
+              Asociar gasto · {doc.docLabel} {doc.folio}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {doc.counterpartyName} · {doc.issuedOn} · Falta {formatCLP(remaining)} de{" "}
+              {formatCLP(doc.totalAmount)}
+            </p>
+          </div>
+          <button type="button" className="ui-btn-secondary ui-btn-sm" onClick={onClose}>
+            Volver a facturas
           </button>
         </div>
-      ) : null}
 
-      <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
+        {links.length > 0 ? (
+          <ul className="space-y-2 text-sm">
+            {links.map((link) => (
+              <li key={link.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {link.source === "banco" ? "Banco" : "Fudo"} · {link.paidOn} · {link.label} ·{" "}
+                  {formatCLP(link.amount)}
+                </span>
+                <button
+                  type="button"
+                  className="ui-btn-secondary ui-btn-sm"
+                  disabled={busy || busyId === link.id}
+                  onClick={() => void unlink(link.id)}
+                >
+                  Quitar
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <form
+          onSubmit={onSearch}
+          className="flex gap-2"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            className="ui-field flex-1"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={
+              doc.book === "venta"
+                ? "Buscar abono del banco"
+                : "Buscar gasto o transferencia"
+            }
+            aria-label="Buscar gasto para asociar"
+          />
+          <button type="submit" className="ui-btn-secondary shrink-0">
+            Buscar gasto
+          </button>
+        </form>
+        {doc.book === "compra" && !bankLoaded ? (
+          <p className="text-sm text-slate-500">
+            Todavía no hay movimientos de banco en esas fechas. Puedes asociar un gasto de Fudo.
+          </p>
+        ) : null}
+        {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+
+        {!loading && selectable.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="size-4 accent-[#e85e00]"
+                checked={
+                  selectable.length > 0 &&
+                  selectedPayments.length === selectable.length
+                }
+                onChange={toggleAll}
+              />
+              Seleccionar todos
+            </label>
+            <button
+              type="button"
+              className="ui-btn-primary ui-btn-sm"
+              disabled={busy || selectedPayments.length === 0}
+              onClick={() => void linkSelected()}
+            >
+              {busy
+                ? "Asociando…"
+                : selectedPayments.length === 0
+                  ? "Asociar seleccionados"
+                  : `Asociar ${selectedPayments.length} · ${formatCLP(selectedTotal)}`}
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain px-4 text-sm dark:divide-slate-800 sm:px-5">
         {loading ? (
-          <li className="py-2 text-slate-500">Buscando pagos…</li>
+          <li className="py-3 text-slate-500">Buscando gastos…</li>
         ) : payments.length === 0 ? (
-          <li className="py-2 text-slate-500">No hay pagos disponibles en esas fechas.</li>
+          <li className="py-3 text-slate-500">No hay gastos disponibles en esas fechas.</li>
         ) : (
           payments.map((payment) => {
             const key = paymentKey(payment);
@@ -326,7 +336,7 @@ export function FacturaPagoPanel({
             return (
               <li
                 key={key}
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 py-2.5"
               >
                 <label
                   className={`flex min-w-0 flex-1 cursor-pointer items-start gap-3 ${
@@ -353,7 +363,8 @@ export function FacturaPagoPanel({
                     </div>
                     {payment.remaining > remaining ? (
                       <div className="text-xs text-slate-500">
-                        En esta factura faltan {formatCLP(remaining)}. Se asocia el gasto completo.
+                        En esta factura faltan {formatCLP(remaining)}. Se asocia el gasto
+                        completo.
                       </div>
                     ) : null}
                   </div>
