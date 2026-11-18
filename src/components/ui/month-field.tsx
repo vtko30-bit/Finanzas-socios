@@ -58,10 +58,12 @@ export function MonthField({
     : "Mes";
 
   return (
-    <div className={`relative isolate overflow-hidden ${className ?? ""}`}>
+    <div
+      className={`relative isolate box-border flex items-center overflow-hidden ${className ?? ""}`}
+    >
       <span
         aria-hidden
-        className="pointer-events-none relative z-0 flex h-full min-h-[2.25rem] w-full items-center truncate tabular-nums"
+        className="pointer-events-none relative z-0 block w-full truncate leading-normal tabular-nums"
       >
         {label}
       </span>
