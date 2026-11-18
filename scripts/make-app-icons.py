@@ -1,4 +1,4 @@
-"""Genera iconos de app (cuadrado con esquinas redondeadas) desde el logo RG."""
+"""Genera iconos de app (esquinas redondeadas) con el logo RG completo."""
 from PIL import Image, ImageDraw
 from pathlib import Path
 
@@ -10,6 +10,9 @@ PUB_DIR = Path(r"C:\Users\Lenovo\Proyectos\finanzas-socios-app\public")
 RG_ICONS = Path(r"C:\Users\Lenovo\Proyectos\rg-suite\public\icons")
 CHECK_APP = Path(r"C:\Users\Lenovo\Proyectos\Check\src\app")
 
+# Azul del fondo del logo
+BG = (120, 198, 255, 255)
+
 
 def rounded_mask(size: int, radius: int) -> Image.Image:
     mask = Image.new("L", (size, size), 0)
@@ -18,19 +21,23 @@ def rounded_mask(size: int, radius: int) -> Image.Image:
     return mask
 
 
-def make_icon(size: int, corner_ratio: float = 0.22) -> Image.Image:
-    """Recorta al centro cuadrado, aplica esquinas redondeadas."""
+def make_icon(size: int, pad_ratio: float = 0.06, corner_ratio: float = 0.22) -> Image.Image:
+    """Logo completo centrado sobre fondo azul, con esquinas redondeadas."""
     logo = Image.open(SRC).convert("RGBA")
-    w, h = logo.size
-    side = min(w, h)
-    left = (w - side) // 2
-    top = (h - side) // 2
-    square = logo.crop((left, top, left + side, top + side))
-    square = square.resize((size, size), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), BG)
+    max_w = int(size * (1 - 2 * pad_ratio))
+    max_h = int(size * (1 - 2 * pad_ratio))
+    lw, lh = logo.size
+    scale = min(max_w / lw, max_h / lh)
+    nw, nh = max(1, int(lw * scale)), max(1, int(lh * scale))
+    resized = logo.resize((nw, nh), Image.Resampling.LANCZOS)
+    x = (size - nw) // 2
+    y = (size - nh) // 2
+    canvas.alpha_composite(resized, (x, y))
     radius = max(1, int(size * corner_ratio))
     mask = rounded_mask(size, radius)
     out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    out.paste(square, (0, 0), mask)
+    out.paste(canvas, (0, 0), mask)
     return out
 
 
@@ -49,8 +56,7 @@ def save_all() -> None:
     apple.save(APP_DIR / "apple-icon.png", optimize=True)
     apple.save(PUB_DIR / "apple-icon.png", optimize=True)
 
-    # favicon: fondo opaco (mejor en pestañas)
-    fav = make_icon(256).convert("RGBA")
+    fav = make_icon(256)
     fav.save(APP_DIR / "favicon.ico", format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
 
     if RG_ICONS.exists():
