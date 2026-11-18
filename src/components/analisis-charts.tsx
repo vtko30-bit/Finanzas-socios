@@ -38,6 +38,7 @@ import {
   SUCURSALES_RESUMEN_CANONICAS,
   type SucursalResumenCanonico,
 } from "@/lib/sucursal-resumen";
+import { MonthField } from "@/components/ui/month-field";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -697,20 +698,18 @@ export function AnalisisCharts() {
           <>
             <label className="text-sm text-slate-700">
               Desde
-              <input
-                type="month"
+              <MonthField
                 className="ui-field mt-1"
                 value={rangoDesde}
-                onChange={(e) => setRangoDesde(e.target.value)}
+                onChange={setRangoDesde}
               />
             </label>
             <label className="text-sm text-slate-700">
               Hasta
-              <input
-                type="month"
+              <MonthField
                 className="ui-field mt-1"
                 value={rangoHasta}
-                onChange={(e) => setRangoHasta(e.target.value)}
+                onChange={setRangoHasta}
               />
             </label>
           </>

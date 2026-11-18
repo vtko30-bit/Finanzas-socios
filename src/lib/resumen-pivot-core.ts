@@ -28,18 +28,18 @@ const INCOME_TYPES = ["income", "ingreso"] as const;
 const PAGE_SIZE = 1000;
 
 const MESES_CORTO = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sept",
+  "Oct",
+  "Nov",
+  "Dic",
 ] as const;
 
 export function isoDateOk(s: string): boolean {
@@ -72,7 +72,7 @@ export function buildMonthLabels(keys: string[]): string[] {
   return keys.map((k) => {
     const mi = Number(k.slice(5, 7)) - 1;
     const name = MESES_CORTO[mi] ?? k;
-    return multiYear ? `${name.slice(0, 3)} ${k.slice(0, 4)}` : name;
+    return multiYear ? `${name} ${k.slice(0, 4)}` : name;
   });
 }
 

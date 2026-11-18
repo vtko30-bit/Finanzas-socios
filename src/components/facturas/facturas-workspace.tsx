@@ -149,12 +149,22 @@ function yearFromPeriod(period: string) {
 function formatMonthLabel(period: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(period);
   if (!match) return period || "Sin mes";
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
-  const label = date.toLocaleDateString("es-CL", {
-    month: "long",
-    timeZone: "UTC",
-  });
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  const meses = [
+    "Ene",
+    "Feb",
+    "Mar",
+    "Abr",
+    "May",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Sept",
+    "Oct",
+    "Nov",
+    "Dic",
+  ] as const;
+  const mi = Number(match[2]) - 1;
+  return meses[mi] ?? period;
 }
 
 function groupByYearAndPeriod(docs: TaxDocument[]) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, RefreshCw } from "lucide-react";
+import { MonthField } from "@/components/ui/month-field";
 
 type FudoWorkspaceProps = {
   canWrite: boolean;
@@ -1455,15 +1456,10 @@ export function FudoWorkspace({
                   {period === "month" ? (
                     <label className="col-span-1 block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300 sm:w-auto">
                       Mes
-                      <input
-                        type="month"
+                      <MonthField
                         value={from.slice(0, 7)}
                         max={today.slice(0, 7)}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (!v) return;
-                          applyPeriod("month", `${v}-01`);
-                        }}
+                        onChange={(v) => applyPeriod("month", `${v}-01`)}
                         className="ui-field mt-0.5 w-full sm:w-auto"
                       />
                     </label>

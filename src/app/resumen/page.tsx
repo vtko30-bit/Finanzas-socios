@@ -7,6 +7,7 @@ import {
   getClientCache,
   setClientCache,
 } from "@/lib/client-fetch-cache";
+import { MonthField } from "@/components/ui/month-field";
 
 type PivotRowVenta = {
   formaPago: string;
@@ -1314,11 +1315,10 @@ export default function ResumenPage() {
                       />
                     ) : null}
                     {modo === "mensual" ? (
-                      <input
-                        type="month"
-                        className="box-border h-8 w-[9rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
+                      <MonthField
+                        className="box-border h-8 w-[7.5rem] shrink-0 rounded border border-slate-300 bg-white px-2 text-xs leading-normal text-slate-900 outline-none focus:border-[#e85e00]"
                         value={mes}
-                        onChange={(e) => setMes(e.target.value)}
+                        onChange={setMes}
                       />
                     ) : null}
                     {modo === "anual" ? (

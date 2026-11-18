@@ -13,6 +13,7 @@ import { useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { GastosCargasPanel } from "@/components/gastos/gastos-cargas-panel";
+import { MonthField } from "@/components/ui/month-field";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 import {
@@ -1930,13 +1931,12 @@ function GastosPageContent() {
                 </label>
               ) : null}
               {modoFecha === "mes" ? (
-                <label className="flex min-w-[9.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
+                <label className="flex min-w-[7.5rem] shrink-0 flex-col gap-0.5 text-xs text-slate-600">
                   Mes
-                  <input
-                    type="month"
+                  <MonthField
                     className="ui-filter-control w-full"
                     value={mes}
-                    onChange={(e) => setMes(e.target.value)}
+                    onChange={setMes}
                   />
                 </label>
               ) : null}
