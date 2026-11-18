@@ -1713,9 +1713,6 @@ export function FudoWorkspace({
                                       </span>
                                       {formatCLP(dia.monto)}
                                     </span>
-                                    <span className="text-right text-slate-600 dark:text-slate-300">
-                                      {dia.share.toFixed(1)}%
-                                    </span>
                                   </span>
                                 </button>
                                 {dayOpen ? (
@@ -1733,9 +1730,6 @@ export function FudoWorkspace({
                                             <th className="px-4 py-2 font-medium text-right">
                                               Total
                                             </th>
-                                            <th className="px-4 py-2 font-medium text-right">
-                                              %
-                                            </th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -1752,9 +1746,6 @@ export function FudoWorkspace({
                                               </td>
                                               <td className="px-4 py-2.5 text-right font-medium tabular-nums">
                                                 {formatCLP(row.monto)}
-                                              </td>
-                                              <td className="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
-                                                {row.share.toFixed(1)}%
                                               </td>
                                             </tr>
                                           ))}
@@ -1782,9 +1773,6 @@ export function FudoWorkspace({
                             Total
                           </span>
                           {formatCLP(suc.monto)}
-                        </span>
-                        <span className="text-right tabular-nums">
-                          {suc.monto > 0 ? "100.0%" : "0.0%"}
                         </span>
                       </span>
                     </div>
