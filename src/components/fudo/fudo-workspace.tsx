@@ -1636,9 +1636,6 @@ export function FudoWorkspace({
 
       {view === "ventas" ? (
         <section className="ui-card overflow-hidden">
-          <div className="px-4 pb-[0.3825rem] pt-[0.6375rem]">
-            <span className="text-sm font-semibold">Totales</span>
-          </div>
           {ventasPorSucursal.length === 0 && !loading ? (
             <p className="border-t border-slate-200/80 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700/80">
               Sin ventas en el período.
@@ -1773,7 +1770,6 @@ export function FudoWorkspace({
                       </div>
                     ) : null}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-100/80 px-4 py-2.5 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800/70">
-                      <span>Totales</span>
                       <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
                         <span className="text-right tabular-nums">
                           <span className="mr-2 text-xs font-medium uppercase text-slate-500">
