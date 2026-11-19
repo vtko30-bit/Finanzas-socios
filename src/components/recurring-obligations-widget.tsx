@@ -69,7 +69,9 @@ export function RecurringObligationsWidget() {
           ) : null}
           {dueSoon > 0 && credits > 0 ? " · " : null}
           {credits > 0 ? (
-            <span>{credits} cuota{credits !== 1 ? "s" : ""} crédito</span>
+            <span>
+              {credits} cuota{credits !== 1 ? "s" : ""} de crédito este mes
+            </span>
           ) : null}
           {!hasAlert ? "Todo al día este mes" : null}
         </p>

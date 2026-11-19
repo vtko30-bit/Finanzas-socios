@@ -22,6 +22,8 @@ export type ObligationMonthItem = {
   dayOfMonth: number;
   dueDate: string;
   amountEstimate: number | null;
+  /** Promedio de los últimos meses pagados (solo si no hay monto fijo). */
+  averageEstimate: number | null;
   familyId: string | null;
   familyName: string | null;
   status: ObligationStatus;
@@ -41,6 +43,16 @@ export type CreditDueItem = {
   dueDate: string;
   totalAmount: number;
   status: string;
+};
+
+/** Resumen de montos del mes (aprox.). */
+export type RecurringMonthSummary = {
+  fixedEstimate: number;
+  variableEstimate: number;
+  creditsEstimate: number;
+  totalApprox: number;
+  paid: number;
+  pendingApprox: number;
 };
 
 function pad2(n: number) {
@@ -87,6 +99,14 @@ function computeStatus(
   return "upcoming";
 }
 
+function shiftYearMonth(year: number, month: number, delta: number): {
+  year: number;
+  month: number;
+} {
+  const idx = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(idx / 12), month: (idx % 12) + 1 };
+}
+
 export async function loadRecurringObligationStatus(
   organizationId: string,
   year?: number,
@@ -97,6 +117,7 @@ export async function loadRecurringObligationStatus(
   today: string;
   items: ObligationMonthItem[];
   creditDueSoon: CreditDueItem[];
+  summary: RecurringMonthSummary;
 }> {
   const admin = createAdminClient();
   const today = todayIsoInChile();
@@ -239,6 +260,61 @@ export async function loadRecurringObligationStatus(
     return null;
   }
 
+  // Promedio de los últimos 3 meses pagados (para obligaciones variables).
+  const histMonths: Array<{ year: number; month: number }> = [];
+  for (let i = 1; i <= 3; i += 1) {
+    histMonths.push(shiftYearMonth(y, m, -i));
+  }
+  const averageByObligation = new Map<string, number>();
+  const obligationIds = (obligations ?? []).map((o) => o.id as string);
+  if (obligationIds.length > 0) {
+    const { data: histMarks } = await admin
+      .from("recurring_obligation_marks")
+      .select("obligation_id, year, month, marked_paid, transaction_id")
+      .eq("organization_id", organizationId)
+      .eq("marked_paid", true)
+      .not("transaction_id", "is", null)
+      .in("obligation_id", obligationIds);
+
+    const relevant = (histMarks ?? []).filter((row) =>
+      histMonths.some(
+        (hm) =>
+          Number(row.year) === hm.year && Number(row.month) === hm.month,
+      ),
+    );
+    const histTxIds = [
+      ...new Set(
+        relevant
+          .map((r) => r.transaction_id as string | null)
+          .filter(Boolean) as string[],
+      ),
+    ];
+    const histTxAmount = new Map<string, number>();
+    if (histTxIds.length > 0) {
+      const { data: histTxs } = await admin
+        .from("transactions")
+        .select("id, amount")
+        .eq("organization_id", organizationId)
+        .in("id", histTxIds);
+      for (const t of histTxs ?? []) {
+        histTxAmount.set(t.id as string, Math.abs(Number(t.amount) || 0));
+      }
+    }
+    const sums = new Map<string, { total: number; count: number }>();
+    for (const row of relevant) {
+      const oid = row.obligation_id as string;
+      const amt = histTxAmount.get(row.transaction_id as string);
+      if (amt == null || amt <= 0) continue;
+      const cur = sums.get(oid) ?? { total: 0, count: 0 };
+      cur.total += amt;
+      cur.count += 1;
+      sums.set(oid, cur);
+    }
+    for (const [oid, { total, count }] of sums) {
+      if (count > 0) averageByObligation.set(oid, Math.round(total / count));
+    }
+  }
+
   const items: ObligationMonthItem[] = (obligations ?? []).map((raw) => {
     const ob = raw as RecurringObligationRow;
     const dueDate = dueDateForMonth(y, m, ob.day_of_month);
@@ -249,12 +325,16 @@ export async function loadRecurringObligationStatus(
     const matched = !linked ? findMatchingTx(ob, familyName) : null;
     const paidViaImport = Boolean(matched) && !markedPaid;
     const isPaid = markedPaid || paidViaImport;
+    const amountEstimate =
+      ob.amount_estimate != null ? Number(ob.amount_estimate) : null;
     return {
       id: ob.id,
       name: ob.name,
       dayOfMonth: ob.day_of_month,
       dueDate,
-      amountEstimate: ob.amount_estimate != null ? Number(ob.amount_estimate) : null,
+      amountEstimate,
+      averageEstimate:
+        amountEstimate == null ? averageByObligation.get(ob.id) ?? null : null,
       familyId: ob.family_id,
       familyName,
       status: computeStatus(dueDate, today, ob.reminder_days_before, isPaid),
@@ -268,17 +348,14 @@ export async function loadRecurringObligationStatus(
     };
   });
 
-  const weekEnd = parseIsoDate(today);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  const weekEndIso = `${weekEnd.getFullYear()}-${pad2(weekEnd.getMonth() + 1)}-${pad2(weekEnd.getDate())}`;
-
+  // Cuotas de crédito del mes calendario (desde el día 1).
   const { data: creditRows } = await admin
     .from("credit_installments")
     .select("credit_id, installment_number, due_date, total_amount, status")
     .eq("organization_id", organizationId)
-    .in("status", ["pending", "partial"])
-    .gte("due_date", today)
-    .lte("due_date", weekEndIso);
+    .in("status", ["pending", "partial", "paid"])
+    .gte("due_date", monthStart)
+    .lte("due_date", monthEnd);
 
   const creditIds = [...new Set((creditRows ?? []).map((r) => r.credit_id as string))];
   const lenderByCreditId = new Map<string, string>();
@@ -297,19 +374,73 @@ export async function loadRecurringObligationStatus(
     }
   }
 
-  const creditDueSoon: CreditDueItem[] = (creditRows ?? [])
+  const creditsOfMonth: CreditDueItem[] = (creditRows ?? [])
     .filter((row) => activeCreditIds.has(row.credit_id as string))
     .map((row) => ({
       creditId: row.credit_id as string,
       lender: lenderByCreditId.get(row.credit_id as string) ?? "Crédito",
       installmentNumber: Number(row.installment_number),
       dueDate: row.due_date as string,
-      totalAmount: Number(row.total_amount),
+      totalAmount: Number(row.total_amount) || 0,
       status: row.status as string,
     }))
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
-  return { year: y, month: m, today, items, creditDueSoon };
+  // Para el widget / avisos: solo cuotas aún no pagadas del mes.
+  const creditDueSoon = creditsOfMonth.filter(
+    (c) => c.status === "pending" || c.status === "partial",
+  );
+
+  let fixedEstimate = 0;
+  let variableEstimate = 0;
+  let paidObligations = 0;
+  let pendingObligations = 0;
+  for (const item of items) {
+    const planned =
+      item.amountEstimate != null
+        ? item.amountEstimate
+        : item.averageEstimate != null
+          ? item.averageEstimate
+          : 0;
+    if (item.amountEstimate != null) {
+      fixedEstimate += item.amountEstimate;
+    } else if (item.averageEstimate != null) {
+      variableEstimate += item.averageEstimate;
+    }
+    if (item.status === "paid") {
+      paidObligations +=
+        item.transactionAmount ?? planned;
+    } else {
+      pendingObligations += planned;
+    }
+  }
+
+  let creditsEstimate = 0;
+  let paidCredits = 0;
+  let pendingCredits = 0;
+  for (const c of creditsOfMonth) {
+    creditsEstimate += c.totalAmount;
+    if (c.status === "paid") {
+      paidCredits += c.totalAmount;
+    } else {
+      pendingCredits += c.totalAmount;
+    }
+  }
+
+  const paid = paidObligations + paidCredits;
+  const pendingApprox = pendingObligations + pendingCredits;
+  const totalApprox = fixedEstimate + variableEstimate + creditsEstimate;
+
+  const summary: RecurringMonthSummary = {
+    fixedEstimate,
+    variableEstimate,
+    creditsEstimate,
+    totalApprox,
+    paid,
+    pendingApprox,
+  };
+
+  return { year: y, month: m, today, items, creditDueSoon, summary };
 }
 
 export function obligationsForWeeklyEmail(

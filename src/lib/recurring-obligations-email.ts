@@ -10,11 +10,17 @@ function statusLabel(status: ObligationMonthItem["status"], paidViaImport: boole
   return "Programado";
 }
 
+function obligationAmountLabel(item: ObligationMonthItem) {
+  if (item.amountEstimate != null) return formatCLP(item.amountEstimate);
+  if (item.averageEstimate != null) return `≈ ${formatCLP(item.averageEstimate)}`;
+  return "";
+}
+
 function obligationRowHtml(item: ObligationMonthItem) {
-  const amt =
-    item.amountEstimate != null
-      ? `<span style="color:#64748b;font-size:12px;">${formatCLP(item.amountEstimate)}</span>`
-      : "";
+  const label = obligationAmountLabel(item);
+  const amt = label
+    ? `<span style="color:#64748b;font-size:12px;">${label}</span>`
+    : "";
   const badgeColor =
     item.status === "overdue"
       ? "#fef2f2"
@@ -70,7 +76,7 @@ export function recurringObligationsEmailHtml(
   const creditSection =
     credits.length > 0
       ? `
-    <h2 style="margin:24px 0 8px;font-size:15px;color:#1e293b;">Cuotas de crédito (7 días)</h2>
+    <h2 style="margin:24px 0 8px;font-size:15px;color:#1e293b;">Cuotas de crédito (este mes)</h2>
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
       <thead>
         <tr style="background:#f1f5f9;">
@@ -131,8 +137,9 @@ export function recurringObligationsEmailText(
   if (overdue.length) {
     lines.push("Vencidos:");
     for (const i of overdue) {
+      const amt = obligationAmountLabel(i);
       lines.push(
-        `  - ${i.name} (vence ${formatFecha(i.dueDate)})${i.amountEstimate != null ? ` ~${formatCLP(i.amountEstimate)}` : ""}`,
+        `  - ${i.name} (vence ${formatFecha(i.dueDate)})${amt ? ` ${amt}` : ""}`,
       );
     }
     lines.push("");
@@ -140,14 +147,15 @@ export function recurringObligationsEmailText(
   if (dueSoon.length) {
     lines.push("Próximos a vencer:");
     for (const i of dueSoon) {
+      const amt = obligationAmountLabel(i);
       lines.push(
-        `  - ${i.name} (vence ${formatFecha(i.dueDate)})${i.amountEstimate != null ? ` ~${formatCLP(i.amountEstimate)}` : ""}`,
+        `  - ${i.name} (vence ${formatFecha(i.dueDate)})${amt ? ` ${amt}` : ""}`,
       );
     }
     lines.push("");
   }
   if (credits.length) {
-    lines.push("Cuotas de crédito (7 días):");
+    lines.push("Cuotas de crédito (este mes):");
     for (const c of credits) {
       lines.push(
         `  - ${c.lender} cuota #${c.installmentNumber} vence ${formatFecha(c.dueDate)} ${formatCLP(c.totalAmount)}`,

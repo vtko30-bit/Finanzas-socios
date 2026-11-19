@@ -37,6 +37,7 @@ type ObligationMonthItem = {
   dayOfMonth: number;
   dueDate: string;
   amountEstimate: number | null;
+  averageEstimate: number | null;
   familyId: string | null;
   familyName: string | null;
   status: "paid" | "overdue" | "due_soon" | "upcoming";
@@ -56,6 +57,15 @@ type CreditDueItem = {
   dueDate: string;
   totalAmount: number;
   status: string;
+};
+
+type MonthSummary = {
+  fixedEstimate: number;
+  variableEstimate: number;
+  creditsEstimate: number;
+  totalApprox: number;
+  paid: number;
+  pendingApprox: number;
 };
 
 type FamilyOption = { id: string; name: string };
@@ -92,6 +102,7 @@ export default function PagosRecurrentesPage() {
   const [families, setFamilies] = useState<FamilyOption[]>([]);
   const [statusItems, setStatusItems] = useState<ObligationMonthItem[]>([]);
   const [creditDueSoon, setCreditDueSoon] = useState<CreditDueItem[]>([]);
+  const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null);
   const [periodLabel, setPeriodLabel] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -141,6 +152,18 @@ export default function PagosRecurrentesPage() {
 
       setStatusItems(statusData.items ?? []);
       setCreditDueSoon(statusData.creditDueSoon ?? []);
+      setMonthSummary(
+        statusData.summary
+          ? {
+              fixedEstimate: Number(statusData.summary.fixedEstimate) || 0,
+              variableEstimate: Number(statusData.summary.variableEstimate) || 0,
+              creditsEstimate: Number(statusData.summary.creditsEstimate) || 0,
+              totalApprox: Number(statusData.summary.totalApprox) || 0,
+              paid: Number(statusData.summary.paid) || 0,
+              pendingApprox: Number(statusData.summary.pendingApprox) || 0,
+            }
+          : null,
+      );
       const label = new Intl.DateTimeFormat("es-CL", {
         month: "long",
         year: "numeric",
@@ -400,13 +423,58 @@ export default function PagosRecurrentesPage() {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Cuotas crédito (7 días)
+            Cuotas crédito (mes)
           </p>
           <p className="mt-1 text-2xl font-bold text-slate-900">
             {creditDueSoon.length}
           </p>
         </div>
       </section>
+
+      {monthSummary ? (
+        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-800">
+            Resumen del mes — {periodLabel}
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Variables usan promedio de los últimos 3 meses pagados (aprox.).
+          </p>
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">Recurrentes fijos</p>
+              <p className="font-semibold tabular-nums text-slate-900">
+                {formatClp(monthSummary.fixedEstimate)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">Variables (promedio)</p>
+              <p className="font-semibold tabular-nums text-slate-900">
+                {formatClp(monthSummary.variableEstimate)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">Cuotas crédito</p>
+              <p className="font-semibold tabular-nums text-slate-900">
+                {formatClp(monthSummary.creditsEstimate)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-[#fbe7d8]/60 px-3 py-2">
+              <p className="text-xs text-[#9a3f00]">Total aprox.</p>
+              <p className="font-bold tabular-nums text-[#9a3f00]">
+                {formatClp(monthSummary.totalApprox)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <span className="tabular-nums text-emerald-800">
+              Pagado {formatClp(monthSummary.paid)}
+            </span>
+            <span className="tabular-nums text-slate-700">
+              Pendiente aprox. {formatClp(monthSummary.pendingApprox)}
+            </span>
+          </div>
+        </section>
+      ) : null}
 
       {showCreate && canWrite ? (
         <form
@@ -575,7 +643,9 @@ export default function PagosRecurrentesPage() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     {item.amountEstimate != null
                       ? formatClp(item.amountEstimate)
-                      : "Variable"}
+                      : item.averageEstimate != null
+                        ? `≈ ${formatClp(item.averageEstimate)}`
+                        : "Variable"}
                   </td>
                   <td className="px-3 py-2">
                     <span
@@ -747,7 +817,7 @@ export default function PagosRecurrentesPage() {
       {creditDueSoon.length > 0 ? (
         <section className="mb-8">
           <h2 className="mb-3 text-base font-semibold text-slate-800">
-            Cuotas de crédito — próximos 7 días
+            Cuotas de crédito — este mes
           </h2>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <table className="min-w-full text-sm">
