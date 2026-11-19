@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
-import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 import { currentYearMonthChile } from "@/lib/recurring-obligations";
 
 const EXPENSE_TYPES = ["expense", "gasto", "egreso"];
 
 /**
- * Marca una obligación del mes como pagada vinculándola a un egreso importado.
+ * Marca una obligación del mes como pagada vinculándola a un egreso operativo.
  * No modifica la transacción (no setea credit_id): el egreso sigue en Gastos,
  * a diferencia de la conciliación de cuotas de crédito.
  */
@@ -106,15 +105,6 @@ export async function POST(request: Request) {
     if (tx.credit_id) {
       return NextResponse.json(
         { error: "Ese movimiento ya está vinculado a un crédito" },
-        { status: 400 },
-      );
-    }
-    if (!isReconcilableImportSource(tx.source as string | null)) {
-      return NextResponse.json(
-        {
-          error:
-            "Solo se pueden asociar egresos importados (planilla excel_…), como en créditos.",
-        },
         { status: 400 },
       );
     }

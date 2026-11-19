@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganization } from "@/lib/organization";
 import { supabaseErrorMessage } from "@/lib/supabase-error-message";
-import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
 import {
   currentYearMonthChile,
   dueDateForMonth,
@@ -21,8 +20,7 @@ function addDaysYmd(ymd: string, days: number): string {
 }
 
 /**
- * Candidatos de egreso importado para asociar al marcar un pago recurrente.
- * Similar a /api/creditos/[id]/reconcile-candidates.
+ * Candidatos de egreso operativo para asociar al marcar un pago recurrente.
  */
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -161,7 +159,6 @@ export async function GET(request: Request) {
     const id = r.id as string;
     if (linkedTxIds.has(id)) continue;
     const src = r.source as string | null;
-    if (!isReconcilableImportSource(src)) continue;
 
     const amount = Math.abs(Number(r.amount) || 0);
     if (amountFilter != null && Number.isFinite(amountFilter)) {

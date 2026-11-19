@@ -368,9 +368,9 @@ export default function PagosRecurrentesPage() {
       </header>
 
       <p className="mb-4 text-sm text-slate-600">
-        Arriendo, servicios, impuestos e otros pagos fijos del mes. Al marcar
-        pagado debes asociar un egreso importado (igual que las cuotas de
-        crédito). También se detecta automáticamente si ya aparece en
+        Arriendo, servicios, impuestos e otros pagos fijos del mes. Podés crear
+        uno desde un gasto (Detalle → Recurrente) o acá con “Nueva obligación”.
+        Al marcar pagado asociás el egreso. También se detecta si ya aparece en
         importaciones. Correo semanal a socios con vencidos, próximos y cuotas
         de crédito.
       </p>
@@ -622,9 +622,9 @@ export default function PagosRecurrentesPage() {
                             Asociar movimiento — {reconcileFor.name}
                           </h2>
                           <p className="mt-1 text-xs text-slate-600">
-                            Elige un egreso importado (planilla) del mes. El monto puede
-                            variar (luz, agua, etc.): no se exige el estimado. A diferencia
-                            de los créditos, el movimiento <strong>sigue en Gastos</strong>.
+                            Elige un egreso del mes. El monto puede variar (luz, agua,
+                            etc.): no se exige el estimado. A diferencia de los créditos,
+                            el movimiento <strong>sigue en Gastos</strong>.
                             {reconcileFor.amountEstimate != null ? (
                               <>
                                 {" "}

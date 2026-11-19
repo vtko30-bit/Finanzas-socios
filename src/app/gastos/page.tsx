@@ -14,6 +14,7 @@ import * as XLSX from "xlsx";
 import { useOrgCapabilities } from "@/components/org-capabilities-provider";
 import { GastosCargasPanel } from "@/components/gastos/gastos-cargas-panel";
 import { GastoFacturaLinkModal } from "@/components/gastos/gasto-factura-link-modal";
+import { GastoRecurrenteModal } from "@/components/gastos/gasto-recurrente-modal";
 import { MonthField } from "@/components/ui/month-field";
 import { esEtiquetaCarpetaBanco } from "@/lib/origen-familia-banco";
 import { isReconcilableImportSource } from "@/lib/reconcilable-import-source";
@@ -822,6 +823,7 @@ function GastosPageContent() {
   } | null>(null);
   const [detailRow, setDetailRow] = useState<GastoRow | null>(null);
   const [facturaLinkRow, setFacturaLinkRow] = useState<GastoRow | null>(null);
+  const [recurrenteRow, setRecurrenteRow] = useState<GastoRow | null>(null);
   const [reconcileModal, setReconcileModal] = useState<{
     transactionId: string;
     monto: number;
@@ -2792,6 +2794,20 @@ function GastosPageContent() {
                   Vincular factura
                 </button>
               ) : null}
+              {canWrite ? (
+                <button
+                  type="button"
+                  className="shrink-0 rounded border border-violet-700 bg-violet-50 px-2 py-1 text-xs text-violet-900 hover:bg-violet-100 disabled:opacity-50"
+                  disabled={uiBloqueadoGuardado}
+                  title="Crear un pago recurrente con este gasto y marcar el mes como pagado"
+                  onClick={() => {
+                    setRecurrenteRow(detailRow);
+                    setDetailRow(null);
+                  }}
+                >
+                  Recurrente
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="ml-auto shrink-0 rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-200"
@@ -2812,6 +2828,20 @@ function GastosPageContent() {
               onLinked={() => {
                 setFacturaLinkRow(null);
                 setStatus("Gasto vinculado a la factura.");
+              }}
+            />,
+            document.body,
+          )
+        : null}
+
+      {mounted && recurrenteRow
+        ? createPortal(
+            <GastoRecurrenteModal
+              gasto={recurrenteRow}
+              onClose={() => setRecurrenteRow(null)}
+              onCreated={(message) => {
+                setRecurrenteRow(null);
+                setStatus(message);
               }}
             />,
             document.body,
