@@ -1,17 +1,15 @@
-"""Genera iconos de app (esquinas redondeadas) con el logo RG completo."""
+"""Genera iconos de app con el logo RG (circulo rosa sobre negro)."""
 from PIL import Image, ImageDraw
 from pathlib import Path
 
 SRC = Path(
-    r"C:\Users\Lenovo\.cursor\projects\c-Users-Lenovo-Proyectos-rg-suite\assets\LOGO_RGapp-f0d18fc7-7d5e-4f32-a3eb-fbb4e490477c.jpg"
+    r"C:\Users\Lenovo\.cursor\projects\c-Users-Lenovo-Proyectos-rg-suite\assets\Icono_app-5558f20a-42df-47d6-b1f4-2bda74995222.png"
 )
 APP_DIR = Path(r"C:\Users\Lenovo\Proyectos\finanzas-socios-app\src\app")
 PUB_DIR = Path(r"C:\Users\Lenovo\Proyectos\finanzas-socios-app\public")
 RG_ICONS = Path(r"C:\Users\Lenovo\Proyectos\rg-suite\public\icons")
+RG_APP = Path(r"C:\Users\Lenovo\Proyectos\rg-suite\src\app")
 CHECK_APP = Path(r"C:\Users\Lenovo\Proyectos\Check\src\app")
-
-# Azul del fondo del logo
-BG = (120, 198, 255, 255)
 
 
 def rounded_mask(size: int, radius: int) -> Image.Image:
@@ -21,23 +19,14 @@ def rounded_mask(size: int, radius: int) -> Image.Image:
     return mask
 
 
-def make_icon(size: int, pad_ratio: float = 0.06, corner_ratio: float = 0.22) -> Image.Image:
-    """Logo completo centrado sobre fondo azul, con esquinas redondeadas."""
+def make_icon(size: int, corner_ratio: float = 0.22) -> Image.Image:
+    """Redimensiona el icono fuente y aplica esquinas redondeadas."""
     logo = Image.open(SRC).convert("RGBA")
-    canvas = Image.new("RGBA", (size, size), BG)
-    max_w = int(size * (1 - 2 * pad_ratio))
-    max_h = int(size * (1 - 2 * pad_ratio))
-    lw, lh = logo.size
-    scale = min(max_w / lw, max_h / lh)
-    nw, nh = max(1, int(lw * scale)), max(1, int(lh * scale))
-    resized = logo.resize((nw, nh), Image.Resampling.LANCZOS)
-    x = (size - nw) // 2
-    y = (size - nh) // 2
-    canvas.alpha_composite(resized, (x, y))
+    resized = logo.resize((size, size), Image.Resampling.LANCZOS)
     radius = max(1, int(size * corner_ratio))
     mask = rounded_mask(size, radius)
     out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    out.paste(canvas, (0, 0), mask)
+    out.paste(resized, (0, 0), mask)
     return out
 
 
@@ -64,6 +53,14 @@ def save_all() -> None:
         icon512.save(RG_ICONS / "icon-512.png", optimize=True)
         icon512.save(RG_ICONS / "icon-maskable-512.png", optimize=True)
         apple.save(RG_ICONS / "apple-touch-icon.png", optimize=True)
+
+    if RG_APP.exists():
+        icon512.save(RG_APP / "icon.png", optimize=True)
+        apple.save(RG_APP / "apple-icon.png", optimize=True)
+        fav.save(RG_APP / "favicon.ico", format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+        old_svg = RG_APP / "icon.svg"
+        if old_svg.exists():
+            old_svg.unlink()
 
     if CHECK_APP.exists():
         icon512.save(CHECK_APP / "icon.png", optimize=True)
