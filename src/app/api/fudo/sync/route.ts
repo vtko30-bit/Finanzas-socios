@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { syncGastosFudoFromRange } from "@/lib/fudo/sync-gastos";
 import { rgSuiteOrganizationId } from "@/lib/fudo/rg-suite";
 import { syncFudoRange } from "@/lib/fudo/sync-store";
+import { syncVentasFudoFromRange } from "@/lib/fudo/sync-ventas";
 import { getUserOrganization } from "@/lib/organization";
 import { denyIfNotOwner } from "@/lib/org-permissions";
 import { resolveOrganizationId } from "@/lib/send-daily-balance";
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
     : undefined;
 
   try {
+    const admin = createAdminClient();
+    const organizationId = await resolveOrganizationId();
     const result = await syncFudoRange({
       organizationId: await rgSuiteOrganizationId(),
       fromDate: from,
@@ -60,15 +63,25 @@ export async function POST(request: Request) {
       branchIds: branches?.length ? branches : undefined,
       includeEvents: body.includeEvents === false ? false : undefined,
     });
-    const gastos = await syncGastosFudoFromRange({
-      supabase: createAdminClient(),
-      organizationId: await resolveOrganizationId(),
-      fromDate: from,
-      toDate: to,
-      actorUserId: user.id,
-      trigger: "manual",
-    });
-    return NextResponse.json({ ...result, gastos });
+    const [ventas, gastos] = await Promise.all([
+      syncVentasFudoFromRange({
+        supabase: admin,
+        organizationId,
+        fromDate: from,
+        toDate: to,
+        actorUserId: user.id,
+        trigger: "manual",
+      }),
+      syncGastosFudoFromRange({
+        supabase: admin,
+        organizationId,
+        fromDate: from,
+        toDate: to,
+        actorUserId: user.id,
+        trigger: "manual",
+      }),
+    ]);
+    return NextResponse.json({ ...result, ventas, gastos });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "No se pudo actualizar Fudo" },
