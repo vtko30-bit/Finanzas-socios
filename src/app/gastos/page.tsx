@@ -820,6 +820,7 @@ function GastosPageContent() {
     categoria: string;
     familia: string;
     descripcion: string;
+    marcarRecurrente: boolean;
   } | null>(null);
   const [detailRow, setDetailRow] = useState<GastoRow | null>(null);
   const [facturaLinkRow, setFacturaLinkRow] = useState<GastoRow | null>(null);
@@ -1580,6 +1581,8 @@ function GastosPageContent() {
     const famTrim = editModal.familia.trim();
     const descTrim = editModal.descripcion.trim();
     const soloUnaLinea = editModal.gastoIds.length === 1;
+    const marcarRecurrente = editModal.marcarRecurrente;
+    const gastoIdsEdicion = [...editModal.gastoIds];
 
     if (!catTrim) {
       mostrarAviso("Escribe o elige una categoría.");
@@ -1589,15 +1592,104 @@ function GastosPageContent() {
     setSaveInProgress(true);
     const guardarOpts: GuardarConceptoOpts = { silent: true };
 
+    const crearRecurrentesSiCorresponde = async () => {
+      if (!marcarRecurrente) return;
+      const idSet = new Set(gastoIdsEdicion);
+      const seleccion = rows.filter((r) => idSet.has(r.id));
+      if (seleccion.length === 0) return;
+
+      let familyId: string | null =
+        famTrim ? findFamilyByName(famTrim, catalogo)?.id ?? null : null;
+      if (famTrim && !familyId) {
+        const resFam = await fetch("/api/familias");
+        const dataFam = await resFam.json().catch(() => ({}));
+        if (resFam.ok) {
+          familyId =
+            findFamilyByName(
+              famTrim,
+              (dataFam.families ?? []) as CatalogFamily[],
+            )?.id ?? null;
+        }
+      }
+
+      let okCount = 0;
+      let skipCount = 0;
+      const errors: string[] = [];
+      for (const gasto of seleccion) {
+        const dayMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(
+          String(gasto.fecha || "").trim(),
+        );
+        const day = dayMatch ? Number(dayMatch[3]) : 5;
+        const name =
+          (gasto.nombreDestino || "").trim() ||
+          (gasto.descripcion || "").trim() ||
+          "Pago recurrente";
+        const matchText =
+          (gasto.nombreDestino || "").trim() ||
+          (gasto.descripcion || "").trim();
+        const amount = Math.round(Math.abs(Number(gasto.monto) || 0));
+        try {
+          const res = await fetch("/api/pagos-recurrentes/from-gasto", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              transaction_id: gasto.id,
+              name,
+              day_of_month: Number.isFinite(day) && day >= 1 && day <= 31 ? day : 5,
+              amount_estimate: amount > 0 ? amount : null,
+              family_id: familyId,
+              match_text: matchText,
+              notes: "",
+              reminder_days_before: 3,
+            }),
+          });
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          if (res.ok) {
+            okCount += 1;
+          } else if (res.status === 409) {
+            skipCount += 1;
+          } else {
+            errors.push(body.error || `Error en ${name}`);
+          }
+        } catch {
+          errors.push(`Error de red en ${name}`);
+        }
+      }
+
+      if (okCount > 0 && errors.length === 0 && skipCount === 0) {
+        setStatus(
+          okCount === 1
+            ? "Quedó marcado como pago recurrente y este mes como pagado."
+            : `${okCount} gastos quedaron como pago recurrente y este mes como pagados.`,
+        );
+      } else if (okCount > 0) {
+        const parts = [`${okCount} como recurrente`];
+        if (skipCount > 0) parts.push(`${skipCount} ya lo eran`);
+        if (errors.length > 0) parts.push(`${errors.length} con error`);
+        setStatus(`Listo: ${parts.join("; ")}.`);
+      } else if (skipCount > 0 && errors.length === 0) {
+        setStatus(
+          skipCount === 1
+            ? "Ese gasto ya estaba como pago recurrente."
+            : `Esos ${skipCount} gastos ya estaban como pago recurrente.`,
+        );
+      } else if (errors.length > 0) {
+        mostrarAviso(errors[0] || "No se pudo marcar como recurrente.");
+      }
+    };
+
     const cerrarSiOk = async (ok: boolean) => {
       if (!ok) return;
       if (soloUnaLinea) {
         const descOk = await guardarDescripcionGasto(
-          editModal.gastoIds[0]!,
+          gastoIdsEdicion[0]!,
           descTrim,
         );
         if (!descOk) return;
       }
+      await crearRecurrentesSiCorresponde();
       setEditModal(null);
       setSelectedGastoIds(new Set());
     };
@@ -1857,6 +1949,7 @@ function GastosPageContent() {
       categoria: categoriaDisplayLabel(first, catalogo),
       familia: (first.familia ?? "").trim(),
       descripcion: (first.descripcion ?? "").trim(),
+      marcarRecurrente: false,
     });
   }, [rows, selectedGastoIds, catalogo]);
 
@@ -2549,6 +2642,7 @@ function GastosPageContent() {
                                 categoria: categoriaDisplayLabel(row, catalogo),
                                 familia: (row.familia ?? "").trim(),
                                 descripcion: (row.descripcion ?? "").trim(),
+                                marcarRecurrente: false,
                               });
                             }}
                           >
@@ -3085,6 +3179,27 @@ function GastosPageContent() {
                     }
                   />
                 </div>
+                <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#e85e00] focus:ring-[#e85e00]"
+                    checked={editModal.marcarRecurrente}
+                    disabled={uiBloqueadoGuardado}
+                    onChange={(e) =>
+                      setEditModal((m) =>
+                        m ? { ...m, marcarRecurrente: e.target.checked } : m,
+                      )
+                    }
+                  />
+                  <span>
+                    Marcar como pago recurrente
+                    <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                      {editModal.gastoIds.length > 1
+                        ? "Crea una obligación por cada gasto y deja este mes como pagado."
+                        : "Crea la obligación y deja este mes como pagado con este movimiento."}
+                    </span>
+                  </span>
+                </label>
                 <div className="mt-6 flex justify-end gap-2">
                   <button
                     type="button"
