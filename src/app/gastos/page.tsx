@@ -3191,14 +3191,7 @@ function GastosPageContent() {
                       )
                     }
                   />
-                  <span>
-                    Marcar como pago recurrente
-                    <span className="mt-0.5 block text-xs font-normal text-slate-500">
-                      {editModal.gastoIds.length > 1
-                        ? "Crea una obligación por cada gasto y deja este mes como pagado."
-                        : "Crea la obligación y deja este mes como pagado con este movimiento."}
-                    </span>
-                  </span>
+                  <span>Marcar como pago recurrente</span>
                 </label>
                 <div className="mt-6 flex justify-end gap-2">
                   <button
