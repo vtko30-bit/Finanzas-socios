@@ -2744,77 +2744,79 @@ function GastosPageContent() {
                 </dd>
               </div>
             </dl>
-            <div className="mt-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto">
-              {canWrite && isReconcilableImportSource(detailRow.source) ? (
-                <button
-                  type="button"
-                  className="shrink-0 rounded border border-emerald-700 bg-emerald-50 px-2 py-1 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
-                  disabled={uiBloqueadoGuardado}
-                  title="Vincular este egreso importado con el pago de una cuota (reemplaza el movimiento por el desglose contable)"
-                  onClick={() => {
-                    setReconcileModal({
-                      transactionId: detailRow.id,
-                      monto: detailRow.monto,
-                    });
-                    setDetailRow(null);
-                  }}
-                >
-                  Conciliar cuota
-                </button>
-              ) : null}
-              {canWrite && isReconcilableImportSource(detailRow.source) ? (
-                <button
-                  type="button"
-                  className="shrink-0 rounded border border-[#d45500] bg-[#fbe7d8] px-2 py-1 text-xs text-[#9a3f00] hover:bg-[#f6d7bf] disabled:opacity-50"
-                  disabled={uiBloqueadoGuardado}
-                  title="Marcar este egreso importado como correspondiente a una cuota ya pagada. Deja de aparecer en Gastos."
-                  onClick={() => {
-                    setReconcileModal({
-                      transactionId: detailRow.id,
-                      monto: detailRow.monto,
-                      alreadyPaid: true,
-                    });
-                    setDetailRow(null);
-                  }}
-                >
-                  Cuota pagada
-                </button>
-              ) : null}
+            <div className="mt-4 space-y-2">
               {canWrite ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {isReconcilableImportSource(detailRow.source) ? (
+                    <button
+                      type="button"
+                      className="rounded border border-emerald-700 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                      disabled={uiBloqueadoGuardado}
+                      title="Vincular este egreso importado con el pago de una cuota (reemplaza el movimiento por el desglose contable)"
+                      onClick={() => {
+                        setReconcileModal({
+                          transactionId: detailRow.id,
+                          monto: detailRow.monto,
+                        });
+                        setDetailRow(null);
+                      }}
+                    >
+                      Conciliar cuota
+                    </button>
+                  ) : null}
+                  {isReconcilableImportSource(detailRow.source) ? (
+                    <button
+                      type="button"
+                      className="rounded border border-[#d45500] bg-[#fbe7d8] px-2 py-1.5 text-xs text-[#9a3f00] hover:bg-[#f6d7bf] disabled:opacity-50"
+                      disabled={uiBloqueadoGuardado}
+                      title="Marcar este egreso importado como correspondiente a una cuota ya pagada. Deja de aparecer en Gastos."
+                      onClick={() => {
+                        setReconcileModal({
+                          transactionId: detailRow.id,
+                          monto: detailRow.monto,
+                          alreadyPaid: true,
+                        });
+                        setDetailRow(null);
+                      }}
+                    >
+                      Cuota pagada
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="rounded border border-sky-700 bg-sky-50 px-2 py-1.5 text-xs text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                    disabled={uiBloqueadoGuardado}
+                    title="Vincular este gasto con una factura de compra pendiente"
+                    onClick={() => {
+                      setFacturaLinkRow(detailRow);
+                      setDetailRow(null);
+                    }}
+                  >
+                    Vincular factura
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-violet-700 bg-violet-50 px-2 py-1.5 text-xs text-violet-900 hover:bg-violet-100 disabled:opacity-50"
+                    disabled={uiBloqueadoGuardado}
+                    title="Crear un pago recurrente con este gasto y marcar el mes como pagado"
+                    onClick={() => {
+                      setRecurrenteRow(detailRow);
+                      setDetailRow(null);
+                    }}
+                  >
+                    Recurrente
+                  </button>
+                </div>
+              ) : null}
+              <div className="flex justify-end">
                 <button
                   type="button"
-                  className="shrink-0 rounded border border-sky-700 bg-sky-50 px-2 py-1 text-xs text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-                  disabled={uiBloqueadoGuardado}
-                  title="Vincular este gasto con una factura de compra pendiente"
-                  onClick={() => {
-                    setFacturaLinkRow(detailRow);
-                    setDetailRow(null);
-                  }}
+                  className="rounded border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-200"
+                  onClick={() => setDetailRow(null)}
                 >
-                  Vincular factura
+                  Cerrar
                 </button>
-              ) : null}
-              {canWrite ? (
-                <button
-                  type="button"
-                  className="shrink-0 rounded border border-violet-700 bg-violet-50 px-2 py-1 text-xs text-violet-900 hover:bg-violet-100 disabled:opacity-50"
-                  disabled={uiBloqueadoGuardado}
-                  title="Crear un pago recurrente con este gasto y marcar el mes como pagado"
-                  onClick={() => {
-                    setRecurrenteRow(detailRow);
-                    setDetailRow(null);
-                  }}
-                >
-                  Recurrente
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="ml-auto shrink-0 rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-200"
-                onClick={() => setDetailRow(null)}
-              >
-                Cerrar
-              </button>
+              </div>
             </div>
           </div>
         </div>
