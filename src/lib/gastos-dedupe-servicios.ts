@@ -548,21 +548,22 @@ export function claveEmparejarTransferenciasDuplicadas(m: {
 }
 
 /**
- * Omite egresos del import de servicios cuando ya existe el mismo monto en la misma fecha
- * en el import `excel_egresos`, para no contar dos veces el mismo pago (p. ej. CGE + LUZ).
+ * Si el mismo pago está en `excel_egresos` y en servicios (misma fecha + monto),
+ * conserva el detalle de servicios y omite el egreso genérico, para que se vea
+ * en Gastos sin contar dos veces.
  */
 export function omitServiciosExpenseWhenMirroredInExcelEgresos<
   T extends { date?: unknown; amount?: unknown; source?: unknown },
 >(rows: T[]): T[] {
   const counts = new Map<string, number>();
   for (const r of rows) {
-    if (normSource(r.source) !== SOURCE_EXCEL_EGRESOS) continue;
+    if (normSource(r.source) !== SOURCE_EXCEL_EGRESOS_SERVICIOS) continue;
     const k = fingerprintDateAmount(r);
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   const out: T[] = [];
   for (const r of rows) {
-    if (normSource(r.source) !== SOURCE_EXCEL_EGRESOS_SERVICIOS) {
+    if (normSource(r.source) !== SOURCE_EXCEL_EGRESOS) {
       out.push(r);
       continue;
     }
